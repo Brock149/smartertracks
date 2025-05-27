@@ -28,12 +28,20 @@ serve(async (req) => {
     )
 
     // Update the user in the users table
-    const { error } = await supabaseClient
+    const { error: updateError } = await supabaseClient
       .from('users')
       .update({ name, email, role })
       .eq('id', id)
 
-    if (error) throw error
+    if (updateError) throw updateError
+
+    // Update the user in Supabase Auth
+    const { error: authError } = await supabaseClient.auth.admin.updateUserById(
+      id,
+      { email, user_metadata: { name, role } }
+    )
+
+    if (authError) throw authError
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

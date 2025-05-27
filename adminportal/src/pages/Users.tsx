@@ -11,7 +11,7 @@ interface User {
 
 const EDGE_FUNCTION_BASE_URL = import.meta.env.DEV
   ? 'https://trcackummmixzocenxvm.supabase.co'
-  : ''
+  : 'https://trcackummmixzocenxvm.supabase.co'
 
 export default function Users() {
   const [showForm, setShowForm] = useState(false)
@@ -36,6 +36,10 @@ export default function Users() {
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [editSuccess, setEditSuccess] = useState<string | null>(null)
+  const [deleteUser, setDeleteUser] = useState<User | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
 
   // Fetch users
   useEffect(() => {
@@ -177,6 +181,51 @@ export default function Users() {
     } catch (err: any) {
       setEditError(err.message || 'Failed to update user')
       setEditLoading(false)
+    }
+  }
+
+  function handleDeleteOpen(user: User) {
+    setDeleteUser(user)
+  }
+
+  function handleDeleteClose() {
+    setDeleteUser(null)
+  }
+
+  async function handleDeleteSubmit() {
+    setDeleteLoading(true)
+    setDeleteError(null)
+    setDeleteSuccess(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setDeleteError('You must be logged in to delete users')
+        setDeleteLoading(false)
+        return
+      }
+      const res = await fetch(`${EDGE_FUNCTION_BASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          id: deleteUser?.id,
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setDeleteError(result.error || 'Failed to delete user')
+        setDeleteLoading(false)
+        return
+      }
+      setDeleteSuccess('User deleted successfully!')
+      setDeleteLoading(false)
+      handleDeleteClose()
+      fetchUsers()
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete user')
+      setDeleteLoading(false)
     }
   }
 
@@ -385,6 +434,72 @@ export default function Users() {
         </div>
       )}
 
+      {/* Delete User Modal */}
+      {deleteUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={handleDeleteClose}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-semibold mb-6">Delete User</h3>
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">User Information</h4>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm text-gray-500">Name:</span>
+                    <p className="text-gray-900">{deleteUser.name}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Email:</span>
+                    <p className="text-gray-900">{deleteUser.email}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Role:</span>
+                    <p className="text-gray-900">{deleteUser.role}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-red-600 font-medium">
+                Warning: This action cannot be undone. Are you sure you want to delete this user?
+              </p>
+              {deleteError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                  {deleteError}
+                </div>
+              )}
+              {deleteSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                  {deleteSuccess}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  onClick={handleDeleteClose}
+                  disabled={deleteLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  onClick={handleDeleteSubmit}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* User list */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
@@ -421,7 +536,7 @@ export default function Users() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button className="text-blue-600 hover:text-blue-900 mr-3" onClick={() => handleEditOpen(user)}>Edit</button>
-                    <button className="text-red-600 hover:text-red-900">Delete</button>
+                    <button className="text-red-600 hover:text-red-900" onClick={() => handleDeleteOpen(user)}>Delete</button>
                   </td>
                 </tr>
               ))}
