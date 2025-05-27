@@ -26,6 +26,16 @@ export default function Users() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [editForm, setEditForm] = useState({
+    id: '',
+    name: '',
+    email: '',
+    role: 'technician',
+  })
+  const [editLoading, setEditLoading] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editSuccess, setEditSuccess] = useState<string | null>(null)
 
   // Fetch users
   useEffect(() => {
@@ -103,6 +113,70 @@ export default function Users() {
     } catch (err: any) {
       setError(err.message || 'Failed to create user')
       setLoading(false)
+    }
+  }
+
+  function handleEditOpen(user: User) {
+    setEditingUser(user)
+    setEditForm({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    })
+    setEditError(null)
+    setEditSuccess(null)
+  }
+
+  function handleEditClose() {
+    setEditingUser(null)
+    setEditForm({ id: '', name: '', email: '', role: 'technician' })
+    setEditError(null)
+    setEditSuccess(null)
+  }
+
+  function handleEditChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    setEditForm({ ...editForm, [e.target.name]: e.target.value })
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setEditLoading(true)
+    setEditError(null)
+    setEditSuccess(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setEditError('You must be logged in to edit users')
+        setEditLoading(false)
+        return
+      }
+      const res = await fetch(`${EDGE_FUNCTION_BASE_URL}/functions/v1/edit-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          id: editForm.id,
+          name: editForm.name,
+          email: editForm.email,
+          role: editForm.role,
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setEditError(result.error || 'Failed to update user')
+        setEditLoading(false)
+        return
+      }
+      setEditSuccess('User updated successfully!')
+      setEditLoading(false)
+      handleEditClose()
+      fetchUsers()
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update user')
+      setEditLoading(false)
     }
   }
 
@@ -206,7 +280,7 @@ export default function Users() {
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="admin">Admin</option>
-                  <option value="technician">Technician</option>
+                  <option value="tech">Tech</option>
                 </select>
               </div>
               <div className="flex justify-end gap-3 pt-4">
@@ -231,6 +305,86 @@ export default function Users() {
         </div>
       )}
 
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={handleEditClose}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-semibold mb-6">Edit User</h3>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block font-medium mb-1">Full Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={editForm.name}
+                  onChange={handleEditChange}
+                  required
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={editForm.email}
+                  onChange={handleEditChange}
+                  required
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Role</label>
+                <select
+                  name="role"
+                  value={editForm.role}
+                  onChange={handleEditChange}
+                  required
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="tech">Tech</option>
+                </select>
+              </div>
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                  {editError}
+                </div>
+              )}
+              {editSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                  {editSuccess}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  onClick={handleEditClose}
+                  disabled={editLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  disabled={editLoading}
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* User list */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
@@ -244,7 +398,6 @@ export default function Users() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -252,14 +405,7 @@ export default function Users() {
               {filteredUsers.map(user => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
-                        <span className="text-gray-500 text-lg">👤</span>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                      </div>
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{user.email}</div>
@@ -273,11 +419,8 @@ export default function Users() {
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(user.created_at).toLocaleDateString()}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                    <button className="text-blue-600 hover:text-blue-900 mr-3" onClick={() => handleEditOpen(user)}>Edit</button>
                     <button className="text-red-600 hover:text-red-900">Delete</button>
                   </td>
                 </tr>
