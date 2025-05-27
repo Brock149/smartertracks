@@ -1,4 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabaseClient'
 
 const navLinks = [
   { to: '/tools', label: 'Tools', icon: '🧰' },
@@ -8,6 +10,37 @@ const navLinks = [
 
 export default function Layout() {
   const location = useLocation()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  // Check if we're already logged in
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session)
+    })
+  }, [])
+
+  async function handleLogin() {
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'admin@example.com',
+        password: 'admin1',
+      })
+      if (error) throw error
+      setIsLoggedIn(true)
+    } catch (error) {
+      console.error('Error logging in:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    setIsLoggedIn(false)
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
@@ -52,6 +85,22 @@ export default function Layout() {
             <span className="text-gray-500">Sasi HVAC Tool Tracker</span>
           </div>
           <div className="flex items-center gap-4">
+            {!isLoggedIn ? (
+              <button
+                onClick={handleLogin}
+                disabled={loading}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Logging in...' : 'Login as Admin'}
+              </button>
+            ) : (
+              <button
+                onClick={handleLogout}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Logout
+              </button>
+            )}
             <input
               type="text"
               placeholder="Search..."
