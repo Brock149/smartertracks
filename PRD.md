@@ -62,6 +62,23 @@ photo_url	Text	Optional (Supabase Storage)
 current_owner	UUID	Foreign key → users(id)
 created_at	Timestamp	Default: now()
 
+tool_checklists
+Field	Type	Notes
+id	UUID	Default: gen_random_uuid()
+tool_id	UUID	Foreign key → tools(id)
+item_name	Text	Name of checklist item (e.g., glue)
+required	Boolean	Whether the item is critical
+created_at	Timestamp	Default: now()
+
+checklist_reports
+Field	Type	Notes
+id	UUID	Default: gen_random_uuid()
+transaction_id	UUID	Foreign key → transactions(id)
+checklist_item_id	UUID	Foreign key → tool_checklists(id)
+status	Text	missing, damaged, or ok
+comments	Text	Optional notes from user
+created_at	Timestamp	Default: now()
+
 tool_transactions
 Field	Type	Notes
 id	UUID	Default: gen_random_uuid()
@@ -83,6 +100,8 @@ Tool Management
  Delete tools
 
  Manually transfer ownership
+
+ Define tool checklists for kits (list of required components)
 
 User Management
  View all users
@@ -114,6 +133,8 @@ Search by number, name, or category
 
 Claim any tool (even if it's listed under someone else)
 
+Complete tool checklists during checkout/return
+
 My Tools Screen
 View all tools the current user "owns"
 
@@ -124,6 +145,8 @@ Search employees
 
 Select multiple tools to transfer to another user
 
+Complete tool checklists for kits during transfer
+
 Account Screen
 Edit profile, view login info
 
@@ -132,6 +155,8 @@ User takes a tool physically from another.
 
 User searches for the tool in the app and claims it.
 
+If tool has a checklist, user confirms all components are present.
+
 App records a transaction:
 
 from_user → to_user
@@ -139,6 +164,8 @@ from_user → to_user
 time
 
 new storage and location
+
+checklist status (if applicable)
 
 If an error occurs or is forgotten, admin can manually fix it.
 

@@ -21,6 +21,8 @@ View tool details (name, number, description, picture, current owner, location, 
 
 Claim possession of a tool from anyone—whether from the warehouse or another user.
 
+Complete tool checklists for kits during checkout/return.
+
 My Tools
 
 Shows a list of tools currently owned by the logged-in user.
@@ -32,6 +34,8 @@ Transfer Tools
 Select one or more tools from your inventory to transfer.
 
 Search the company directory to choose a recipient.
+
+Complete tool checklists for kits during transfer.
 
 Account
 
@@ -51,6 +55,8 @@ Upload optional tool photos.
 Add optional descriptions.
 
 Define starting owner, location, and storage state.
+
+Create and manage tool checklists for kits.
 
 User Management
 
@@ -84,6 +90,11 @@ Optional Image
 Current Owner (User ID)
 
 Created At Timestamp
+
+Tool Checklist (for kits):
+- List of required components
+- Component status during transfers
+- Missing/damaged item reports
 
 Transaction History Fields:
 - Tool ID
