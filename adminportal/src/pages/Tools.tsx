@@ -37,6 +37,7 @@ export default function Tools() {
     item_name: '',
     required: true
   })
+  const [isAddingItem, setIsAddingItem] = useState(false)
 
   useEffect(() => {
     console.log('Tools component mounted')
@@ -140,6 +141,54 @@ export default function Tools() {
       ...prev,
       checklist: prev.checklist.filter((_, i) => i !== index)
     }))
+  }
+
+  async function handleAddChecklistItem() {
+    if (!selectedTool || !newChecklistItem.item_name.trim()) return
+
+    try {
+      setIsAddingItem(true)
+      const session = await supabase.auth.getSession()
+      console.log('Current session:', session)
+      console.log('Access token:', session.data.session?.access_token)
+      console.log('User ID:', session.data.session?.user.id)
+
+      if (!session.data.session?.access_token) {
+        throw new Error('No access token found. Please log in again.')
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/add-checklist-item`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.data.session.access_token}`
+          },
+          body: JSON.stringify({
+            tool_id: selectedTool.id,
+            item_name: newChecklistItem.item_name,
+            required: newChecklistItem.required
+          })
+        }
+      )
+
+      const data = await response.json()
+      console.log('Response data:', data)
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add checklist item')
+      }
+
+      // Reset form and refresh checklist
+      setNewChecklistItem({ item_name: '', required: true })
+      await fetchChecklist(selectedTool.id)
+    } catch (error: any) {
+      console.error('Error adding checklist item:', error)
+      setError(error.message)
+    } finally {
+      setIsAddingItem(false)
+    }
   }
 
   if (loading) return <div className="p-6">Loading tools...</div>
@@ -344,6 +393,36 @@ export default function Tools() {
               >
                 ✕
               </button>
+            </div>
+
+            {/* Add Item Form */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Add New Checklist Item</h4>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newChecklistItem.item_name}
+                  onChange={(e) => setNewChecklistItem(prev => ({ ...prev, item_name: e.target.value }))}
+                  placeholder="Enter item name"
+                  className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+                <label className="flex items-center gap-2 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={newChecklistItem.required}
+                    onChange={(e) => setNewChecklistItem(prev => ({ ...prev, required: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                  />
+                  Required
+                </label>
+                <button
+                  onClick={handleAddChecklistItem}
+                  disabled={isAddingItem || !newChecklistItem.item_name.trim()}
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAddingItem ? 'Adding...' : 'Add Item'}
+                </button>
+              </div>
             </div>
 
             {loadingChecklist ? (
