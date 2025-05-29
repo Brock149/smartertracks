@@ -31,13 +31,29 @@ export default function Tools() {
     name: '',
     description: '',
     photo_url: '',
-    checklist: [] as ChecklistItem[]
+    checklist: [] as Array<ChecklistItem | { item_name: string; required: boolean }>
   })
   const [newChecklistItem, setNewChecklistItem] = useState({
     item_name: '',
     required: true
   })
   const [isAddingItem, setIsAddingItem] = useState(false)
+  const [editingTool, setEditingTool] = useState<any>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [toolToDelete, setToolToDelete] = useState<Tool | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null)
+  const [editingChecklistItem, setEditingChecklistItem] = useState<{ item_name: string; required: boolean }>({ item_name: '', required: true })
+  const [editChecklistLoading, setEditChecklistLoading] = useState(false)
+  const [editChecklistError, setEditChecklistError] = useState<string | null>(null)
+  const [deleteChecklistLoading, setDeleteChecklistLoading] = useState(false)
+  const [deleteChecklistError, setDeleteChecklistError] = useState<string | null>(null)
+  const [checklistItemToDelete, setChecklistItemToDelete] = useState<ChecklistItem | null>(null)
+  const [showDeleteChecklistModal, setShowDeleteChecklistModal] = useState(false)
 
   useEffect(() => {
     console.log('Tools component mounted')
@@ -191,8 +207,238 @@ export default function Tools() {
     }
   }
 
-  if (loading) return <div className="p-6">Loading tools...</div>
-  if (error) return <div className="p-6 text-red-500">Error: {error}</div>
+  const handleEditTool = (tool: any) => {
+    setEditingTool(tool)
+    setIsEditModalOpen(true)
+  }
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTool) return;
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/edit-tool`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          },
+          body: JSON.stringify(editingTool)
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || 'Failed to update tool');
+        return;
+      }
+
+      setIsEditModalOpen(false);
+      setEditingTool(null);
+      fetchTools(); // Refresh the tools list
+    } catch (error: any) {
+      alert(error.message || 'An unexpected error occurred');
+    }
+  };
+
+  const openDeleteModal = (tool: Tool) => {
+    setToolToDelete(tool)
+    setDeleteError(null)
+    setDeleteModalOpen(true)
+  }
+
+  const handleDeleteClose = () => {
+    setDeleteModalOpen(false)
+    setToolToDelete(null)
+    setDeleteError(null)
+  }
+
+  const handleDeleteTool = async () => {
+    if (!toolToDelete) return
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      const session = await supabase.auth.getSession()
+      if (!session.data.session) {
+        setDeleteError('You must be logged in to delete tools')
+        setDeleteLoading(false)
+        return
+      }
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-tool`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.data.session.access_token}`
+          },
+          body: JSON.stringify({ id: toolToDelete.id })
+        }
+      )
+      const data = await response.json()
+      if (!response.ok || data.error) {
+        setDeleteError(data.error || 'Failed to delete tool')
+        setDeleteLoading(false)
+        return
+      }
+      setDeleteLoading(false)
+      handleDeleteClose()
+      fetchTools()
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete tool')
+      setDeleteLoading(false)
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  function handleDeleteToolOpen(tool: Tool) {
+    setDeleteTool(tool)
+  }
+
+  function handleDeleteToolClose() {
+    setDeleteTool(null)
+    setDeleteError(null)
+    setDeleteSuccess(null)
+  }
+
+  async function handleDeleteToolSubmit() {
+    setDeleteLoading(true)
+    setDeleteError(null)
+    setDeleteSuccess(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setDeleteError('You must be logged in to delete tools')
+        setDeleteLoading(false)
+        return
+      }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-tool`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ id: deleteTool?.id }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setDeleteError(result.error || 'Failed to delete tool')
+        setDeleteLoading(false)
+        return
+      }
+      setDeleteSuccess('Tool deleted successfully!')
+      setDeleteLoading(false)
+      handleDeleteToolClose()
+      fetchTools()
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete tool')
+      setDeleteLoading(false)
+    }
+  }
+
+  function handleEditChecklistOpen(item: ChecklistItem) {
+    setEditingChecklistItemId(item.id)
+    setEditingChecklistItem({ item_name: item.item_name, required: item.required })
+    setEditChecklistError(null)
+  }
+
+  function handleEditChecklistCancel() {
+    setEditingChecklistItemId(null)
+    setEditingChecklistItem({ item_name: '', required: true })
+    setEditChecklistError(null)
+  }
+
+  async function handleEditChecklistSave(item: ChecklistItem) {
+    setEditChecklistLoading(true)
+    setEditChecklistError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setEditChecklistError('You must be logged in to edit checklist items')
+        setEditChecklistLoading(false)
+        return
+      }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/edit-checklist-item`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          id: item.id,
+          item_name: editingChecklistItem.item_name,
+          required: editingChecklistItem.required
+        })
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setEditChecklistError(result.error || 'Failed to update checklist item')
+        setEditChecklistLoading(false)
+        return
+      }
+      setEditingChecklistItemId(null)
+      setEditingChecklistItem({ item_name: '', required: true })
+      await fetchChecklist(item.tool_id)
+    } catch (err: any) {
+      setEditChecklistError(err.message || 'Failed to update checklist item')
+    } finally {
+      setEditChecklistLoading(false)
+    }
+  }
+
+  async function handleDeleteChecklistItem(item: ChecklistItem) {
+    setDeleteChecklistLoading(true)
+    setDeleteChecklistError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setDeleteChecklistError('You must be logged in to delete checklist items')
+        setDeleteChecklistLoading(false)
+        return
+      }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-checklist-item`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ id: item.id })
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setDeleteChecklistError(result.error || 'Failed to delete checklist item')
+        setDeleteChecklistLoading(false)
+        return
+      }
+      await fetchChecklist(item.tool_id)
+    } catch (err: any) {
+      setDeleteChecklistError(err.message || 'Failed to delete checklist item')
+    } finally {
+      setDeleteChecklistLoading(false)
+    }
+  }
+
+  function handleDeleteChecklistConfirm(item: ChecklistItem) {
+    setChecklistItemToDelete(item)
+    setShowDeleteChecklistModal(true)
+  }
+
+  function handleDeleteChecklistCancelModal() {
+    setChecklistItemToDelete(null)
+    setShowDeleteChecklistModal(false)
+  }
+
+  async function handleDeleteChecklistConfirmModal() {
+    if (checklistItemToDelete) {
+      await handleDeleteChecklistItem(checklistItemToDelete)
+      setChecklistItemToDelete(null)
+      setShowDeleteChecklistModal(false)
+    }
+  }
 
   return (
     <div className="p-6">
@@ -362,12 +608,21 @@ export default function Tools() {
                   {new Date(tool.created_at).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <button
-                    onClick={() => handleViewChecklist(tool)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    View Checklist
-                  </button>
+                  <div className="flex space-x-2 items-center">
+                    <button
+                      onClick={() => handleEditTool(tool)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Edit
+                    </button>
+                    <button className="text-red-600 hover:text-red-900" onClick={() => handleDeleteToolOpen(tool)}>Delete</button>
+                    <button
+                      className="text-blue-500 hover:text-blue-700 ml-12 px-8 font-semibold"
+                      onClick={() => handleViewChecklist(tool)}
+                    >
+                      View Checklist
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -434,14 +689,56 @@ export default function Tools() {
                     key={item.id}
                     className="flex items-center justify-between bg-gray-50 p-3 rounded"
                   >
-                    <div className="flex items-center gap-2">
-                      <span>{item.item_name}</span>
-                      {item.required && (
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                    {editingChecklistItemId === item.id ? (
+                      <div className="flex-1 flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={editingChecklistItem.item_name}
+                          onChange={e => setEditingChecklistItem({ ...editingChecklistItem, item_name: e.target.value })}
+                          className="w-48 border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <label className="flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={editingChecklistItem.required}
+                            onChange={e => setEditingChecklistItem({ ...editingChecklistItem, required: e.target.checked })}
+                            className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                          />
                           Required
-                        </span>
-                      )}
-                    </div>
+                        </label>
+                        <button
+                          type="button"
+                          className="text-blue-600 hover:text-blue-900 px-2"
+                          onClick={() => handleEditChecklistSave(item)}
+                          disabled={editChecklistLoading}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="text-gray-500 hover:text-gray-700 px-2"
+                          onClick={handleEditChecklistCancel}
+                          disabled={editChecklistLoading}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex gap-2 items-center">
+                        <span>{item.item_name}</span>
+                        {item.required && (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Required</span>
+                        )}
+                        <button
+                          type="button"
+                          className="text-blue-600 hover:text-blue-900 px-2"
+                          onClick={() => handleDeleteChecklistConfirm(item)}
+                          disabled={deleteChecklistLoading}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -450,6 +747,202 @@ export default function Tools() {
                 No checklist items found for this tool.
               </div>
             )}
+            {editChecklistError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded mb-2 mt-2">{editChecklistError}</div>
+            )}
+            {deleteChecklistError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded mb-2 mt-2">{deleteChecklistError}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Tool Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => setIsEditModalOpen(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-semibold mb-6">Edit Tool</h3>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block font-medium mb-1">Tool Number</label>
+                <input
+                  type="text"
+                  value={editingTool?.number || ''}
+                  onChange={e => setEditingTool({ ...editingTool, number: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Tool Name</label>
+                <input
+                  type="text"
+                  value={editingTool?.name || ''}
+                  onChange={e => setEditingTool({ ...editingTool, name: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Description</label>
+                <input
+                  type="text"
+                  value={editingTool?.description || ''}
+                  onChange={e => setEditingTool({ ...editingTool, description: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">Photo URL</label>
+                <input
+                  type="text"
+                  value={editingTool?.photo_url || ''}
+                  onChange={e => setEditingTool({ ...editingTool, photo_url: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  onClick={() => setIsEditModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteTool && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={handleDeleteToolClose}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-semibold mb-6">Delete Tool</h3>
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">Tool Information</h4>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm text-gray-500">Number:</span>
+                    <p className="text-gray-900">{deleteTool.number}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Name:</span>
+                    <p className="text-gray-900">{deleteTool.name}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Description:</span>
+                    <p className="text-gray-900">{deleteTool.description || '-'}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-red-600 font-medium">
+                Warning: This action cannot be undone. Are you sure you want to delete this tool?
+              </p>
+              {deleteError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                  {deleteError}
+                </div>
+              )}
+              {deleteSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                  {deleteSuccess}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  onClick={handleDeleteToolClose}
+                  disabled={deleteLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  onClick={handleDeleteToolSubmit}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteChecklistModal && checklistItemToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={handleDeleteChecklistCancelModal}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-semibold mb-6 text-red-600">Delete Checklist Item</h3>
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">Checklist Item Information</h4>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm text-gray-500">Item Name:</span>
+                    <p className="text-gray-900">{checklistItemToDelete.item_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Required:</span>
+                    <p className="text-gray-900">{checklistItemToDelete.required ? 'Yes' : 'No'}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-red-600 font-medium">
+                Warning: This action cannot be undone. Are you sure you want to delete this checklist item?
+              </p>
+              {deleteChecklistError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded mb-2 mt-2">{deleteChecklistError}</div>
+              )}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  onClick={handleDeleteChecklistCancelModal}
+                  disabled={deleteChecklistLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  onClick={handleDeleteChecklistConfirmModal}
+                  disabled={deleteChecklistLoading}
+                >
+                  {deleteChecklistLoading ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
