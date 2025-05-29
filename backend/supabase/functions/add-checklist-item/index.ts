@@ -30,7 +30,7 @@ serve(async (req) => {
     // Insert checklist item
     const { data, error } = await supabaseClient
       .from('tool_checklists')
-      .insert([{ tool_id, item_name, required: required ?? false }])
+      .insert([{ tool_id, item_name, required }])
       .select()
       .single()
 
