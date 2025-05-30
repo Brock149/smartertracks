@@ -732,6 +732,14 @@ export default function Tools() {
                         <button
                           type="button"
                           className="text-blue-600 hover:text-blue-900 px-2"
+                          onClick={() => handleEditChecklistOpen(item)}
+                          disabled={editChecklistLoading}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="text-blue-600 hover:text-blue-900 px-2"
                           onClick={() => handleDeleteChecklistConfirm(item)}
                           disabled={deleteChecklistLoading}
                         >
