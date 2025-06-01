@@ -19,7 +19,7 @@ export default function Users() {
     name: '',
     email: '',
     password: '',
-    role: 'technician',
+    role: 'tech',
   })
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
@@ -31,7 +31,7 @@ export default function Users() {
     id: '',
     name: '',
     email: '',
-    role: 'technician',
+    role: 'tech',
   })
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
@@ -70,7 +70,7 @@ export default function Users() {
 
   function handleClose() {
     setShowForm(false)
-    setForm({ name: '', email: '', password: '', role: 'technician' })
+    setForm({ name: '', email: '', password: '', role: 'tech' })
     setError(null)
     setSuccess(null)
   }
@@ -134,7 +134,7 @@ export default function Users() {
 
   function handleEditClose() {
     setEditingUser(null)
-    setEditForm({ id: '', name: '', email: '', role: 'technician' })
+    setEditForm({ id: '', name: '', email: '', role: 'tech' })
     setEditError(null)
     setEditSuccess(null)
   }

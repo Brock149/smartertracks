@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Tools from './pages/Tools'
 import Users from './pages/Users'
+import Transactions from './pages/Transactions'
 
 export default function App() {
   return (
@@ -11,7 +12,7 @@ export default function App() {
           <Route index element={<div>Welcome to Sasi HVAC Tool Tracker</div>} />
           <Route path="tools" element={<Tools />} />
           <Route path="users" element={<Users />} />
-          <Route path="transactions" element={<div>Transactions Page</div>} />
+          <Route path="transactions" element={<Transactions />} />
         </Route>
       </Routes>
     </Router>
