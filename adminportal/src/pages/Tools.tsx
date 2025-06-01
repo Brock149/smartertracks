@@ -12,6 +12,11 @@ interface Tool {
   owner?: {
     name: string
   }
+  latest_transaction?: Array<{
+    location: string
+    stored_at: string
+    timestamp: string
+  }>
 }
 
 interface ChecklistItem {
@@ -62,6 +67,28 @@ export default function Tools() {
   useEffect(() => {
     console.log('Tools component mounted')
     fetchTools()
+
+    // Subscribe to changes in tool_transactions
+    const subscription = supabase
+      .channel('tool_transactions_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tool_transactions'
+        },
+        () => {
+          // Refresh tools data when any transaction changes
+          fetchTools()
+        }
+      )
+      .subscribe()
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function fetchTools() {
@@ -69,7 +96,9 @@ export default function Tools() {
       setLoading(true)
       setError(null)
       console.log('Fetching tools...')
-      const { data, error } = await supabase
+      
+      // First get all tools with their owners
+      const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
         .select(`
           *,
@@ -77,11 +106,32 @@ export default function Tools() {
         `)
         .order('number', { ascending: true })
 
-      console.log('Supabase response:', { data, error })
+      if (toolsError) throw toolsError
 
-      if (error) throw error
-      setTools(data || [])
-      console.log('Tools state updated:', data)
+      // Then get the latest transaction for each tool
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('tool_transactions')
+        .select('tool_id, location, stored_at, timestamp')
+        .order('timestamp', { ascending: false })
+
+      if (transactionsError) throw transactionsError
+
+      // Create a map of the latest transaction for each tool
+      const latestTransactions = new Map()
+      transactionsData?.forEach(transaction => {
+        if (!latestTransactions.has(transaction.tool_id)) {
+          latestTransactions.set(transaction.tool_id, transaction)
+        }
+      })
+
+      // Combine the data
+      const toolsWithTransactions = toolsData?.map(tool => ({
+        ...tool,
+        latest_transaction: latestTransactions.get(tool.id) ? [latestTransactions.get(tool.id)] : []
+      }))
+
+      setTools(toolsWithTransactions || [])
+      console.log('Tools state updated:', toolsWithTransactions)
     } catch (error: any) {
       console.error('Error fetching tools:', error)
       setError(error.message)
@@ -595,6 +645,12 @@ export default function Tools() {
                 Owner
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Location
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Last Transaction
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -613,6 +669,19 @@ export default function Tools() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {tool.owner?.name || 'Unassigned'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.latest_transaction?.[0]?.location || 'No location recorded'}
+                  {tool.latest_transaction?.[0]?.stored_at && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      ({tool.latest_transaction[0].stored_at})
+                    </span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.latest_transaction?.[0]?.timestamp 
+                    ? new Date(tool.latest_transaction[0].timestamp).toLocaleString()
+                    : 'No transactions'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   <div className="flex space-x-2 items-center">

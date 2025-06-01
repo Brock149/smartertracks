@@ -67,6 +67,7 @@ export default function Transactions() {
     notes: ''
   })
   const [currentToolHolder, setCurrentToolHolder] = useState<{ id: string; name: string } | null>(null)
+  const [checklistStatus, setChecklistStatus] = useState<{ [itemId: string]: null | 'damaged' | 'replace' }>({})
 
   // Fetch transactions
   useEffect(() => {
@@ -134,6 +135,15 @@ export default function Transactions() {
         return
       }
 
+      // Build checklist_reports array from checklistStatus
+      const checklist_reports = Object.entries(checklistStatus)
+        .filter(([_, status]) => status)
+        .map(([itemId, status]) => ({
+          checklist_item_id: itemId,
+          status: status === 'damaged' ? 'damaged' : status === 'replace' ? 'missing' : undefined
+        }))
+        .filter(r => r.status)
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transaction`,
         {
@@ -142,7 +152,10 @@ export default function Transactions() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`
           },
-          body: JSON.stringify(newTransaction)
+          body: JSON.stringify({
+            ...newTransaction,
+            checklist_reports
+          })
         }
       )
 
@@ -161,6 +174,7 @@ export default function Transactions() {
         stored_at: '',
         notes: ''
       })
+      setChecklistStatus({})
       setIsCreateModalOpen(false)
       fetchTransactions() // Refresh the transactions list
     } catch (error: any) {
@@ -341,7 +355,7 @@ export default function Transactions() {
       {/* Create Transaction Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={() => setIsCreateModalOpen(false)}
@@ -452,6 +466,36 @@ export default function Transactions() {
                             {item.required && (
                               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Required</span>
                             )}
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={checklistStatus[item.id] === 'damaged'}
+                                onChange={() => {
+                                  setChecklistStatus(prev => ({
+                                    ...prev,
+                                    [item.id]: prev[item.id] === 'damaged' ? null : 'damaged'
+                                  }))
+                                }}
+                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                              />
+                              <span>Damaged/Needs Repair</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={checklistStatus[item.id] === 'replace'}
+                                onChange={() => {
+                                  setChecklistStatus(prev => ({
+                                    ...prev,
+                                    [item.id]: prev[item.id] === 'replace' ? null : 'replace'
+                                  }))
+                                }}
+                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                              />
+                              <span>Needs Replacement/Resupply</span>
+                            </label>
                           </div>
                         </div>
                       ))}
