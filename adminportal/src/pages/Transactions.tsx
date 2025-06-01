@@ -34,6 +34,13 @@ interface User {
   name: string
 }
 
+interface ChecklistItem {
+  id: string
+  tool_id: string
+  item_name: string
+  required: boolean
+}
+
 export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,9 +49,18 @@ export default function Transactions() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [tools, setTools] = useState<Tool[]>([])
   const [users, setUsers] = useState<User[]>([])
-  const [newTransaction, setNewTransaction] = useState({
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
+  const [loadingChecklist, setLoadingChecklist] = useState(false)
+  const [newTransaction, setNewTransaction] = useState<{
+    tool_id: string
+    from_user_id: string | null
+    to_user_id: string
+    location: string
+    stored_at: string
+    notes: string
+  }>({
     tool_id: '',
-    from_user_id: '',
+    from_user_id: null,
     to_user_id: '',
     location: '',
     stored_at: '',
@@ -139,7 +155,7 @@ export default function Transactions() {
       // Reset form and close modal
       setNewTransaction({
         tool_id: '',
-        from_user_id: '',
+        from_user_id: null,
         to_user_id: '',
         location: '',
         stored_at: '',
@@ -165,21 +181,44 @@ export default function Transactions() {
 
       if (error) throw error
       if (data) {
+        const userName = data.to_user && typeof data.to_user === 'object' && 'name' in data.to_user 
+          ? String(data.to_user.name) 
+          : 'Unknown User'
+        
         setCurrentToolHolder({ 
           id: data.to_user_id, 
-          name: data.to_user?.name || 'Unknown User'
+          name: userName
         })
         setNewTransaction(prev => ({ ...prev, from_user_id: data.to_user_id }))
       } else {
         // If no transactions found, it's a new tool
         setCurrentToolHolder({ id: '', name: 'System (New Tool)' })
-        setNewTransaction(prev => ({ ...prev, from_user_id: '' }))
+        setNewTransaction(prev => ({ ...prev, from_user_id: null }))
       }
     } catch (error: any) {
       console.error('Error fetching current tool holder:', error)
       // If error, assume it's a new tool
       setCurrentToolHolder({ id: '', name: 'System (New Tool)' })
-      setNewTransaction(prev => ({ ...prev, from_user_id: '' }))
+      setNewTransaction(prev => ({ ...prev, from_user_id: null }))
+    }
+  }
+
+  // Add function to fetch checklist items
+  async function fetchChecklist(toolId: string) {
+    try {
+      setLoadingChecklist(true)
+      const { data, error } = await supabase
+        .from('tool_checklists')
+        .select('*')
+        .eq('tool_id', toolId)
+        .order('item_name', { ascending: true })
+
+      if (error) throw error
+      setChecklistItems(data || [])
+    } catch (error: any) {
+      console.error('Error fetching checklist:', error)
+    } finally {
+      setLoadingChecklist(false)
     }
   }
 
@@ -320,8 +359,10 @@ export default function Transactions() {
                     setNewTransaction(prev => ({ ...prev, tool_id: e.target.value }))
                     if (e.target.value) {
                       fetchCurrentToolHolder(e.target.value)
+                      fetchChecklist(e.target.value)
                     } else {
                       setCurrentToolHolder(null)
+                      setChecklistItems([])
                     }
                   }}
                   required
@@ -392,6 +433,36 @@ export default function Transactions() {
                   <option value="N/A">N/A</option>
                 </select>
               </div>
+
+              {/* Add Checklist Display */}
+              {newTransaction.tool_id && (
+                <div>
+                  <label className="block font-medium mb-1">Tool Checklist</label>
+                  {loadingChecklist ? (
+                    <div className="text-gray-500">Loading checklist...</div>
+                  ) : checklistItems.length > 0 ? (
+                    <div className="space-y-2 max-h-105 overflow-y-auto bg-gray-50 p-3 rounded-lg">
+                      {checklistItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between bg-white p-2 rounded border"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{item.item_name}</span>
+                            {item.required && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Required</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-gray-500 bg-gray-50 p-3 rounded-lg">
+                      No checklist items found for this tool.
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block font-medium mb-1">Notes</label>
