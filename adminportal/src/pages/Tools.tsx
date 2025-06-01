@@ -8,6 +8,10 @@ interface Tool {
   description?: string
   photo_url?: string
   created_at: string
+  current_owner?: string
+  owner?: {
+    name: string
+  }
 }
 
 interface ChecklistItem {
@@ -67,7 +71,10 @@ export default function Tools() {
       console.log('Fetching tools...')
       const { data, error } = await supabase
         .from('tools')
-        .select('*')
+        .select(`
+          *,
+          owner:users!current_owner(name)
+        `)
         .order('number', { ascending: true })
 
       console.log('Supabase response:', { data, error })
@@ -585,7 +592,7 @@ export default function Tools() {
                 Description
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created At
+                Owner
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -598,16 +605,16 @@ export default function Tools() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   #{tool.number}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {tool.name}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
                   {tool.description || '-'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(tool.created_at).toLocaleDateString()}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.owner?.name || 'Unassigned'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   <div className="flex space-x-2 items-center">
                     <button
                       onClick={() => handleEditTool(tool)}
