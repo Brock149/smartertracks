@@ -32,24 +32,8 @@ serve(async (req) => {
       )
     }
 
-    // Delete the user from Supabase Auth first
-    const { error: authError } = await supabaseClient.auth.admin.deleteUser(id)
-
-    if (authError) {
-      return new Response(
-        JSON.stringify({ error: authError.message }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-    }
-
-    // Delete the user from the users table
-    const { error: deleteError } = await supabaseClient
-      .from('users')
-      .delete()
-      .eq('id', id)
+    // Call our delete_user function
+    const { error: deleteError } = await supabaseClient.rpc('delete_user', { user_id: id })
 
     if (deleteError) {
       return new Response(

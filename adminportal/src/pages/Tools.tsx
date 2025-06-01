@@ -98,13 +98,14 @@ export default function Tools() {
       setError(null)
       console.log('Fetching tools...')
       
-      // First get all tools with their owners
+      // First get all tools with their owners, excluding deleted tools
       const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
         .select(`
           *,
           owner:users!current_owner(name)
         `)
+        .eq('is_deleted', false)  // Only show non-deleted tools
         .order('number', { ascending: true })
 
       if (toolsError) throw toolsError

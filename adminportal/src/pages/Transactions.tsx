@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 
 interface Transaction {
   id: string
-  tool_id: string
+  tool_id: string | null
   from_user_id: string | null
   to_user_id: string
   location: string
@@ -11,6 +11,10 @@ interface Transaction {
   notes: string | null
   timestamp: string
   created_at: string
+  deleted_from_user_name?: string
+  deleted_to_user_name?: string
+  deleted_tool_number?: string
+  deleted_tool_name?: string
   tool?: {
     number: string
     name: string
@@ -86,7 +90,11 @@ export default function Transactions() {
           *,
           tool:tools(number, name),
           from_user:users!from_user_id(name),
-          to_user:users!to_user_id(name)
+          to_user:users!to_user_id(name),
+          deleted_from_user_name,
+          deleted_to_user_name,
+          deleted_tool_number,
+          deleted_tool_name
         `)
         .order('timestamp', { ascending: false })
 
@@ -316,17 +324,21 @@ export default function Transactions() {
                 <tr key={transaction.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
-                      #{transaction.tool?.number} - {transaction.tool?.name}
+                      {transaction.tool_id ? (
+                        <>#{transaction.tool?.number} - {transaction.tool?.name}</>
+                      ) : (
+                        <>#{transaction.deleted_tool_number} - {transaction.deleted_tool_name} (Deleted)</>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {transaction.from_user?.name || 'System'}
+                      {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {transaction.to_user?.name}
+                      {transaction.deleted_to_user_name || transaction.to_user?.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

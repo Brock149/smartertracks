@@ -8,6 +8,7 @@ interface ChecklistReport {
   status: 'Damaged/Needs Repair' | 'Needs Replacement/Resupply' | 'ok'
   comments: string | null
   created_at: string
+  deleted_user_name?: string
   transaction?: {
     tool: {
       number: string
@@ -19,6 +20,8 @@ interface ChecklistReport {
     to_user: {
       name: string
     }
+    deleted_from_user_name?: string
+    deleted_to_user_name?: string
     timestamp: string
   }
   checklist_item?: {
@@ -49,10 +52,14 @@ export default function Reports() {
         .from('checklist_reports')
         .select(`
           *,
-          transaction:tool_transactions(
+          transaction:tool_transactions!inner(
             tool:tools(number, name),
             from_user:users!from_user_id(name),
             to_user:users!to_user_id(name),
+            deleted_from_user_name,
+            deleted_to_user_name,
+            deleted_tool_number,
+            deleted_tool_name,
             timestamp
           ),
           checklist_item:tool_checklists(item_name, required)
@@ -214,12 +221,12 @@ export default function Reports() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {report.transaction?.from_user?.name || 'System'}
+                      {report.transaction?.deleted_from_user_name || report.transaction?.from_user?.name || 'System'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {report.transaction?.to_user?.name}
+                      {report.transaction?.deleted_to_user_name || report.transaction?.to_user?.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -235,7 +242,7 @@ export default function Reports() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleResolveOpen(report)}
-                      className="text-green-600 hover:text-green-900"
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                     >
                       Resolved
                     </button>

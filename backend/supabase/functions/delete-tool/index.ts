@@ -27,19 +27,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Delete all checklist items associated with the tool
-    const { error: checklistError } = await supabaseClient
-      .from('tool_checklists')
-      .delete()
-      .eq('tool_id', id)
-    if (checklistError) throw checklistError
+    // Call our delete_tool function with the correct parameter name
+    const { error: deleteError } = await supabaseClient.rpc('delete_tool', { p_tool_id: id })
 
-    // Delete the tool itself
-    const { error: toolError } = await supabaseClient
-      .from('tools')
-      .delete()
-      .eq('id', id)
-    if (toolError) throw toolError
+    if (deleteError) {
+      return new Response(JSON.stringify({ error: deleteError.message }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      })
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
