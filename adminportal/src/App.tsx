@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Tools from './pages/Tools'
 import Users from './pages/Users'
 import Transactions from './pages/Transactions'
+import Reports from './pages/Reports'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
           <Route path="tools" element={<Tools />} />
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />
+          <Route path="reports" element={<Reports />} />
         </Route>
       </Routes>
     </Router>

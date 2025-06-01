@@ -6,6 +6,7 @@ const navLinks = [
   { to: '/tools', label: 'Tools', icon: '🧰' },
   { to: '/users', label: 'Users', icon: '👥' },
   { to: '/transactions', label: 'Transactions', icon: '🔄' },
+  { to: '/reports', label: 'Reports', icon: '📊' },
 ]
 
 export default function Layout() {

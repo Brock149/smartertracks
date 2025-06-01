@@ -30,6 +30,7 @@ export default function Tools() {
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
@@ -497,6 +498,16 @@ export default function Tools() {
     }
   }
 
+  // Filter tools based on search term
+  const filteredTools = tools.filter(tool => 
+    tool.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tool.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tool.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tool.owner?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tool.latest_transaction?.[0]?.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tool.latest_transaction?.[0]?.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -507,6 +518,101 @@ export default function Tools() {
         >
           Create New Tool
         </button>
+      </div>
+
+      {/* Search */}
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Search tools..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Tool Number
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Owner
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Location
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Last Transaction
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredTools.map((tool) => (
+              <tr key={tool.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  #{tool.number}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.name}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  {tool.description || '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.owner?.name || 'Unassigned'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.latest_transaction?.[0]?.location || 'No location recorded'}
+                  {tool.latest_transaction?.[0]?.stored_at && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      ({tool.latest_transaction[0].stored_at})
+                    </span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {tool.latest_transaction?.[0]?.timestamp 
+                    ? new Date(tool.latest_transaction[0].timestamp).toLocaleString()
+                    : 'No transactions'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <div className="flex space-x-2 items-center">
+                    <button
+                      onClick={() => handleEditTool(tool)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Edit
+                    </button>
+                    <button className="text-red-600 hover:text-red-900" onClick={() => handleDeleteToolOpen(tool)}>Delete</button>
+                    <button
+                      className="text-blue-500 hover:text-blue-700 ml-12 px-8 font-semibold"
+                      onClick={() => handleViewChecklist(tool)}
+                    >
+                      View Checklist
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Create Tool Modal */}
@@ -627,84 +733,6 @@ export default function Tools() {
           </div>
         </div>
       )}
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tool Number
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Owner
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Location
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Transaction
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {tools.map((tool) => (
-              <tr key={tool.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  #{tool.number}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {tool.name}
-                </td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                  {tool.description || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {tool.owner?.name || 'Unassigned'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {tool.latest_transaction?.[0]?.location || 'No location recorded'}
-                  {tool.latest_transaction?.[0]?.stored_at && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      ({tool.latest_transaction[0].stored_at})
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {tool.latest_transaction?.[0]?.timestamp 
-                    ? new Date(tool.latest_transaction[0].timestamp).toLocaleString()
-                    : 'No transactions'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  <div className="flex space-x-2 items-center">
-                    <button
-                      onClick={() => handleEditTool(tool)}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      Edit
-                    </button>
-                    <button className="text-red-600 hover:text-red-900" onClick={() => handleDeleteToolOpen(tool)}>Delete</button>
-                    <button
-                      className="text-blue-500 hover:text-blue-700 ml-12 px-8 font-semibold"
-                      onClick={() => handleViewChecklist(tool)}
-                    >
-                      View Checklist
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
       {/* Checklist Modal */}
       {isChecklistModalOpen && selectedTool && (

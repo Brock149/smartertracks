@@ -140,7 +140,7 @@ export default function Transactions() {
         .filter(([_, status]) => status)
         .map(([itemId, status]) => ({
           checklist_item_id: itemId,
-          status: status === 'damaged' ? 'damaged' : status === 'replace' ? 'missing' : undefined
+          status: status === 'damaged' ? 'Damaged/Needs Repair' : status === 'replace' ? 'Needs Replacement/Resupply' : undefined
         }))
         .filter(r => r.status)
 
