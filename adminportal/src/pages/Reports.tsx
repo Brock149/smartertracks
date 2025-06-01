@@ -32,6 +32,10 @@ export default function Reports() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [reportToResolve, setReportToResolve] = useState<ChecklistReport | null>(null)
+  const [resolveLoading, setResolveLoading] = useState(false)
+  const [resolveError, setResolveError] = useState<string | null>(null)
+  const [resolveSuccess, setResolveSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     fetchReports()
@@ -73,6 +77,52 @@ export default function Reports() {
     report.transaction?.from_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     report.transaction?.to_user?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  async function handleResolveReport() {
+    if (!reportToResolve) return
+    setResolveLoading(true)
+    setResolveError(null)
+    setResolveSuccess(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setResolveError('You must be logged in to resolve reports')
+        setResolveLoading(false)
+        return
+      }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-checklist-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ id: reportToResolve.id })
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setResolveError(result.error || 'Failed to resolve report')
+        setResolveLoading(false)
+        return
+      }
+      setResolveSuccess('Report resolved successfully!')
+      setResolveLoading(false)
+      setReportToResolve(null)
+      fetchReports()
+    } catch (err: any) {
+      setResolveError(err.message || 'Failed to resolve report')
+      setResolveLoading(false)
+    }
+  }
+
+  function handleResolveOpen(report: ChecklistReport) {
+    setReportToResolve(report)
+  }
+
+  function handleResolveClose() {
+    setReportToResolve(null)
+    setResolveError(null)
+    setResolveSuccess(null)
+  }
 
   return (
     <div>
@@ -130,6 +180,9 @@ export default function Reports() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Comments
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -171,15 +224,21 @@ export default function Reports() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {report.transaction?.timestamp 
-                        ? new Date(report.transaction.timestamp).toLocaleString()
-                        : new Date(report.created_at).toLocaleString()}
+                      {new Date(report.transaction?.timestamp || report.created_at).toLocaleString()}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
                       {report.comments || '-'}
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleResolveOpen(report)}
+                      className="text-green-600 hover:text-green-900"
+                    >
+                      Resolved
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -187,6 +246,78 @@ export default function Reports() {
           </table>
         )}
       </div>
+
+      {/* Resolve Report Modal */}
+      {reportToResolve && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={handleResolveClose}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-semibold mb-6 text-green-600">Resolve Report</h3>
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">Report Information</h4>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm text-gray-500">Tool:</span>
+                    <p className="text-gray-900">
+                      #{reportToResolve.transaction?.tool?.number} - {reportToResolve.transaction?.tool?.name}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Item:</span>
+                    <p className="text-gray-900">{reportToResolve.checklist_item?.item_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Status:</span>
+                    <p className="text-gray-900">{reportToResolve.status}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-500">Comments:</span>
+                    <p className="text-gray-900">{reportToResolve.comments || '-'}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-green-600 font-medium">
+                Are you sure you want to mark this report as resolved? This action cannot be undone.
+              </p>
+              {resolveError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                  {resolveError}
+                </div>
+              )}
+              {resolveSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                  {resolveSuccess}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  onClick={handleResolveClose}
+                  disabled={resolveLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  onClick={handleResolveReport}
+                  disabled={resolveLoading}
+                >
+                  {resolveLoading ? 'Resolving...' : 'Confirm Resolve'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
