@@ -31,11 +31,13 @@ interface Tool {
   id: string
   number: string
   name: string
+  company_id: string
 }
 
 interface User {
   id: string
   name: string
+  company_id: string
 }
 
 interface ChecklistItem {
@@ -111,7 +113,7 @@ export default function Transactions() {
     try {
       const { data, error } = await supabase
         .from('tools')
-        .select('id, number, name')
+        .select('id, number, name, company_id')
         .order('number', { ascending: true })
 
       if (error) throw error
@@ -125,7 +127,7 @@ export default function Transactions() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, name')
+        .select('id, name, company_id')
         .order('name', { ascending: true })
 
       if (error) throw error
@@ -258,12 +260,12 @@ export default function Transactions() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Tool Transactions</h2>
-          <p className="text-gray-500 mt-1">View all tool transfers and movements</p>
+          <h2 className="text-3xl font-bold">Tool Transactions</h2>
+          <p className="text-lg text-gray-500 mt-1">View all tool transfers and movements</p>
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+          className="bg-blue-600 text-white px-6 py-3 rounded text-lg hover:bg-blue-700 transition-colors"
         >
           Create New Transaction
         </button>
@@ -276,12 +278,12 @@ export default function Transactions() {
           placeholder="Search transactions..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-5 py-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-4 text-lg">
           {error}
         </div>
       )}
@@ -289,32 +291,32 @@ export default function Transactions() {
       {/* Transactions Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Loading transactions...</div>
+          <div className="p-8 text-center text-gray-500 text-lg">Loading transactions...</div>
         ) : filteredTransactions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">No transactions found</div>
+          <div className="p-8 text-center text-gray-500 text-lg">No transactions found</div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Tool
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   From
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   To
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Location
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Stored At
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Date/Time
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Notes
                 </th>
               </tr>
@@ -323,7 +325,7 @@ export default function Transactions() {
               {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-lg font-medium text-gray-900">
                       {transaction.tool_id ? (
                         <>#{transaction.tool?.number} - {transaction.tool?.name}</>
                       ) : (
@@ -332,28 +334,28 @@ export default function Transactions() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {transaction.deleted_to_user_name || transaction.to_user?.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{transaction.location}</div>
+                    <div className="text-lg text-gray-900">{transaction.location}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{transaction.stored_at}</div>
+                    <div className="text-lg text-gray-900">{transaction.stored_at}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {new Date(transaction.timestamp).toLocaleString()}
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {transaction.notes || '-'}
                     </div>
                   </td>
@@ -367,186 +369,195 @@ export default function Transactions() {
       {/* Create Transaction Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl relative">
-            <button
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={() => setIsCreateModalOpen(false)}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <h3 className="text-xl font-semibold mb-6">Create New Transaction</h3>
-            <form onSubmit={(e) => { e.preventDefault(); handleCreateTransaction(); }} className="space-y-4">
-              <div>
-                <label className="block font-medium mb-1">Tool</label>
-                <select
-                  value={newTransaction.tool_id}
-                  onChange={(e) => {
-                    setNewTransaction(prev => ({ ...prev, tool_id: e.target.value }))
-                    if (e.target.value) {
-                      fetchCurrentToolHolder(e.target.value)
-                      fetchChecklist(e.target.value)
-                    } else {
-                      setCurrentToolHolder(null)
-                      setChecklistItems([])
-                    }
-                  }}
-                  required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select a tool</option>
-                  {tools.map(tool => (
-                    <option key={tool.id} value={tool.id}>
-                      #{tool.number} - {tool.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-medium mb-1">From User</label>
-                {currentToolHolder ? (
-                  <div className="w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-700">
-                    {currentToolHolder.name}
-                  </div>
-                ) : (
-                  <div className="w-full border rounded-lg px-3 py-2 bg-gray-50 text-gray-500">
-                    Select a tool to see current owner
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block font-medium mb-1">To User</label>
-                <select
-                  value={newTransaction.to_user_id}
-                  onChange={(e) => setNewTransaction(prev => ({ ...prev, to_user_id: e.target.value }))}
-                  required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select a user</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-medium mb-1">Location</label>
-                <input
-                  type="text"
-                  value={newTransaction.location}
-                  onChange={(e) => setNewTransaction(prev => ({ ...prev, location: e.target.value }))}
-                  required
-                  placeholder="Where is the tool going?"
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-medium mb-1">Stored At</label>
-                <select
-                  value={newTransaction.stored_at}
-                  onChange={(e) => setNewTransaction(prev => ({ ...prev, stored_at: e.target.value }))}
-                  required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select storage location</option>
-                  <option value="on job site">On Job Site</option>
-                  <option value="on truck">On Truck</option>
-                  <option value="N/A">N/A</option>
-                </select>
-              </div>
-
-              {/* Add Checklist Display */}
-              {newTransaction.tool_id && (
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+            <div className="p-8 border-b">
+              <button
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+                onClick={() => setIsCreateModalOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+              <h3 className="text-2xl font-semibold">Create New Transaction</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8">
+              <form onSubmit={(e) => { e.preventDefault(); handleCreateTransaction(); }} className="space-y-5">
                 <div>
-                  <label className="block font-medium mb-1">Tool Checklist</label>
-                  {loadingChecklist ? (
-                    <div className="text-gray-500">Loading checklist...</div>
-                  ) : checklistItems.length > 0 ? (
-                    <div className="space-y-2 max-h-105 overflow-y-auto bg-gray-50 p-3 rounded-lg">
-                      {checklistItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between bg-white p-2 rounded border"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span>{item.item_name}</span>
-                            {item.required && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Required</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-6">
-                            <label className="flex items-center gap-2 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
-                                checked={checklistStatus[item.id] === 'damaged'}
-                                onChange={() => {
-                                  setChecklistStatus(prev => ({
-                                    ...prev,
-                                    [item.id]: prev[item.id] === 'damaged' ? null : 'damaged'
-                                  }))
-                                }}
-                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
-                              />
-                              <span>Damaged/Needs Repair</span>
-                            </label>
-                            <label className="flex items-center gap-2 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
-                                checked={checklistStatus[item.id] === 'replace'}
-                                onChange={() => {
-                                  setChecklistStatus(prev => ({
-                                    ...prev,
-                                    [item.id]: prev[item.id] === 'replace' ? null : 'replace'
-                                  }))
-                                }}
-                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
-                              />
-                              <span>Needs Replacement/Resupply</span>
-                            </label>
-                          </div>
-                        </div>
-                      ))}
+                  <label className="block font-medium mb-2 text-lg">Tool</label>
+                  <select
+                    value={newTransaction.tool_id}
+                    onChange={(e) => {
+                      setNewTransaction(prev => ({ ...prev, tool_id: e.target.value }))
+                      if (e.target.value) {
+                        fetchCurrentToolHolder(e.target.value)
+                        fetchChecklist(e.target.value)
+                      } else {
+                        setCurrentToolHolder(null)
+                        setChecklistItems([])
+                      }
+                    }}
+                    required
+                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select a tool</option>
+                    {tools.map(tool => (
+                      <option key={tool.id} value={tool.id}>
+                        #{tool.number} - {tool.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-2 text-lg">From User</label>
+                  {currentToolHolder ? (
+                    <div className="w-full border rounded-lg px-5 py-3 bg-gray-50 text-gray-700 text-lg">
+                      {currentToolHolder.name}
                     </div>
                   ) : (
-                    <div className="text-gray-500 bg-gray-50 p-3 rounded-lg">
-                      No checklist items found for this tool.
+                    <div className="w-full border rounded-lg px-5 py-3 bg-gray-50 text-gray-500 text-lg">
+                      Select a tool to see current owner
                     </div>
                   )}
                 </div>
-              )}
 
-              <div>
-                <label className="block font-medium mb-1">Notes</label>
-                <textarea
-                  value={newTransaction.notes}
-                  onChange={(e) => setNewTransaction(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Optional notes about the transaction"
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                />
-              </div>
+                <div>
+                  <label className="block font-medium mb-2 text-lg">To User</label>
+                  <select
+                    value={newTransaction.to_user_id}
+                    onChange={(e) => setNewTransaction(prev => ({ ...prev, to_user_id: e.target.value }))}
+                    required
+                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select a user</option>
+                    {users.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="flex justify-end gap-3 pt-4">
+                <div>
+                  <label className="block font-medium mb-2 text-lg">Location</label>
+                  <input
+                    type="text"
+                    value={newTransaction.location}
+                    onChange={(e) => setNewTransaction(prev => ({ ...prev, location: e.target.value }))}
+                    required
+                    placeholder="Where is the tool going?"
+                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-2 text-lg">Stored At</label>
+                  <select
+                    value={newTransaction.stored_at}
+                    onChange={(e) => setNewTransaction(prev => ({ ...prev, stored_at: e.target.value }))}
+                    required
+                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select storage location</option>
+                    <option value="on job site">On Job Site</option>
+                    <option value="on truck">On Truck</option>
+                    <option value="N/A">N/A</option>
+                  </select>
+                </div>
+
+                {/* Add Checklist Display */}
+                {newTransaction.tool_id && (
+                  <div>
+                    <label className="block font-medium mb-2 text-lg">Tool Checklist</label>
+                    {loadingChecklist ? (
+                      <div className="text-gray-500 text-lg">Loading checklist...</div>
+                    ) : checklistItems.length > 0 ? (
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto bg-gray-50 p-4 rounded-lg">
+                        {checklistItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between bg-white p-4 rounded-lg border"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">{item.item_name}</span>
+                              {item.required && (
+                                <span className="text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <label className="flex items-center gap-2 text-lg text-gray-700">
+                                <input
+                                  type="checkbox"
+                                  checked={checklistStatus[item.id] === 'damaged'}
+                                  onChange={() => {
+                                    setChecklistStatus(prev => ({
+                                      ...prev,
+                                      [item.id]: prev[item.id] === 'damaged' ? null : 'damaged'
+                                    }))
+                                  }}
+                                  className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
+                                />
+                                <span>Damaged/Needs Repair</span>
+                              </label>
+                              <label className="flex items-center gap-2 text-lg text-gray-700">
+                                <input
+                                  type="checkbox"
+                                  checked={checklistStatus[item.id] === 'replace'}
+                                  onChange={() => {
+                                    setChecklistStatus(prev => ({
+                                      ...prev,
+                                      [item.id]: prev[item.id] === 'replace' ? null : 'replace'
+                                    }))
+                                  }}
+                                  className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
+                                />
+                                <span>Needs Replacement/Resupply</span>
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 bg-gray-50 p-4 rounded-lg text-lg">
+                        No checklist items found for this tool.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block font-medium mb-2 text-lg">Notes</label>
+                  <textarea
+                    value={newTransaction.notes}
+                    onChange={(e) => setNewTransaction(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Optional notes about the transaction"
+                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                  />
+                </div>
+              </form>
+            </div>
+            <div className="p-8 border-t bg-gray-50">
+              <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
                   onClick={() => setIsCreateModalOpen(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCreateTransaction();
+                  }}
                 >
                   Create Transaction
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

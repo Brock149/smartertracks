@@ -19,6 +19,38 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Get the authorization header and verify the user
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    // Get the requesting user's company_id and verify admin role
+    const { data: requestingUserData, error: requestingUserError } = await supabaseClient
+      .from('users')
+      .select('company_id, role')
+      .eq('id', user.id)
+      .single()
+
+    if (requestingUserError || !requestingUserData || requestingUserData.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Only admins can delete users' }),
+        { status: 403, headers: corsHeaders }
+      )
+    }
+
     // Get the request body
     const { id } = await req.json()
 
@@ -29,6 +61,20 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
+      )
+    }
+
+    // Verify the target user belongs to the same company
+    const { data: targetUserData, error: targetUserError } = await supabaseClient
+      .from('users')
+      .select('company_id')
+      .eq('id', id)
+      .single()
+
+    if (targetUserError || !targetUserData || targetUserData.company_id !== requestingUserData.company_id) {
+      return new Response(
+        JSON.stringify({ error: 'Target user not found or not in the same company' }),
+        { status: 400, headers: corsHeaders }
       )
     }
 

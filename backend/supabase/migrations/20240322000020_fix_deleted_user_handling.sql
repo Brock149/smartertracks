@@ -15,7 +15,7 @@ FROM users u
 WHERE t.to_user_id = u.id
 AND NOT EXISTS (SELECT 1 FROM users WHERE id = u.id);
 
--- Drop and recreate the delete_user function
+-- Drop existing function
 DROP FUNCTION IF EXISTS delete_user;
 
 CREATE OR REPLACE FUNCTION delete_user(user_id UUID)
@@ -29,9 +29,12 @@ BEGIN
     -- Check if this is the last admin
     SELECT COUNT(*) = 1 INTO is_last_admin
     FROM users
-    WHERE role = 'admin' AND id = user_id;
+    WHERE role = 'admin';
 
-    IF is_last_admin THEN
+    IF is_last_admin AND EXISTS (
+        SELECT 1 FROM users 
+        WHERE id = user_id AND role = 'admin'
+    ) THEN
         RAISE EXCEPTION 'Cannot delete the last admin user';
     END IF;
 

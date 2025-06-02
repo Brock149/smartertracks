@@ -12,6 +12,43 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Get the authorization header and verify the user
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    // Get the user's company_id
+    const { data: userData, error: userError } = await supabaseClient
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      return new Response(
+        JSON.stringify({ error: 'User not found' }),
+        { status: 404, headers: corsHeaders }
+      )
+    }
+
     const { id } = await req.json()
 
     if (!id) {
@@ -21,10 +58,19 @@ serve(async (req) => {
       })
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    // Verify the checklist item belongs to the same company
+    const { data: checklistData, error: checklistError } = await supabaseClient
+      .from('tool_checklists')
+      .select('company_id')
+      .eq('id', id)
+      .single()
+
+    if (checklistError || !checklistData || checklistData.company_id !== userData.company_id) {
+      return new Response(
+        JSON.stringify({ error: 'Checklist item not found or not in the same company' }),
+        { status: 400, headers: corsHeaders }
+      )
+    }
 
     const { error } = await supabaseClient
       .from('tool_checklists')

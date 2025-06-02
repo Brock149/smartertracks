@@ -48,10 +48,10 @@ serve(async (req) => {
       )
     }
 
-    // Check if the user is an admin
+    // Check if the user is an admin and get their company_id
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('role')
+      .select('role, company_id')
       .eq('id', user.id)
       .single()
 
@@ -61,6 +61,9 @@ serve(async (req) => {
         { status: 403, headers: corsHeaders }
       )
     }
+
+    // Get the admin's company_id to assign to the new user
+    const adminCompanyId = userData.company_id
 
     // Get the request body
     const { name, email, password, role } = await req.json()
@@ -79,12 +82,13 @@ serve(async (req) => {
     }
     const userId = authData.user.id
 
-    // 2. Insert user info into users table
+    // 2. Insert user info into users table with the admin's company_id
     const { error: dbError } = await supabase.from('users').insert({
       id: userId,
       name,
       email,
       role,
+      company_id: adminCompanyId,
     })
     if (dbError) {
       return new Response(

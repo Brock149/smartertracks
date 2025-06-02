@@ -6,6 +6,7 @@ interface User {
   name: string
   email: string
   role: string
+  company_id: string
   created_at: string
 }
 
@@ -51,7 +52,7 @@ export default function Users() {
     setError(null)
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, email, role, created_at')
+      .select('id, name, email, role, company_id, created_at')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setUsers(data || [])
@@ -240,11 +241,11 @@ export default function Users() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Users</h2>
-          <p className="text-gray-500 mt-1">Manage your team members and their roles</p>
+          <h2 className="text-3xl font-bold">Users</h2>
+          <p className="text-gray-500 mt-1 text-lg">Manage your team members and their roles</p>
         </div>
         <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+          className="bg-blue-600 text-white px-6 py-3 rounded text-lg hover:bg-blue-700 transition-colors"
           onClick={handleOpen}
         >
           Add New User
@@ -258,17 +259,17 @@ export default function Users() {
           placeholder="Search users..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-5 py-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-4 text-lg">
           {error}
         </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg mb-4">
+        <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg mb-4 text-lg">
           {success}
         </div>
       )}
@@ -284,58 +285,58 @@ export default function Users() {
             >
               ×
             </button>
-            <h3 className="text-xl font-semibold mb-6">Add New User</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <h3 className="text-2xl font-semibold mb-6">Add New User</h3>
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block font-medium mb-1">Full Name</label>
+                <label className="block font-medium mb-2 text-lg">Full Name</label>
                 <input
                   type="text"
                   name="name"
                   value={form.name}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Email</label>
+                <label className="block font-medium mb-2 text-lg">Email</label>
                 <input
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Password</label>
+                <label className="block font-medium mb-2 text-lg">Password</label>
                 <input
                   type="password"
                   name="password"
                   value={form.password}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Role</label>
+                <label className="block font-medium mb-2 text-lg">Role</label>
                 <select
                   name="role"
                   value={form.role}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="admin">Admin</option>
                   <option value="tech">Tech</option>
                 </select>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-5">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
                   onClick={handleClose}
                   disabled={loading}
                 >
@@ -343,7 +344,7 @@ export default function Users() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   disabled={loading}
                 >
                   {loading ? 'Creating...' : 'Create User'}
@@ -365,57 +366,57 @@ export default function Users() {
             >
               ×
             </button>
-            <h3 className="text-xl font-semibold mb-6">Edit User</h3>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
+            <h3 className="text-2xl font-semibold mb-6">Edit User</h3>
+            <form onSubmit={handleEditSubmit} className="space-y-5">
               <div>
-                <label className="block font-medium mb-1">Full Name</label>
+                <label className="block font-medium mb-2 text-lg">Full Name</label>
                 <input
                   type="text"
                   name="name"
                   value={editForm.name}
                   onChange={handleEditChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Email</label>
+                <label className="block font-medium mb-2 text-lg">Email</label>
                 <input
                   type="email"
                   name="email"
                   value={editForm.email}
                   onChange={handleEditChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-1">Role</label>
+                <label className="block font-medium mb-2 text-lg">Role</label>
                 <select
                   name="role"
                   value={editForm.role}
                   onChange={handleEditChange}
                   required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="admin">Admin</option>
                   <option value="tech">Tech</option>
                 </select>
               </div>
               {editError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg">
                   {editError}
                 </div>
               )}
               {editSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg">
                   {editSuccess}
                 </div>
               )}
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-5">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
                   onClick={handleEditClose}
                   disabled={editLoading}
                 >
@@ -423,7 +424,7 @@ export default function Users() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   disabled={editLoading}
                 >
                   {editLoading ? 'Saving...' : 'Save Changes'}
@@ -445,42 +446,42 @@ export default function Users() {
             >
               ×
             </button>
-            <h3 className="text-xl font-semibold mb-6">Delete User</h3>
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-3">User Information</h4>
+            <h3 className="text-2xl font-semibold mb-6">Delete User</h3>
+            <div className="space-y-5">
+              <div className="bg-gray-50 p-5 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3 text-lg">User Information</h4>
                 <div className="space-y-2">
                   <div>
-                    <span className="text-sm text-gray-500">Name:</span>
-                    <p className="text-gray-900">{deleteUser.name}</p>
+                    <span className="text-base text-gray-500">Name:</span>
+                    <p className="text-gray-900 text-lg">{deleteUser.name}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Email:</span>
-                    <p className="text-gray-900">{deleteUser.email}</p>
+                    <span className="text-base text-gray-500">Email:</span>
+                    <p className="text-gray-900 text-lg">{deleteUser.email}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Role:</span>
-                    <p className="text-gray-900">{deleteUser.role}</p>
+                    <span className="text-base text-gray-500">Role:</span>
+                    <p className="text-gray-900 text-lg">{deleteUser.role}</p>
                   </div>
                 </div>
               </div>
-              <p className="text-red-600 font-medium">
+              <p className="text-red-600 font-medium text-lg">
                 Warning: This action cannot be undone. Are you sure you want to delete this user?
               </p>
               {deleteError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg">
                   {deleteError}
                 </div>
               )}
               {deleteSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg">
                   {deleteSuccess}
                 </div>
               )}
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-5">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
                   onClick={handleDeleteClose}
                   disabled={deleteLoading}
                 >
@@ -488,7 +489,7 @@ export default function Users() {
                 </button>
                 <button
                   type="button"
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                   onClick={handleDeleteSubmit}
                   disabled={deleteLoading}
                 >
@@ -510,23 +511,23 @@ export default function Users() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredUsers.map(user => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                    <div className="text-lg font-medium text-gray-900">{user.name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.email}</div>
+                    <div className="text-lg text-gray-900">{user.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    <span className={`px-3 py-1 inline-flex text-base leading-5 font-semibold rounded-full ${
                       user.role === 'admin' 
                         ? 'bg-purple-100 text-purple-800' 
                         : 'bg-green-100 text-green-800'
@@ -534,8 +535,8 @@ export default function Users() {
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3" onClick={() => handleEditOpen(user)}>Edit</button>
+                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium">
+                    <button className="text-blue-600 hover:text-blue-900 mr-4" onClick={() => handleEditOpen(user)}>Edit</button>
                     <button className="text-red-600 hover:text-red-900" onClick={() => handleDeleteOpen(user)}>Delete</button>
                   </td>
                 </tr>

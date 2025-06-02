@@ -13,18 +13,42 @@ serve(async (req) => {
   }
 
   try {
-    // Create a Supabase client with the service role key
+    // Create a Supabase client with the Auth context of the logged in user
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
     )
 
-    // Get the request body
-    const { number, name, description, photo_url, checklist } = await req.json()
+    // Get the user's session
+    const {
+      data: { user },
+    } = await supabaseClient.auth.getUser()
 
-    if (!number || !name) {
+    if (!user) {
       return new Response(
-        JSON.stringify({ error: 'Tool number and name are required' }),
+        JSON.stringify({ error: 'Unauthorized' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Get the user's data to check role and company
+    const { data: userData, error: userError } = await supabaseClient
+      .from('users')
+      .select('role, company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      return new Response(
+        JSON.stringify({ error: 'User not found' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -32,14 +56,40 @@ serve(async (req) => {
       )
     }
 
-    // First create the tool
+    // Only admins can create tools
+    if (userData.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Only admins can create tools' }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Get the request body
+    const { number, name, description, photo_url, checklist } = await req.json()
+
+    // Validate required fields
+    if (!number || !name) {
+      return new Response(
+        JSON.stringify({ error: 'Number and name are required' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Create the tool with the user's company_id
     const { data: toolData, error: toolError } = await supabaseClient
       .from('tools')
       .insert([{
         number,
         name,
         description,
-        photo_url
+        photo_url,
+        company_id: userData.company_id
       }])
       .select()
       .single()
@@ -54,27 +104,28 @@ serve(async (req) => {
       )
     }
 
-    // Then create checklist items if any exist
+    // If there are checklist items, insert them directly
     if (checklist && checklist.length > 0) {
+      const checklistItems = checklist.map((item: any) => ({
+        tool_id: toolData.id,
+        item_name: item.item_name,
+        required: item.required,
+        company_id: userData.company_id
+      }))
+
       const { error: checklistError } = await supabaseClient
         .from('tool_checklists')
-        .insert(
-          checklist.map((item: { item_name: string; required: boolean }) => ({
-            tool_id: toolData.id,
-            item_name: item.item_name,
-            required: item.required
-          }))
-        )
+        .insert(checklistItems)
 
       if (checklistError) {
-        // If checklist creation fails, delete the tool to maintain consistency
+        // If checklist insertion fails, delete the tool and return error
         await supabaseClient
           .from('tools')
           .delete()
           .eq('id', toolData.id)
 
         return new Response(
-          JSON.stringify({ error: checklistError.message }),
+          JSON.stringify({ error: 'Failed to create checklist items: ' + checklistError.message }),
           {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

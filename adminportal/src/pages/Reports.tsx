@@ -135,8 +135,8 @@ export default function Reports() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Reports</h2>
-          <p className="text-gray-500 mt-1">View and analyze tool tracking data</p>
+          <h2 className="text-3xl font-bold">Reports</h2>
+          <p className="text-lg text-gray-500 mt-1">View and analyze tool tracking data</p>
         </div>
       </div>
 
@@ -147,47 +147,47 @@ export default function Reports() {
           placeholder="Search reports..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-5 py-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-4 text-lg">
           {error}
         </div>
       )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Loading reports...</div>
+          <div className="p-8 text-center text-gray-500 text-lg">Loading reports...</div>
         ) : filteredReports.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">No reports found</div>
+          <div className="p-8 text-center text-gray-500 text-lg">No reports found</div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Tool
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Item
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   From
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   To
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Date/Time
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Comments
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -196,20 +196,20 @@ export default function Reports() {
               {filteredReports.map((report) => (
                 <tr key={report.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-lg font-medium text-gray-900">
                       #{report.transaction?.tool?.number} - {report.transaction?.tool?.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {report.checklist_item?.item_name}
                       {report.checklist_item?.required && (
-                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Required</span>
+                        <span className="ml-2 text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
                       )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    <span className={`px-3 py-1 inline-flex text-base leading-5 font-semibold rounded-full ${
                       report.status === 'Damaged/Needs Repair'
                         ? 'bg-yellow-100 text-yellow-800'
                         : report.status === 'Needs Replacement/Resupply'
@@ -220,29 +220,29 @@ export default function Reports() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {report.transaction?.deleted_from_user_name || report.transaction?.from_user?.name || 'System'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {report.transaction?.deleted_to_user_name || report.transaction?.to_user?.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {new Date(report.transaction?.timestamp || report.created_at).toLocaleString()}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-lg text-gray-900">
                       {report.comments || '-'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium">
                     <button
                       onClick={() => handleResolveOpen(report)}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                      className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-green-700 transition-colors"
                     >
                       Resolved
                     </button>
@@ -265,48 +265,48 @@ export default function Reports() {
             >
               ×
             </button>
-            <h3 className="text-xl font-semibold mb-6 text-green-600">Resolve Report</h3>
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-3">Report Information</h4>
-                <div className="space-y-2">
+            <h3 className="text-2xl font-semibold mb-6 text-green-600">Resolve Report</h3>
+            <div className="space-y-5">
+              <div className="bg-gray-50 p-5 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-4 text-lg">Report Information</h4>
+                <div className="space-y-3">
                   <div>
-                    <span className="text-sm text-gray-500">Tool:</span>
-                    <p className="text-gray-900">
+                    <span className="text-base text-gray-500">Tool:</span>
+                    <p className="text-lg text-gray-900">
                       #{reportToResolve.transaction?.tool?.number} - {reportToResolve.transaction?.tool?.name}
                     </p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Item:</span>
-                    <p className="text-gray-900">{reportToResolve.checklist_item?.item_name}</p>
+                    <span className="text-base text-gray-500">Item:</span>
+                    <p className="text-lg text-gray-900">{reportToResolve.checklist_item?.item_name}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Status:</span>
-                    <p className="text-gray-900">{reportToResolve.status}</p>
+                    <span className="text-base text-gray-500">Status:</span>
+                    <p className="text-lg text-gray-900">{reportToResolve.status}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Comments:</span>
-                    <p className="text-gray-900">{reportToResolve.comments || '-'}</p>
+                    <span className="text-base text-gray-500">Comments:</span>
+                    <p className="text-lg text-gray-900">{reportToResolve.comments || '-'}</p>
                   </div>
                 </div>
               </div>
-              <p className="text-green-600 font-medium">
+              <p className="text-green-600 font-medium text-lg">
                 Are you sure you want to mark this report as resolved? This action cannot be undone.
               </p>
               {resolveError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg text-lg">
                   {resolveError}
                 </div>
               )}
               {resolveSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded-lg">
+                <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg text-lg">
                   {resolveSuccess}
                 </div>
               )}
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-5">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
                   onClick={handleResolveClose}
                   disabled={resolveLoading}
                 >
@@ -314,7 +314,7 @@ export default function Reports() {
                 </button>
                 <button
                   type="button"
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                   onClick={handleResolveReport}
                   disabled={resolveLoading}
                 >

@@ -18,6 +18,38 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Get the authorization header and verify the user
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    // Get the user's company_id
+    const { data: userData, error: userError } = await supabaseClient
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
+      return new Response(
+        JSON.stringify({ error: 'User not found' }),
+        { status: 404, headers: corsHeaders }
+      )
+    }
+
     // Get the request body
     const { tool_id, item_name, required } = await req.json()
     if (!tool_id || !item_name) {
@@ -27,10 +59,29 @@ serve(async (req) => {
       )
     }
 
-    // Insert checklist item
+    // Verify the tool belongs to the same company
+    const { data: toolData, error: toolError } = await supabaseClient
+      .from('tools')
+      .select('company_id')
+      .eq('id', tool_id)
+      .single()
+
+    if (toolError || !toolData || toolData.company_id !== userData.company_id) {
+      return new Response(
+        JSON.stringify({ error: 'Tool not found or not in the same company' }),
+        { status: 400, headers: corsHeaders }
+      )
+    }
+
+    // Insert checklist item with company_id
     const { data, error } = await supabaseClient
       .from('tool_checklists')
-      .insert([{ tool_id, item_name, required }])
+      .insert([{ 
+        tool_id, 
+        item_name, 
+        required,
+        company_id: userData.company_id
+      }])
       .select()
       .single()
 
