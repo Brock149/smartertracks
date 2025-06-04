@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
@@ -11,35 +11,24 @@ const navLinks = [
 
 export default function Layout() {
   const location = useLocation()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+  const [user, setUser] = useState<any>(null)
 
-  // Check if we're already logged in
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
     })
-  }, [])
 
-  async function handleLogin() {
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: 'admin@example.com',
-        password: 'admin1',
-      })
-      if (error) throw error
-      setIsLoggedIn(true)
-    } catch (error) {
-      console.error('Error logging in:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    setIsLoggedIn(false)
+    navigate('/login')
   }
 
   return (
@@ -69,8 +58,13 @@ export default function Layout() {
           <div className="flex items-center gap-3 px-2">
             <span className="inline-block w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-xl">👤</span>
             <div>
-              <div className="font-semibold">Admin User</div>
-              <div className="text-xs text-gray-300">admin@company.com</div>
+              <div className="font-semibold">{user?.email || 'Loading...'}</div>
+              <button
+                onClick={handleLogout}
+                className="text-sm text-gray-300 hover:text-white"
+              >
+                Sign out
+              </button>
             </div>
           </div>
         </div>
@@ -86,22 +80,6 @@ export default function Layout() {
             <span className="text-gray-500">Sasi HVAC Tool Tracker</span>
           </div>
           <div className="flex items-center gap-4">
-            {!isLoggedIn ? (
-              <button
-                onClick={handleLogin}
-                disabled={loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Logging in...' : 'Login as Admin'}
-              </button>
-            ) : (
-              <button
-                onClick={handleLogout}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                Logout
-              </button>
-            )}
             <input
               type="text"
               placeholder="Search..."

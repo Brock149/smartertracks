@@ -36,17 +36,17 @@ serve(async (req) => {
       )
     }
 
-    // Get the requesting user's company_id and verify admin role
+    // Get the requesting user's company_id and role
     const { data: requestingUserData, error: requestingUserError } = await supabaseClient
       .from('users')
       .select('company_id, role')
       .eq('id', user.id)
       .single()
 
-    if (requestingUserError || !requestingUserData || requestingUserData.role !== 'admin') {
+    if (requestingUserError || !requestingUserData) {
       return new Response(
-        JSON.stringify({ error: 'Only admins can edit users' }),
-        { status: 403, headers: corsHeaders }
+        JSON.stringify({ error: 'User not found' }),
+        { status: 404, headers: corsHeaders }
       )
     }
 
@@ -62,7 +62,7 @@ serve(async (req) => {
     // Verify the target user belongs to the same company
     const { data: targetUserData, error: targetUserError } = await supabaseClient
       .from('users')
-      .select('company_id')
+      .select('company_id, role')
       .eq('id', id)
       .single()
 
@@ -73,13 +73,27 @@ serve(async (req) => {
       )
     }
 
+    // Only admins can edit users
+    if (requestingUserData.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Only admins can edit users' }),
+        { status: 403, headers: corsHeaders }
+      )
+    }
+
     // Update the user in the users table
     const { error: updateError } = await supabaseClient
       .from('users')
       .update({ name, email, role })
       .eq('id', id)
 
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error('Error updating user:', updateError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to update user in database' }),
+        { status: 400, headers: corsHeaders }
+      )
+    }
 
     // Update the user in Supabase Auth
     const { error: authError2 } = await supabaseClient.auth.admin.updateUserById(
@@ -87,13 +101,20 @@ serve(async (req) => {
       { email, user_metadata: { name, role } }
     )
 
-    if (authError2) throw authError2
+    if (authError2) {
+      console.error('Error updating auth user:', authError2)
+      return new Response(
+        JSON.stringify({ error: 'Failed to update user in auth system' }),
+        { status: 400, headers: corsHeaders }
+      )
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
+    console.error('Unexpected error:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
