@@ -21,12 +21,32 @@ export async function uploadToolImageAndInsert(
     const { data: { publicUrl } } = supabase.storage
       .from('tool-images')
       .getPublicUrl(filePath);
-    // Insert into tool_images table
+
+    // Get the tool's company_id
+    const { data: toolData, error: toolError } = await supabase
+      .from('tools')
+      .select('company_id')
+      .eq('id', toolId)
+      .single();
+
+    if (toolError) {
+      console.error('Error fetching tool data:', toolError);
+      // Clean up storage if DB insert fails
+      await supabase.storage.from('tool-images').remove([filePath]);
+      return null;
+    }
+
+    // Insert into tool_images table with company_id
     const { data: insertData, error: insertError } = await supabase
       .from('tool_images')
-      .insert([{ tool_id: toolId, image_url: publicUrl }])
+      .insert([{ 
+        tool_id: toolId, 
+        image_url: publicUrl,
+        company_id: toolData.company_id 
+      }])
       .select()
       .single();
+
     if (insertError) {
       console.error('Error inserting image record:', insertError);
       // Clean up storage if DB insert fails
