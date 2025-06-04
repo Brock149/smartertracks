@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { ToolImageUpload } from '../components/ToolImageUpload'
+import { ToolImageGallery } from '../components/ToolImageGallery'
+import { deleteToolImage, fetchToolImages, deleteToolImageRecord } from '../lib/uploadImage'
 
 interface Tool {
   id: string
@@ -41,7 +44,6 @@ export default function Tools() {
     number: '',
     name: '',
     description: '',
-    photo_url: '',
     checklist: [] as Array<ChecklistItem | { item_name: string; required: boolean }>
   })
   const [newChecklistItem, setNewChecklistItem] = useState({
@@ -75,6 +77,13 @@ export default function Tools() {
   const [checklistItemToDelete, setChecklistItemToDelete] = useState<ChecklistItem | null>(null)
   const [showDeleteChecklistModal, setShowDeleteChecklistModal] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [newToolImages, setNewToolImages] = useState<Array<{ id: string; image_url: string }>>([])
+  const [newToolImagesAdded, setNewToolImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
+  const [editToolImages, setEditToolImages] = useState<Array<{ id: string; image_url: string }>>([])
+  const [editImagesToDelete, setEditImagesToDelete] = useState<Array<{ id: string; image_url: string }>>([])
+  const [editImagesAdded, setEditImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
+  const [toolsWithImages, setToolsWithImages] = useState<{ [toolId: string]: boolean }>({})
 
   useEffect(() => {
     console.log('Tools component mounted')
@@ -102,6 +111,18 @@ export default function Tools() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    async function checkImages() {
+      const result: { [toolId: string]: boolean } = {};
+      for (const tool of tools) {
+        const imgs = await fetchToolImages(tool.id);
+        result[tool.id] = imgs.length > 0;
+      }
+      setToolsWithImages(result);
+    }
+    if (tools.length > 0) checkImages();
+  }, [tools]);
 
   async function fetchTools() {
     try {
@@ -190,23 +211,24 @@ export default function Tools() {
           body: JSON.stringify(newTool)
         }
       )
-
       const data = await response.json()
-
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create tool')
       }
-
-      // Reset form and close modal
       setNewTool({
         number: '',
         name: '',
         description: '',
-        photo_url: '',
         checklist: []
-      })
+      });
+      setNewToolImages([]);
+      setNewToolImagesAdded([]);
       setIsCreateModalOpen(false)
-      fetchTools() // Refresh the tools list
+      fetchTools();
+      // Open edit modal for the new tool so user can upload images
+      if (data.id) {
+        await handleEditTool({ ...newTool, id: data.id });
+      }
     } catch (error: any) {
       setError(error.message || 'An unexpected error occurred')
     }
@@ -278,17 +300,26 @@ export default function Tools() {
     }
   }
 
-  const handleEditTool = (tool: any) => {
-    setEditingTool(tool)
-    setIsEditModalOpen(true)
-  }
+  const handleEditTool = async (tool: any) => {
+    setEditingTool(tool);
+    const imgs = await fetchToolImages(tool.id);
+    setEditToolImages(imgs);
+    setEditImagesToDelete([]);
+    setEditImagesAdded([]);
+    setIsEditModalOpen(true);
+  };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTool) return;
-
     try {
       setEditLoading(true);
+      // Actually delete staged images
+      for (const img of editImagesToDelete) {
+        await deleteToolImageRecord(img.id, img.image_url);
+      }
+      // Clear added images tracker (they are now kept)
+      setEditImagesAdded([]);
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/edit-tool`,
         {
@@ -300,22 +331,32 @@ export default function Tools() {
           body: JSON.stringify(editingTool)
         }
       );
-
       const data = await response.json();
-
       if (!response.ok) {
         alert(data.error || 'Failed to update tool');
         return;
       }
-
       setIsEditModalOpen(false);
       setEditingTool(null);
-      fetchTools(); // Refresh the tools list
+      setEditImagesToDelete([]);
+      setEditImagesAdded([]);
+      fetchTools();
     } catch (error: any) {
       alert(error.message || 'An unexpected error occurred');
     } finally {
       setEditLoading(false);
     }
+  };
+
+  const handleEditModalClose = async () => {
+    // Delete all newly added images
+    for (const img of editImagesAdded) {
+      await deleteToolImageRecord(img.id, img.image_url);
+    }
+    setIsEditModalOpen(false);
+    setEditingTool(null);
+    setEditImagesToDelete([]);
+    setEditImagesAdded([]);
   };
 
   const openDeleteModal = (tool: Tool) => {
@@ -330,11 +371,35 @@ export default function Tools() {
     setDeleteError(null)
   }
 
+  const resetNewTool = async () => {
+    // Delete all uploaded images for this new tool (not yet saved in DB)
+    for (const img of newToolImages) {
+      await deleteToolImageRecord(img.id, img.image_url);
+    }
+    // Also delete staged new images
+    for (const img of newToolImagesAdded) {
+      await deleteToolImageRecord(img.id, img.image_url);
+    }
+    setNewTool({
+      number: '',
+      name: '',
+      description: '',
+      checklist: []
+    });
+    setNewToolImages([]);
+    setNewToolImagesAdded([]);
+  };
+
   const handleDeleteTool = async () => {
     if (!toolToDelete) return
     setDeleteLoading(true)
     setDeleteError(null)
     try {
+      // Fetch all images for this tool and delete them
+      const imgs = await fetchToolImages(toolToDelete.id);
+      for (const img of imgs) {
+        await deleteToolImageRecord(img.id, img.image_url);
+      }
       const session = await supabase.auth.getSession()
       if (!session.data.session) {
         setDeleteError('You must be logged in to delete tools')
@@ -532,6 +597,11 @@ export default function Tools() {
     tool.latest_transaction?.[0]?.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // Add this new function for handling image preview
+  const handleImagePreview = (imageUrl: string | null) => {
+    setPreviewImage(imageUrl);
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -592,6 +662,9 @@ export default function Tools() {
                   Last Transaction
                 </th>
                 <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  Image
+                </th>
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -625,6 +698,18 @@ export default function Tools() {
                       : 'No transactions'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
+                    {toolsWithImages[tool.id] ? (
+                      <ToolImageGallery toolId={tool.id} />
+                    ) : (
+                      <button
+                        className="text-blue-600 hover:text-blue-900 underline"
+                        onClick={() => handleEditTool(tool)}
+                      >
+                        Upload Image
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
                     <div className="flex space-x-3 items-center">
                       <button
                         onClick={() => handleEditTool(tool)}
@@ -653,6 +738,31 @@ export default function Tools() {
         )}
       </div>
 
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 max-w-2xl w-full relative">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+            >
+              ×
+            </button>
+            <div className="mt-4">
+              <img
+                src={previewImage}
+                alt="Tool Preview"
+                className="w-full h-auto rounded-lg"
+              />
+              <div className="mt-4 text-sm text-gray-600 break-all">
+                <p className="font-semibold">Image URL:</p>
+                <p>{previewImage}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Tool Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
@@ -660,7 +770,7 @@ export default function Tools() {
             <div className="p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={async () => { setIsCreateModalOpen(false); await resetNewTool(); }}
                 aria-label="Close"
               >
                 ×
@@ -701,17 +811,6 @@ export default function Tools() {
                     placeholder="Enter tool description (optional)"
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-medium mb-2 text-lg">Photo URL</label>
-                  <input
-                    type="text"
-                    value={newTool.photo_url}
-                    onChange={(e) => setNewTool(prev => ({ ...prev, photo_url: e.target.value }))}
-                    placeholder="Enter photo URL (optional)"
-                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -777,7 +876,7 @@ export default function Tools() {
                 <button
                   type="button"
                   className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={async () => { setIsCreateModalOpen(false); await resetNewTool(); }}
                 >
                   Cancel
                 </button>
@@ -801,7 +900,7 @@ export default function Tools() {
             <div className="p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-                onClick={() => setIsEditModalOpen(false)}
+                onClick={handleEditModalClose}
                 aria-label="Close"
               >
                 ×
@@ -843,12 +942,19 @@ export default function Tools() {
                 </div>
 
                 <div>
-                  <label className="block font-medium mb-2 text-lg">Photo URL</label>
-                  <input
-                    type="text"
-                    value={editingTool.photo_url}
-                    onChange={(e) => setEditingTool({ ...editingTool, photo_url: e.target.value })}
-                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  <label className="block font-medium mb-2 text-lg">Tool Images</label>
+                  <ToolImageUpload
+                    toolId={editingTool.id}
+                    images={editToolImages}
+                    setImages={setEditToolImages}
+                    disabled={false}
+                    onRemoveImage={(img) => {
+                      setEditToolImages(editToolImages.filter(i => i.id !== img.id));
+                      setEditImagesToDelete([...editImagesToDelete, img]);
+                    }}
+                    onAddImage={(img) => {
+                      setEditImagesAdded([...editImagesAdded, img]);
+                    }}
                   />
                 </div>
               </form>
@@ -858,7 +964,7 @@ export default function Tools() {
                 <button
                   type="button"
                   className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsEditModalOpen(false)}
+                  onClick={handleEditModalClose}
                   disabled={editLoading}
                 >
                   Cancel
