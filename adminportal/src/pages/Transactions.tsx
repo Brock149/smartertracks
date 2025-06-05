@@ -74,6 +74,8 @@ export default function Transactions() {
   })
   const [currentToolHolder, setCurrentToolHolder] = useState<{ id: string; name: string } | null>(null)
   const [checklistStatus, setChecklistStatus] = useState<{ [itemId: string]: null | 'damaged' | 'replace' }>({})
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Fetch transactions
   useEffect(() => {
@@ -256,6 +258,15 @@ export default function Transactions() {
     transaction.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // Add pagination function
+  const getPaginatedTransactions = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredTransactions.slice(startIndex, endIndex)
+  }
+
+  const getTotalPages = () => Math.ceil(filteredTransactions.length / itemsPerPage)
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -292,78 +303,142 @@ export default function Transactions() {
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-lg">Loading transactions...</div>
-        ) : filteredTransactions.length === 0 ? (
+        ) : getPaginatedTransactions().length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-lg">No transactions found</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Tool
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  From
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  To
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Stored At
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Date/Time
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Notes
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTransactions.map((transaction) => (
-                <tr key={transaction.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg font-medium text-gray-900">
-                      {transaction.tool_id ? (
-                        <>#{transaction.tool?.number} - {transaction.tool?.name}</>
-                      ) : (
-                        <>#{transaction.deleted_tool_number} - {transaction.deleted_tool_name} (Deleted)</>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
-                      {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
-                      {transaction.deleted_to_user_name || transaction.to_user?.name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">{transaction.location}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">{transaction.stored_at}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
-                      {new Date(transaction.timestamp).toLocaleString()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-lg text-gray-900">
-                      {transaction.notes || '-'}
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    Tool
+                  </th>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    From
+                  </th>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    To
+                  </th>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    Location
+                  </th>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    Stored At
+                  </th>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    Date/Time
+                  </th>
+                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                    Notes
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {getPaginatedTransactions().map((transaction) => (
+                  <tr key={transaction.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg font-medium text-gray-900">
+                        {transaction.tool_id ? (
+                          <>#{transaction.tool?.number} - {transaction.tool?.name}</>
+                        ) : (
+                          <>#{transaction.deleted_tool_number} - {transaction.deleted_tool_name} (Deleted)</>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg text-gray-900">
+                        {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg text-gray-900">
+                        {transaction.deleted_to_user_name || transaction.to_user?.name}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg text-gray-900">{transaction.location}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg text-gray-900">{transaction.stored_at}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg text-gray-900">
+                        {new Date(transaction.timestamp).toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-lg text-gray-900">
+                        {transaction.notes || '-'}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+      </div>
+
+      {/* Pagination */}
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+        <div className="flex-1 flex justify-between sm:hidden">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+            disabled={currentPage === getTotalPages()}
+            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-gray-700">
+              Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+              <span className="font-medium">
+                {Math.min(currentPage * itemsPerPage, filteredTransactions.length)}
+              </span>{' '}
+              of <span className="font-medium">{filteredTransactions.length}</span> transactions
+            </p>
+          </div>
+          <div>
+            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                    currentPage === page
+                      ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                disabled={currentPage === getTotalPages()}
+                className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </nav>
+          </div>
+        </div>
       </div>
 
       {/* Create Transaction Modal */}

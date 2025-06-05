@@ -8,11 +8,11 @@ interface Tool {
   id: string
   number: string
   name: string
-  description?: string
-  photo_url?: string
+  description: string
   created_at: string
-  current_owner?: string
   company_id: string
+  current_owner: string | null
+  photo_url?: string
   owner?: {
     name: string
   }
@@ -20,6 +20,10 @@ interface Tool {
     location: string
     stored_at: string
     timestamp: string
+  }>
+  checklist?: Array<{
+    item_name: string
+    required: boolean
   }>
 }
 
@@ -51,15 +55,28 @@ export default function Tools() {
     required: true
   })
   const [isAddingItem, setIsAddingItem] = useState(false)
-  const [editingTool, setEditingTool] = useState<any>(null)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editLoading, setEditLoading] = useState(false)
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [editingTool, setEditingTool] = useState<Tool | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    photo_url: '',
+    checklist: [] as Array<{ item_name: string; required: boolean }>
+  })
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [toolToDelete, setToolToDelete] = useState<Tool | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
-  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [loadingRole, setLoadingRole] = useState(true)
+  const [userCompanyId, setUserCompanyId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [newToolImages, setNewToolImages] = useState<Array<{ id: string; image_url: string }>>([])
+  const [newToolImagesAdded, setNewToolImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
+  const [editToolImages, setEditToolImages] = useState<Array<{ id: string; image_url: string }>>([])
+  const [editImagesToDelete, setEditImagesToDelete] = useState<Array<{ id: string; image_url: string }>>([])
+  const [editImagesAdded, setEditImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
+  const [toolsWithImages, setToolsWithImages] = useState<{ [toolId: string]: boolean }>({})
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null)
   const [editingChecklistItem, setEditingChecklistItem] = useState<{
     item_name: string
@@ -75,15 +92,14 @@ export default function Tools() {
   const [deleteChecklistLoading, setDeleteChecklistLoading] = useState(false)
   const [deleteChecklistError, setDeleteChecklistError] = useState<string | null>(null)
   const [checklistItemToDelete, setChecklistItemToDelete] = useState<ChecklistItem | null>(null)
-  const [showDeleteChecklistModal, setShowDeleteChecklistModal] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
-  const [newToolImages, setNewToolImages] = useState<Array<{ id: string; image_url: string }>>([])
-  const [newToolImagesAdded, setNewToolImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
-  const [editToolImages, setEditToolImages] = useState<Array<{ id: string; image_url: string }>>([])
-  const [editImagesToDelete, setEditImagesToDelete] = useState<Array<{ id: string; image_url: string }>>([])
-  const [editImagesAdded, setEditImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
-  const [toolsWithImages, setToolsWithImages] = useState<{ [toolId: string]: boolean }>({})
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
+  const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   useEffect(() => {
     console.log('Tools component mounted')
@@ -192,10 +208,9 @@ export default function Tools() {
     }
   }
 
-  async function handleViewChecklist(tool: Tool) {
+  const handleViewChecklist = (tool: Tool) => {
     setSelectedTool(tool)
     setIsChecklistModalOpen(true)
-    await fetchChecklist(tool.id)
   }
 
   async function handleCreateTool() {
@@ -300,20 +315,23 @@ export default function Tools() {
     }
   }
 
-  const handleEditTool = async (tool: any) => {
-    setEditingTool(tool);
-    const imgs = await fetchToolImages(tool.id);
-    setEditToolImages(imgs);
-    setEditImagesToDelete([]);
-    setEditImagesAdded([]);
-    setIsEditModalOpen(true);
-  };
+  const handleEditTool = (tool: Tool) => {
+    setEditingTool(tool)
+    setEditForm({
+      name: tool.name,
+      description: tool.description,
+      photo_url: tool.photo_url || '',
+      checklist: tool.checklist || []
+    })
+    setIsEditModalOpen(true)
+  }
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTool) return;
     try {
-      setEditLoading(true);
+      setEditChecklistLoading(true)
+      setEditChecklistError(null)
       // Actually delete staged images
       for (const img of editImagesToDelete) {
         await deleteToolImageRecord(img.id, img.image_url);
@@ -336,7 +354,7 @@ export default function Tools() {
         alert(data.error || 'Failed to update tool');
         return;
       }
-      setIsEditModalOpen(false);
+      setIsChecklistModalOpen(false);
       setEditingTool(null);
       setEditImagesToDelete([]);
       setEditImagesAdded([]);
@@ -344,7 +362,7 @@ export default function Tools() {
     } catch (error: any) {
       alert(error.message || 'An unexpected error occurred');
     } finally {
-      setEditLoading(false);
+      setEditChecklistLoading(false)
     }
   };
 
@@ -353,15 +371,14 @@ export default function Tools() {
     for (const img of editImagesAdded) {
       await deleteToolImageRecord(img.id, img.image_url);
     }
-    setIsEditModalOpen(false);
+    setIsChecklistModalOpen(false);
     setEditingTool(null);
     setEditImagesToDelete([]);
     setEditImagesAdded([]);
   };
 
   const openDeleteModal = (tool: Tool) => {
-    setToolToDelete(tool)
-    setDeleteError(null)
+    setDeleteTool(tool)
     setDeleteModalOpen(true)
   }
 
@@ -391,44 +408,26 @@ export default function Tools() {
   };
 
   const handleDeleteTool = async () => {
-    if (!toolToDelete) return
-    setDeleteLoading(true)
-    setDeleteError(null)
+    if (!deleteTool) return
+
     try {
-      // Fetch all images for this tool and delete them
-      const imgs = await fetchToolImages(toolToDelete.id);
-      for (const img of imgs) {
-        await deleteToolImageRecord(img.id, img.image_url);
-      }
-      const session = await supabase.auth.getSession()
-      if (!session.data.session) {
-        setDeleteError('You must be logged in to delete tools')
-        setDeleteLoading(false)
-        return
-      }
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-tool`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.data.session.access_token}`
-          },
-          body: JSON.stringify({ id: toolToDelete.id })
-        }
-      )
-      const data = await response.json()
-      if (!response.ok || data.error) {
-        setDeleteError(data.error || 'Failed to delete tool')
-        setDeleteLoading(false)
-        return
-      }
-      setDeleteLoading(false)
-      handleDeleteClose()
-      fetchTools()
-    } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete tool')
-      setDeleteLoading(false)
+      setDeleteLoading(true)
+      setDeleteError(null)
+      setDeleteSuccess(null)
+
+      const { error } = await supabase
+        .rpc('delete_tool', {
+          p_tool_id: deleteTool.id
+        })
+
+      if (error) throw error
+
+      setDeleteSuccess('Tool deleted successfully')
+      setDeleteModalOpen(false)
+      fetchTools() // Refresh the tools list
+    } catch (error: any) {
+      console.error('Error deleting tool:', error)
+      setDeleteError(error.message || 'Failed to delete tool')
     } finally {
       setDeleteLoading(false)
     }
@@ -539,35 +538,22 @@ export default function Tools() {
     }
   }
 
-  async function handleDeleteChecklistItem(item: ChecklistItem) {
-    setDeleteChecklistLoading(true)
-    setDeleteChecklistError(null)
+  const handleDeleteChecklistItem = async (itemId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setDeleteChecklistError('You must be logged in to delete checklist items')
-        setDeleteChecklistLoading(false)
-        return
-      }
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-checklist-item`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ id: item.id })
-      })
-      const result = await res.json()
-      if (!res.ok || result.error) {
-        setDeleteChecklistError(result.error || 'Failed to delete checklist item')
-        setDeleteChecklistLoading(false)
-        return
-      }
-      await fetchChecklist(item.tool_id)
-    } catch (err: any) {
-      setDeleteChecklistError(err.message || 'Failed to delete checklist item')
+      setLoadingChecklist(true)
+      const { error } = await supabase
+        .from('tool_checklists')
+        .delete()
+        .eq('id', itemId)
+
+      if (error) throw error
+
+      // Refresh the checklist items
+      await fetchChecklist(selectedTool!.id)
+    } catch (error) {
+      console.error('Error deleting checklist item:', error)
     } finally {
-      setDeleteChecklistLoading(false)
+      setLoadingChecklist(false)
     }
   }
 
@@ -581,7 +567,7 @@ export default function Tools() {
 
   async function handleDeleteChecklistConfirmModal() {
     if (checklistItemToDelete) {
-      await handleDeleteChecklistItem(checklistItemToDelete)
+      await handleDeleteChecklistItem(checklistItemToDelete.id)
       setChecklistItemToDelete(null)
       setShowDeleteChecklistModal(false)
     }
@@ -602,168 +588,164 @@ export default function Tools() {
     setPreviewImage(imageUrl);
   };
 
+  // Add pagination function
+  const getPaginatedTools = () => {
+    const filtered = tools.filter(tool => 
+      tool.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tool.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filtered.slice(startIndex, endIndex)
+  }
+
+  const getTotalPages = () => Math.ceil(tools.length / itemsPerPage)
+
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-3xl font-bold">Tools</h2>
-          <p className="text-lg text-gray-500 mt-1">Manage and track all tools</p>
+    <div className="container mx-auto px-4 py-8">
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="bg-blue-600 text-white px-6 py-3 rounded text-lg hover:bg-blue-700 transition-colors"
-        >
-          Add New Tool
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Search tools..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-5 py-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-4 text-lg">
-          {error}
-        </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-500 text-lg">Loading tools...</div>
-        ) : filteredTools.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 text-lg">No tools found</div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Tool Number
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Description
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Owner
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Last Transaction
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Image
-                </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTools.map((tool) => (
-                <tr key={tool.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    #{tool.number}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    {tool.name}
-                  </td>
-                  <td className="px-6 py-4 text-lg font-medium text-gray-900">
-                    {tool.description || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    {tool.owner?.name || 'Unassigned'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    {tool.latest_transaction?.[0]?.location || 'No location recorded'}
-                    {tool.latest_transaction?.[0]?.stored_at && (
-                      <span className="ml-2 text-base text-gray-500">
-                        ({tool.latest_transaction[0].stored_at})
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    {tool.latest_transaction?.[0]?.timestamp 
-                      ? new Date(tool.latest_transaction[0].timestamp).toLocaleString()
-                      : 'No transactions'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    {toolsWithImages[tool.id] ? (
-                      <ToolImageGallery toolId={tool.id} />
-                    ) : (
-                      <button
-                        className="text-blue-600 hover:text-blue-900 underline"
-                        onClick={() => handleEditTool(tool)}
-                      >
-                        Upload Image
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium text-gray-900">
-                    <div className="flex space-x-3 items-center">
-                      <button
-                        onClick={() => handleEditTool(tool)}
-                        className="text-blue-600 hover:text-blue-900 text-lg"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        className="text-red-600 hover:text-red-900 text-lg" 
-                        onClick={() => openDeleteModal(tool)}
-                      >
-                        Delete
-                      </button>
-                      <button
-                        className="text-blue-500 hover:text-blue-700 ml-12 px-8 py-2 font-semibold text-lg"
-                        onClick={() => handleViewChecklist(tool)}
-                      >
-                        View Checklist
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 max-w-2xl w-full relative">
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Tools</h1>
             <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              ×
+              Add Tool
             </button>
-            <div className="mt-4">
-              <img
-                src={previewImage}
-                alt="Tool Preview"
-                className="w-full h-auto rounded-lg"
-              />
-              <div className="mt-4 text-sm text-gray-600 break-all">
-                <p className="font-semibold">Image URL:</p>
-                <p>{previewImage}</p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="mb-6">
+            <input
+              type="text"
+              placeholder="Search tools..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+
+          {/* Tools List */}
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Number</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Owner</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {getPaginatedTools().map((tool) => (
+                    <tr key={tool.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tool.number}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tool.name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{tool.description}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {tool.current_owner?.name || 'None'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => handleEditTool(tool)}
+                          className="text-blue-600 hover:text-blue-900 mr-4"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setToolToDelete(tool)
+                            setShowDeleteModal(true)
+                          }}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination */}
+            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                  disabled={currentPage === getTotalPages()}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                    <span className="font-medium">
+                      {Math.min(currentPage * itemsPerPage, tools.length)}
+                    </span>{' '}
+                    of <span className="font-medium">{tools.length}</span> tools
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          currentPage === page
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                      disabled={currentPage === getTotalPages()}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </nav>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Create Tool Modal */}
+      {/* Add Tool Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
@@ -1080,7 +1062,7 @@ export default function Tools() {
                               Cancel
                             </button>
                             <button
-                              onClick={() => handleDeleteChecklistItem(item)}
+                              onClick={() => handleDeleteChecklistItem(item.id)}
                               className="text-red-600 hover:text-red-900 text-lg"
                               disabled={deleteChecklistLoading}
                             >
