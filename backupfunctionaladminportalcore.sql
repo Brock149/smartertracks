@@ -125,7 +125,7 @@ BEGIN
             v_tool_id,
             NULL, -- System transfer (no from_user)
             v_final_owner_id,
-            COALESCE(v_final_location, 'Not specified'),
+            normalize_location(p_company_id, COALESCE(v_final_location, 'Not specified')), -- MODIFIED: Apply location normalization
             'N/A',
             'Initial assignment from system' || 
             CASE 
@@ -142,6 +142,46 @@ $$;
 
 
 ALTER FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_company_id uuid;
+BEGIN
+    -- Get the company_id of the alias
+    SELECT company_id INTO v_company_id 
+    FROM location_aliases 
+    WHERE id = p_alias_id;
+
+    IF v_company_id IS NULL THEN
+        RAISE EXCEPTION 'Location alias not found';
+    END IF;
+
+    -- Check if user is admin of this company
+    IF NOT is_admin(auth.uid()) OR get_user_company_id(auth.uid()) != v_company_id THEN
+        RAISE EXCEPTION 'Access denied. Only company admins can manage location aliases.';
+    END IF;
+
+    -- Delete the alias
+    DELETE FROM location_aliases WHERE id = p_alias_id;
+
+    RETURN json_build_object(
+        'success', true,
+        'message', 'Location alias deleted successfully'
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."delete_tool"("p_tool_id" "uuid") RETURNS "void"
@@ -229,6 +269,28 @@ $$;
 
 
 ALTER FUNCTION "public"."delete_user"("user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_company_aliases"("p_company_id" "uuid") RETURNS TABLE("id" "uuid", "alias" "text", "normalized_location" "text", "created_at" timestamp with time zone, "created_by_name" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        la.id,
+        la.alias,
+        la.normalized_location,
+        la.created_at,
+        u.name as created_by_name
+    FROM location_aliases la
+    LEFT JOIN users u ON la.created_by = u.id
+    WHERE la.company_id = p_company_id
+    ORDER BY la.normalized_location, la.alias;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_company_aliases"("p_company_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_company_settings"("p_company_id" "uuid") RETURNS TABLE("id" "uuid", "company_id" "uuid", "default_location" "text", "default_owner_id" "uuid", "default_owner_name" "text", "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
@@ -338,6 +400,28 @@ $$;
 
 
 ALTER FUNCTION "public"."is_admin"("uid" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_normalized_location text;
+BEGIN
+    -- Look for exact alias match (case-insensitive)
+    SELECT normalized_location INTO v_normalized_location
+    FROM location_aliases
+    WHERE company_id = p_company_id 
+    AND LOWER(TRIM(alias)) = LOWER(TRIM(p_input_location))
+    LIMIT 1;
+    
+    -- Return normalized location if found, otherwise return original
+    RETURN COALESCE(v_normalized_location, TRIM(p_input_location));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_checklist_items"("items" "jsonb") RETURNS "void"
@@ -531,6 +615,52 @@ $$;
 
 ALTER FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_alias_id uuid;
+    v_result json;
+BEGIN
+    -- Check if user is admin of this company
+    IF NOT is_admin(auth.uid()) OR get_user_company_id(auth.uid()) != p_company_id THEN
+        RAISE EXCEPTION 'Access denied. Only company admins can manage location aliases.';
+    END IF;
+
+    -- Validate inputs
+    IF TRIM(p_alias) = '' OR TRIM(p_normalized_location) = '' THEN
+        RAISE EXCEPTION 'Alias and normalized location cannot be empty';
+    END IF;
+
+    -- Insert or update the alias
+    INSERT INTO location_aliases (company_id, alias, normalized_location, created_by)
+    VALUES (p_company_id, TRIM(p_alias), TRIM(p_normalized_location), auth.uid())
+    ON CONFLICT (company_id, LOWER(alias))
+    DO UPDATE SET 
+        normalized_location = EXCLUDED.normalized_location
+    RETURNING id INTO v_alias_id;
+
+    -- Return success result
+    SELECT json_build_object(
+        'success', true,
+        'message', 'Location alias saved successfully',
+        'id', v_alias_id
+    ) INTO v_result;
+
+    RETURN v_result;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -589,6 +719,19 @@ CREATE TABLE IF NOT EXISTS "public"."company_settings" (
 
 
 ALTER TABLE "public"."company_settings" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."location_aliases" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "alias" "text" NOT NULL,
+    "normalized_location" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "created_by" "uuid"
+);
+
+
+ALTER TABLE "public"."location_aliases" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."tool_checklists" (
@@ -698,6 +841,11 @@ ALTER TABLE ONLY "public"."company_settings"
 
 
 
+ALTER TABLE ONLY "public"."location_aliases"
+    ADD CONSTRAINT "location_aliases_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."tool_checklists"
     ADD CONSTRAINT "tool_checklists_pkey" PRIMARY KEY ("id");
 
@@ -743,6 +891,14 @@ CREATE INDEX "idx_checklist_reports_checklist_item_id" ON "public"."checklist_re
 
 
 CREATE INDEX "idx_checklist_reports_transaction_id" ON "public"."checklist_reports" USING "btree" ("transaction_id");
+
+
+
+CREATE INDEX "idx_location_aliases_company_id" ON "public"."location_aliases" USING "btree" ("company_id");
+
+
+
+CREATE UNIQUE INDEX "idx_location_aliases_unique_alias" ON "public"."location_aliases" USING "btree" ("company_id", "lower"("alias"));
 
 
 
@@ -809,6 +965,16 @@ ALTER TABLE ONLY "public"."company_settings"
 
 ALTER TABLE ONLY "public"."company_settings"
     ADD CONSTRAINT "company_settings_default_owner_id_fkey" FOREIGN KEY ("default_owner_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."location_aliases"
+    ADD CONSTRAINT "location_aliases_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."location_aliases"
+    ADD CONSTRAINT "location_aliases_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id");
 
 
 
@@ -887,6 +1053,10 @@ CREATE POLICY "Admins can manage images in their company" ON "public"."tool_imag
 
 
 
+CREATE POLICY "Admins can manage location aliases" ON "public"."location_aliases" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
 CREATE POLICY "Admins can manage their company's access codes" ON "public"."company_access_codes" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
 
 
@@ -920,6 +1090,10 @@ CREATE POLICY "Service role can do everything on companies" ON "public"."compani
 
 
 CREATE POLICY "Service role can do everything on company_settings" ON "public"."company_settings" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role can do everything on location_aliases" ON "public"."location_aliases" TO "service_role" USING (true) WITH CHECK (true);
 
 
 
@@ -987,6 +1161,10 @@ CREATE POLICY "Users can view images in their company" ON "public"."tool_images"
 
 
 
+CREATE POLICY "Users can view their company aliases" ON "public"."location_aliases" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
 CREATE POLICY "Users can view their company settings" ON "public"."company_settings" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
 
 
@@ -1017,6 +1195,9 @@ ALTER TABLE "public"."company_access_codes" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."company_settings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."location_aliases" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tool_checklists" ENABLE ROW LEVEL SECURITY;
@@ -1206,6 +1387,12 @@ GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "
 
 
 
+GRANT ALL ON FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "service_role";
@@ -1215,6 +1402,12 @@ GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "service_rol
 GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_company_aliases"("p_company_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_company_aliases"("p_company_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_company_aliases"("p_company_id" "uuid") TO "service_role";
 
 
 
@@ -1248,6 +1441,12 @@ GRANT ALL ON FUNCTION "public"."is_admin"("uid" "uuid") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "service_role";
@@ -1269,6 +1468,12 @@ GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", 
 GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) TO "anon";
 GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "service_role";
 
 
 
@@ -1308,6 +1513,12 @@ GRANT ALL ON TABLE "public"."company_access_codes" TO "service_role";
 GRANT ALL ON TABLE "public"."company_settings" TO "anon";
 GRANT ALL ON TABLE "public"."company_settings" TO "authenticated";
 GRANT ALL ON TABLE "public"."company_settings" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."location_aliases" TO "anon";
+GRANT ALL ON TABLE "public"."location_aliases" TO "authenticated";
+GRANT ALL ON TABLE "public"."location_aliases" TO "service_role";
 
 
 
