@@ -8,6 +8,7 @@ import Tools from './pages/Tools'
 import Users from './pages/Users'
 import Transactions from './pages/Transactions'
 import Reports from './pages/Reports'
+import Settings from './pages/Settings'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </Router>
