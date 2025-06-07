@@ -13,25 +13,29 @@ serve(async (req) => {
   }
 
   try {
-    // Create a Supabase client with the Auth context of the logged in user
+    // Create a Supabase client with service role key for better permissions
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get the user's session
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser()
-
-    if (!user) {
+    // Get the authorization header and verify the user
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'No authorization header' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -81,18 +85,16 @@ serve(async (req) => {
       )
     }
 
-    // Create the tool with the user's company_id
-    const { data: toolData, error: toolError } = await supabaseClient
-      .from('tools')
-      .insert([{
-        number,
-        name,
-        description,
-        photo_url,
-        company_id: userData.company_id
-      }])
-      .select()
-      .single()
+    // Use the database function to create the tool with checklist
+    const { data: toolId, error: toolError } = await supabaseClient
+      .rpc('create_tool_with_checklist', {
+        p_number: number,
+        p_name: name,
+        p_description: description || '',
+        p_photo_url: photo_url || '',
+        p_company_id: userData.company_id,
+        p_checklist: checklist || []
+      })
 
     if (toolError) {
       return new Response(
@@ -104,40 +106,28 @@ serve(async (req) => {
       )
     }
 
-    // If there are checklist items, insert them directly
-    if (checklist && checklist.length > 0) {
-      const checklistItems = checklist.map((item: any) => ({
-        tool_id: toolData.id,
-        item_name: item.item_name,
-        required: item.required,
-        company_id: userData.company_id
-      }))
+    // Get the created tool data to return
+    const { data: toolData, error: fetchError } = await supabaseClient
+      .from('tools')
+      .select('*')
+      .eq('id', toolId)
+      .single()
 
-      const { error: checklistError } = await supabaseClient
-        .from('tool_checklists')
-        .insert(checklistItems)
-
-      if (checklistError) {
-        // If checklist insertion fails, delete the tool and return error
-        await supabaseClient
-          .from('tools')
-          .delete()
-          .eq('id', toolData.id)
-
-        return new Response(
-          JSON.stringify({ error: 'Failed to create checklist items: ' + checklistError.message }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        )
-      }
+    if (fetchError) {
+      return new Response(
+        JSON.stringify({ error: 'Tool created but failed to fetch data: ' + fetchError.message }),
+        {
+          status: 200, // Tool was created successfully
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        tool: toolData
+        tool: toolData,
+        id: toolId
       }),
       {
         status: 200,

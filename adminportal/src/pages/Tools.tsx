@@ -146,17 +146,24 @@ export default function Tools() {
       setError(null)
       console.log('Fetching tools...')
       
-      // First get all tools with their owners, excluding deleted tools
+      // First get all tools, excluding deleted tools
       const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
-        .select(`
-          *,
-          owner:users!current_owner(name)
-        `)
+        .select('*')
         .eq('is_deleted', false)  // Only show non-deleted tools
         .order('number', { ascending: true })
 
       if (toolsError) throw toolsError
+
+      // Get users data separately to avoid foreign key cache issues
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, name')
+
+      if (usersError) throw usersError
+
+      // Create a map of users for quick lookup
+      const usersMap = new Map(usersData?.map(user => [user.id, user]) || [])
 
       // Then get the latest transaction for each tool
       const { data: transactionsData, error: transactionsError } = await supabase
@@ -177,6 +184,7 @@ export default function Tools() {
       // Combine the data
       const toolsWithTransactions = toolsData?.map(tool => ({
         ...tool,
+        owner: tool.current_owner ? usersMap.get(tool.current_owner) : null,
         latest_transaction: latestTransactions.get(tool.id) ? [latestTransactions.get(tool.id)] : []
       }))
 
@@ -240,10 +248,6 @@ export default function Tools() {
       setNewToolImagesAdded([]);
       setIsCreateModalOpen(false)
       fetchTools();
-      // Open edit modal for the new tool so user can upload images
-      if (data.id) {
-        await handleEditTool({ ...newTool, id: data.id });
-      }
     } catch (error: any) {
       setError(error.message || 'An unexpected error occurred')
     }
@@ -317,12 +321,18 @@ export default function Tools() {
 
   const handleEditTool = (tool: Tool) => {
     setEditingTool(tool)
+    setSelectedTool(tool)
     setEditForm({
       name: tool.name,
       description: tool.description,
       photo_url: tool.photo_url || '',
       checklist: tool.checklist || []
     })
+    setEditToolImages([])
+    setEditImagesToDelete([])
+    setEditImagesAdded([])
+    fetchToolImages(tool.id).then(setEditToolImages)
+    fetchChecklist(tool.id)
     setIsEditModalOpen(true)
   }
 
@@ -354,8 +364,10 @@ export default function Tools() {
         alert(data.error || 'Failed to update tool');
         return;
       }
-      setIsChecklistModalOpen(false);
+      setIsEditModalOpen(false);
       setEditingTool(null);
+      setSelectedTool(null);
+      setChecklistItems([]);
       setEditImagesToDelete([]);
       setEditImagesAdded([]);
       fetchTools();
@@ -371,10 +383,14 @@ export default function Tools() {
     for (const img of editImagesAdded) {
       await deleteToolImageRecord(img.id, img.image_url);
     }
-    setIsChecklistModalOpen(false);
+    setIsEditModalOpen(false);
     setEditingTool(null);
+    setSelectedTool(null);
+    setChecklistItems([]);
     setEditImagesToDelete([]);
     setEditImagesAdded([]);
+    setIsAddingItem(false);
+    setNewChecklistItem({ item_name: '', required: true });
   };
 
   const openDeleteModal = (tool: Tool) => {
@@ -646,6 +662,8 @@ export default function Tools() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Owner</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
@@ -656,7 +674,24 @@ export default function Tools() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tool.name}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">{tool.description}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {tool.current_owner?.name || 'None'}
+                        {tool.owner?.name || 'None'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {tool.latest_transaction && tool.latest_transaction.length > 0 
+                          ? tool.latest_transaction[0].location 
+                          : 'No Location'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {toolsWithImages[tool.id] ? (
+                          <ToolImageGallery toolId={tool.id} />
+                        ) : (
+                          <button
+                            onClick={() => handleEditTool(tool)}
+                            className="text-blue-600 hover:text-blue-800 underline"
+                          >
+                            Upload Image
+                          </button>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
@@ -667,8 +702,8 @@ export default function Tools() {
                         </button>
                         <button
                           onClick={() => {
-                            setToolToDelete(tool)
-                            setShowDeleteModal(true)
+                            setDeleteTool(tool)
+                            setDeleteModalOpen(true)
                           }}
                           className="text-red-600 hover:text-red-900"
                         >
@@ -939,6 +974,120 @@ export default function Tools() {
                     }}
                   />
                 </div>
+
+                <div>
+                  <label className="block font-medium mb-2 text-lg">Checklist Items</label>
+                  {loadingChecklist ? (
+                    <div className="text-center py-4 text-lg">Loading checklist...</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {checklistItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{item.item_name}</span>
+                            {item.required && (
+                              <span className="text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleEditChecklistOpen(item)}
+                              className="text-blue-600 hover:text-blue-900 text-lg"
+                            >
+                              Edit
+                            </button>
+                            {confirmingDeleteId === item.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={handleDeleteChecklistCancel}
+                                  className="text-gray-600 hover:text-gray-900 text-lg"
+                                  disabled={deleteChecklistLoading}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteChecklistItem(item.id)}
+                                  className="text-red-600 hover:text-red-900 text-lg"
+                                  disabled={deleteChecklistLoading}
+                                >
+                                  {deleteChecklistLoading ? 'Deleting...' : 'Confirm Delete'}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteChecklistConfirm(item)}
+                                className="text-red-600 hover:text-red-900 text-lg"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Add New Checklist Item Form */}
+                      {isAddingItem ? (
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <div className="space-y-3">
+                            <input
+                              type="text"
+                              value={newChecklistItem.item_name}
+                              onChange={(e) => setNewChecklistItem(prev => ({ ...prev, item_name: e.target.value }))}
+                              placeholder="Enter checklist item name"
+                              className="w-full border rounded-lg px-3 py-2 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              autoFocus
+                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="required-checkbox"
+                                checked={newChecklistItem.required}
+                                onChange={(e) => setNewChecklistItem(prev => ({ ...prev, required: e.target.checked }))}
+                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                              />
+                              <label htmlFor="required-checkbox" className="text-lg">Required</label>
+                            </div>
+                            <div className="flex justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAddingItem(false)
+                                  setNewChecklistItem({ item_name: '', required: true })
+                                }}
+                                className="px-4 py-2 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAddChecklistItem}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-lg hover:bg-blue-700 transition-colors"
+                                disabled={!newChecklistItem.item_name.trim()}
+                              >
+                                Add Item
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingItem(true)}
+                          className="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                        >
+                          + Add Checklist Item
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </form>
             </div>
             <div className="p-8 border-t bg-gray-50">
@@ -966,7 +1115,7 @@ export default function Tools() {
       )}
 
       {/* Delete Tool Modal */}
-      {deleteModalOpen && toolToDelete && (
+      {deleteModalOpen && deleteTool && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
             <button
@@ -979,7 +1128,7 @@ export default function Tools() {
             <h3 className="text-2xl font-semibold mb-6 text-red-600">Delete Tool</h3>
             <div className="space-y-5">
               <p className="text-lg text-gray-700">
-                Are you sure you want to delete {toolToDelete.name} (#{toolToDelete.number})? This action cannot be undone.
+                Are you sure you want to delete {deleteTool.name} (#{deleteTool.number})? This action cannot be undone.
               </p>
               {deleteError && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg text-lg">

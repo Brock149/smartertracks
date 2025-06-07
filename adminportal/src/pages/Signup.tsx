@@ -31,46 +31,27 @@ export default function Signup() {
     setError(null)
 
     try {
-      // First validate the access code
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setError('You must be logged in to validate access codes')
-        setLoading(false)
-        return
-      }
-
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-access-code`, {
+      // Use the signup-with-code Edge Function which handles everything
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-with-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          code: form.accessCode
+          email: form.email,
+          password: form.password,
+          name: form.name,
+          accessCode: form.accessCode
         })
       })
 
       const result = await res.json()
       if (!res.ok || result.error) {
-        setError(result.error || 'Invalid access code')
+        setError(result.error || 'Failed to create account')
         setLoading(false)
         return
       }
-
-      // If access code is valid, create the user
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          data: {
-            name: form.name,
-            role: result.role,
-            company_id: result.company_id
-          }
-        }
-      })
-
-      if (signUpError) throw signUpError
 
       // Navigate to login with success message
       navigate('/login', { 
