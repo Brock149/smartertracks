@@ -61,13 +61,46 @@ CREATE OR REPLACE FUNCTION "public"."create_tool_with_checklist"("p_number" "tex
     AS $$
 DECLARE
     v_tool_id uuid;
+    v_default_owner_id uuid;
+    v_default_location text;
+    v_use_default_location boolean;
+    v_use_default_owner boolean;
+    v_final_owner_id uuid;
+    v_final_location text;
 BEGIN
-    -- Insert the tool
-    INSERT INTO tools (number, name, description, photo_url, company_id)
-    VALUES (p_number, p_name, p_description, p_photo_url, p_company_id)
+    -- Get company default settings and toggle states
+    SELECT 
+        default_owner_id, 
+        default_location,
+        use_default_location,
+        use_default_owner
+    INTO 
+        v_default_owner_id, 
+        v_default_location,
+        v_use_default_location,
+        v_use_default_owner
+    FROM company_settings 
+    WHERE company_id = p_company_id;
+
+    -- Determine final values based on toggle states
+    v_final_owner_id := CASE 
+        WHEN v_use_default_owner AND v_default_owner_id IS NOT NULL 
+        THEN v_default_owner_id 
+        ELSE NULL 
+    END;
+    
+    v_final_location := CASE 
+        WHEN v_use_default_location AND v_default_location IS NOT NULL 
+        THEN v_default_location 
+        ELSE NULL 
+    END;
+
+    -- Insert the tool with determined owner
+    INSERT INTO tools (number, name, description, photo_url, company_id, current_owner)
+    VALUES (p_number, p_name, p_description, p_photo_url, p_company_id, v_final_owner_id)
     RETURNING id INTO v_tool_id;
 
-    -- If there are checklist items, insert them
+    -- Insert checklist items if provided
     IF p_checklist IS NOT NULL AND jsonb_array_length(p_checklist) > 0 THEN
         INSERT INTO tool_checklists (tool_id, item_name, required, company_id)
         SELECT 
@@ -76,6 +109,31 @@ BEGIN
             (item->>'required')::boolean,
             p_company_id
         FROM jsonb_array_elements(p_checklist) AS item;
+    END IF;
+
+    -- Create initial transaction only if we have at least a default owner or location
+    IF v_final_owner_id IS NOT NULL OR v_final_location IS NOT NULL THEN
+        INSERT INTO tool_transactions (
+            tool_id,
+            from_user_id,
+            to_user_id,
+            location,
+            stored_at,
+            notes,
+            company_id
+        ) VALUES (
+            v_tool_id,
+            NULL, -- System transfer (no from_user)
+            v_final_owner_id,
+            COALESCE(v_final_location, 'Not specified'),
+            'N/A',
+            'Initial assignment from system' || 
+            CASE 
+                WHEN v_final_owner_id IS NOT NULL THEN ' to default owner'
+                ELSE ''
+            END,
+            p_company_id
+        );
     END IF;
 
     RETURN v_tool_id;
@@ -171,6 +229,70 @@ $$;
 
 
 ALTER FUNCTION "public"."delete_user"("user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_company_settings"("p_company_id" "uuid") RETURNS TABLE("id" "uuid", "company_id" "uuid", "default_location" "text", "default_owner_id" "uuid", "default_owner_name" "text", "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        cs.id,
+        cs.company_id,
+        cs.default_location,
+        cs.default_owner_id,
+        COALESCE(u.name, 'User not found') as default_owner_name,
+        cs.created_at,
+        cs.updated_at
+    FROM company_settings cs
+    LEFT JOIN users u ON cs.default_owner_id = u.id
+    WHERE cs.company_id = p_company_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_company_settings"("p_company_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_my_company_settings"() RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_company_id uuid;
+    v_result json;
+BEGIN
+    -- Get the user's company ID
+    SELECT company_id INTO v_company_id 
+    FROM users 
+    WHERE id = auth.uid();
+
+    IF v_company_id IS NULL THEN
+        RETURN json_build_object('error', 'User not found or not associated with a company');
+    END IF;
+
+    -- Get the settings
+    SELECT json_build_object(
+        'id', cs.id,
+        'company_id', cs.company_id,
+        'default_location', cs.default_location,
+        'default_owner_id', cs.default_owner_id,
+        'default_owner_name', u.name,
+        'use_default_location', cs.use_default_location,
+        'use_default_owner', cs.use_default_owner,
+        'created_at', cs.created_at,
+        'updated_at', cs.updated_at
+    ) INTO v_result
+    FROM company_settings cs
+    LEFT JOIN users u ON cs.default_owner_id = u.id
+    WHERE cs.company_id = v_company_id;
+
+    -- Return null if no settings found (not an error)
+    RETURN COALESCE(v_result, json_build_object('settings', null));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_my_company_settings"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_user_company_id"("user_id" "uuid") RETURNS "uuid"
@@ -269,6 +391,146 @@ $$;
 
 ALTER FUNCTION "public"."store_deleted_user_name"() OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_settings_id uuid;
+    v_result json;
+BEGIN
+    -- Check if user is admin of this company
+    IF NOT is_admin(auth.uid()) OR get_user_company_id(auth.uid()) != p_company_id THEN
+        RAISE EXCEPTION 'Access denied. Only company admins can update settings.';
+    END IF;
+
+    -- Validate that the default owner belongs to the same company
+    IF p_default_owner_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = p_default_owner_id AND company_id = p_company_id
+        ) THEN
+            RAISE EXCEPTION 'Default owner must belong to the same company';
+        END IF;
+    END IF;
+
+    -- Upsert the settings
+    INSERT INTO company_settings (company_id, default_location, default_owner_id)
+    VALUES (p_company_id, p_default_location, p_default_owner_id)
+    ON CONFLICT (company_id) 
+    DO UPDATE SET 
+        default_location = EXCLUDED.default_location,
+        default_owner_id = EXCLUDED.default_owner_id,
+        updated_at = now()
+    RETURNING id INTO v_settings_id;
+
+    -- Return the updated settings
+    SELECT json_build_object(
+        'id', cs.id,
+        'company_id', cs.company_id,
+        'default_location', cs.default_location,
+        'default_owner_id', cs.default_owner_id,
+        'default_owner_name', u.name,
+        'created_at', cs.created_at,
+        'updated_at', cs.updated_at,
+        'success', true,
+        'message', 'Settings updated successfully'
+    ) INTO v_result
+    FROM company_settings cs
+    LEFT JOIN users u ON cs.default_owner_id = u.id
+    WHERE cs.id = v_settings_id;
+
+    RETURN v_result;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean DEFAULT true, "p_use_default_owner" boolean DEFAULT true) RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_settings_id uuid;
+    v_result json;
+BEGIN
+    -- Check if user is admin of this company
+    IF NOT is_admin(auth.uid()) OR get_user_company_id(auth.uid()) != p_company_id THEN
+        RAISE EXCEPTION 'Access denied. Only company admins can update settings.';
+    END IF;
+
+    -- Validate that the default owner belongs to the same company (only if use_default_owner is true)
+    IF p_use_default_owner AND p_default_owner_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = p_default_owner_id AND company_id = p_company_id
+        ) THEN
+            RAISE EXCEPTION 'Default owner must belong to the same company';
+        END IF;
+    END IF;
+
+    -- Upsert the settings
+    INSERT INTO company_settings (
+        company_id, 
+        default_location, 
+        default_owner_id, 
+        use_default_location, 
+        use_default_owner
+    )
+    VALUES (
+        p_company_id, 
+        p_default_location, 
+        p_default_owner_id, 
+        p_use_default_location, 
+        p_use_default_owner
+    )
+    ON CONFLICT (company_id) 
+    DO UPDATE SET 
+        default_location = EXCLUDED.default_location,
+        default_owner_id = EXCLUDED.default_owner_id,
+        use_default_location = EXCLUDED.use_default_location,
+        use_default_owner = EXCLUDED.use_default_owner,
+        updated_at = now()
+    RETURNING id INTO v_settings_id;
+
+    -- Return the updated settings
+    SELECT json_build_object(
+        'id', cs.id,
+        'company_id', cs.company_id,
+        'default_location', cs.default_location,
+        'default_owner_id', cs.default_owner_id,
+        'default_owner_name', u.name,
+        'use_default_location', cs.use_default_location,
+        'use_default_owner', cs.use_default_owner,
+        'created_at', cs.created_at,
+        'updated_at', cs.updated_at,
+        'success', true,
+        'message', 'Settings updated successfully'
+    ) INTO v_result
+    FROM company_settings cs
+    LEFT JOIN users u ON cs.default_owner_id = u.id
+    WHERE cs.id = v_settings_id;
+
+    RETURN v_result;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', SQLERRM
+        );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -312,6 +574,21 @@ CREATE TABLE IF NOT EXISTS "public"."company_access_codes" (
 
 
 ALTER TABLE "public"."company_access_codes" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."company_settings" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "default_location" "text" NOT NULL,
+    "default_owner_id" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "use_default_location" boolean DEFAULT true,
+    "use_default_owner" boolean DEFAULT true
+);
+
+
+ALTER TABLE "public"."company_settings" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."tool_checklists" (
@@ -408,6 +685,16 @@ ALTER TABLE ONLY "public"."company_access_codes"
 
 ALTER TABLE ONLY "public"."company_access_codes"
     ADD CONSTRAINT "company_access_codes_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."company_settings"
+    ADD CONSTRAINT "company_settings_company_id_key" UNIQUE ("company_id");
+
+
+
+ALTER TABLE ONLY "public"."company_settings"
+    ADD CONSTRAINT "company_settings_pkey" PRIMARY KEY ("id");
 
 
 
@@ -515,6 +802,16 @@ ALTER TABLE ONLY "public"."company_access_codes"
 
 
 
+ALTER TABLE ONLY "public"."company_settings"
+    ADD CONSTRAINT "company_settings_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."company_settings"
+    ADD CONSTRAINT "company_settings_default_owner_id_fkey" FOREIGN KEY ("default_owner_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."tool_checklists"
     ADD CONSTRAINT "tool_checklists_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
 
@@ -582,6 +879,10 @@ CREATE POLICY "Admins can manage checklists in their company" ON "public"."tool_
 
 
 
+CREATE POLICY "Admins can manage company settings" ON "public"."company_settings" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
 CREATE POLICY "Admins can manage images in their company" ON "public"."tool_images" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
 
 
@@ -615,6 +916,10 @@ CREATE POLICY "Service role can do everything on checklists" ON "public"."tool_c
 
 
 CREATE POLICY "Service role can do everything on companies" ON "public"."companies" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role can do everything on company_settings" ON "public"."company_settings" TO "service_role" USING (true) WITH CHECK (true);
 
 
 
@@ -682,6 +987,10 @@ CREATE POLICY "Users can view images in their company" ON "public"."tool_images"
 
 
 
+CREATE POLICY "Users can view their company settings" ON "public"."company_settings" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
 CREATE POLICY "Users can view their own company" ON "public"."companies" FOR SELECT TO "authenticated" USING (("id" = "public"."get_user_company_id"("auth"."uid"())));
 
 
@@ -705,6 +1014,9 @@ ALTER TABLE "public"."companies" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."company_access_codes" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."company_settings" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tool_checklists" ENABLE ROW LEVEL SECURITY;
@@ -906,6 +1218,18 @@ GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "service_role"
 
 
 
+GRANT ALL ON FUNCTION "public"."get_company_settings"("p_company_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_company_settings"("p_company_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_company_settings"("p_company_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_my_company_settings"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_my_company_settings"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_my_company_settings"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_user_company_id"("user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_user_company_id"("user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_user_company_id"("user_id" "uuid") TO "service_role";
@@ -933,6 +1257,18 @@ GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "servic
 GRANT ALL ON FUNCTION "public"."store_deleted_user_name"() TO "anon";
 GRANT ALL ON FUNCTION "public"."store_deleted_user_name"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."store_deleted_user_name"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) TO "service_role";
 
 
 
@@ -966,6 +1302,12 @@ GRANT ALL ON TABLE "public"."companies" TO "service_role";
 GRANT ALL ON TABLE "public"."company_access_codes" TO "anon";
 GRANT ALL ON TABLE "public"."company_access_codes" TO "authenticated";
 GRANT ALL ON TABLE "public"."company_access_codes" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."company_settings" TO "anon";
+GRANT ALL ON TABLE "public"."company_settings" TO "authenticated";
+GRANT ALL ON TABLE "public"."company_settings" TO "service_role";
 
 
 

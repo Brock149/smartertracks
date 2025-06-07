@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getMyCompanySettings, updateCompanySettings, type CompanySettings } from '../lib/companySettingsApi'
+import { getCompanyAliases, createLocationAlias, deleteLocationAlias, type LocationAlias, type CreateAliasData } from '../lib/locationAliasApi'
 
 interface User {
   id: string
@@ -26,6 +27,20 @@ export default function Settings() {
   })
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null)
+  
+  // Location Aliases State
+  const [aliases, setAliases] = useState<LocationAlias[]>([])
+  const [aliasesLoading, setAliasesLoading] = useState(true)
+  const [aliasesError, setAliasesError] = useState<string | null>(null)
+  const [aliasForm, setAliasForm] = useState({
+    normalized_location: '',
+    aliases: [''] // Start with one empty alias field
+  })
+  const [addingAlias, setAddingAlias] = useState(false)
+  const [deletingAlias, setDeletingAlias] = useState<string | null>(null)
+  const [addingToLocation, setAddingToLocation] = useState<string | null>(null)
+  const [newAliasForLocation, setNewAliasForLocation] = useState('')
+  const [savingNewAlias, setSavingNewAlias] = useState(false)
 
   useEffect(() => {
     fetchUserRole()
@@ -35,6 +50,7 @@ export default function Settings() {
     if (userRole && userCompanyId) {
       fetchUsers()
       fetchSettings()
+      fetchAliases()
     }
   }, [userRole, userCompanyId])
 
@@ -104,6 +120,127 @@ export default function Settings() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function fetchAliases() {
+    try {
+      if (!userCompanyId) return
+      
+      setAliasesLoading(true)
+      setAliasesError(null)
+      
+      const aliasData = await getCompanyAliases(userCompanyId)
+      setAliases(aliasData)
+    } catch (error: any) {
+      console.error('Error fetching aliases:', error)
+      setAliasesError('Failed to fetch location aliases: ' + error.message)
+    } finally {
+      setAliasesLoading(false)
+    }
+  }
+
+  async function handleAddAliases(e: React.FormEvent) {
+    e.preventDefault()
+    if (!userCompanyId) return
+
+    setAddingAlias(true)
+    setAliasesError(null)
+
+    try {
+      // Filter out empty aliases and create each one
+      const validAliases = aliasForm.aliases.filter(alias => alias.trim() !== '')
+      
+      if (validAliases.length === 0) {
+        setAliasesError('Please enter at least one alias')
+        return
+      }
+
+      if (!aliasForm.normalized_location.trim()) {
+        setAliasesError('Please enter a normalized location')
+        return
+      }
+
+      // Create all aliases for this normalized location
+      for (const alias of validAliases) {
+        await createLocationAlias(userCompanyId, {
+          alias: alias.trim(),
+          normalized_location: aliasForm.normalized_location.trim()
+        })
+      }
+      
+      setAliasForm({ normalized_location: '', aliases: [''] })
+      await fetchAliases() // Refresh the list
+    } catch (error: any) {
+      setAliasesError(error.message || 'Failed to add location aliases')
+    } finally {
+      setAddingAlias(false)
+    }
+  }
+
+  function addAliasField() {
+    setAliasForm({
+      ...aliasForm,
+      aliases: [...aliasForm.aliases, '']
+    })
+  }
+
+  function removeAliasField(index: number) {
+    if (aliasForm.aliases.length > 1) {
+      setAliasForm({
+        ...aliasForm,
+        aliases: aliasForm.aliases.filter((_, i) => i !== index)
+      })
+    }
+  }
+
+  function updateAliasField(index: number, value: string) {
+    const newAliases = [...aliasForm.aliases]
+    newAliases[index] = value
+    setAliasForm({
+      ...aliasForm,
+      aliases: newAliases
+    })
+  }
+
+  async function handleDeleteAlias(aliasId: string) {
+    setDeletingAlias(aliasId)
+    setAliasesError(null)
+
+    try {
+      await deleteLocationAlias(aliasId)
+      await fetchAliases() // Refresh the list
+    } catch (error: any) {
+      setAliasesError(error.message || 'Failed to delete location alias')
+    } finally {
+      setDeletingAlias(null)
+    }
+  }
+
+  async function handleAddAliasToLocation(normalizedLocation: string) {
+    if (!userCompanyId || !newAliasForLocation.trim()) return
+
+    setSavingNewAlias(true)
+    setAliasesError(null)
+
+    try {
+      await createLocationAlias(userCompanyId, {
+        alias: newAliasForLocation.trim(),
+        normalized_location: normalizedLocation
+      })
+      setNewAliasForLocation('')
+      setAddingToLocation(null)
+      await fetchAliases() // Refresh the list
+    } catch (error: any) {
+      setAliasesError(error.message || 'Failed to add alias to location')
+    } finally {
+      setSavingNewAlias(false)
+    }
+  }
+
+  function cancelAddAliasToLocation() {
+    setAddingToLocation(null)
+    setNewAliasForLocation('')
+    setAliasesError(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -354,6 +491,215 @@ export default function Settings() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Location Aliases Section */}
+      <div className="bg-white rounded-lg shadow p-8 mt-8">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-2xl font-bold">Location Aliases</h3>
+            <p className="text-lg text-gray-500 mt-1">Map different location names to standardized locations</p>
+          </div>
+        </div>
+
+        {aliasesError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-6 text-lg">
+            {aliasesError}
+          </div>
+        )}
+
+        {/* Add New Aliases Form */}
+        <form onSubmit={handleAddAliases} className="mb-8 p-6 bg-gray-50 rounded-lg">
+          <h4 className="text-lg font-medium text-gray-800 mb-4">Add Multiple Aliases for One Location</h4>
+          
+          {/* Normalized Location Field */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Normalized Location (what gets saved in database)
+            </label>
+            <input
+              type="text"
+              value={aliasForm.normalized_location}
+              onChange={(e) => setAliasForm({ ...aliasForm, normalized_location: e.target.value })}
+              placeholder="e.g., Warehouse"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          {/* Multiple Alias Fields */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Aliases (what users can type)
+            </label>
+            <div className="space-y-2">
+              {aliasForm.aliases.map((alias, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={alias}
+                    onChange={(e) => updateAliasField(index, e.target.value)}
+                    placeholder={`e.g., ${index === 0 ? 'shop' : index === 1 ? 'office' : index === 2 ? '1455' : 'main floor'}`}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {aliasForm.aliases.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeAliasField(index)}
+                      className="px-3 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded-md text-sm"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addAliasField}
+              className="mt-2 px-3 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md text-sm"
+            >
+              + Add Another Alias
+            </button>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={addingAlias}
+              className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {addingAlias ? 'Adding Aliases...' : 'Save All Aliases'}
+            </button>
+          </div>
+        </form>
+
+        {/* Aliases Display - Grouped by Normalized Location */}
+        <div className="bg-white rounded-lg border">
+          {aliasesLoading ? (
+            <div className="p-8 text-center text-gray-500">Loading aliases...</div>
+          ) : aliases.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              No location aliases configured yet. Add some above to get started.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {/* Group aliases by normalized location */}
+              {Object.entries(
+                aliases.reduce((groups, alias) => {
+                  const location = alias.normalized_location
+                  if (!groups[location]) {
+                    groups[location] = []
+                  }
+                  groups[location].push(alias)
+                  return groups
+                }, {} as Record<string, LocationAlias[]>)
+              ).map(([normalizedLocation, locationAliases]) => (
+                <div key={normalizedLocation} className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-lg font-medium text-gray-900">
+                        📍 {normalizedLocation}
+                      </h4>
+                      <p className="text-sm text-gray-500">
+                        {locationAliases.length} alias{locationAliases.length !== 1 ? 'es' : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setAddingToLocation(normalizedLocation)}
+                      disabled={addingToLocation === normalizedLocation}
+                      className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      + Add Alias
+                    </button>
+                  </div>
+
+                  {/* Add Alias Form for this location */}
+                  {addingToLocation === normalizedLocation && (
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={newAliasForLocation}
+                          onChange={(e) => setNewAliasForLocation(e.target.value)}
+                          placeholder="Enter new alias..."
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddAliasToLocation(normalizedLocation)
+                            } else if (e.key === 'Escape') {
+                              cancelAddAliasToLocation()
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleAddAliasToLocation(normalizedLocation)}
+                          disabled={!newAliasForLocation.trim() || savingNewAlias}
+                          className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingNewAlias ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={cancelAddAliasToLocation}
+                          className="px-3 py-2 text-gray-600 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {locationAliases.map((alias) => (
+                      <div
+                        key={alias.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                      >
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-gray-900">
+                            "{alias.alias}"
+                          </span>
+                          <div className="text-xs text-gray-500">
+                            by {alias.created_by_name || 'Unknown'}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteAlias(alias.id)}
+                          disabled={deletingAlias === alias.id}
+                          className="ml-3 text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          {deletingAlias === alias.id ? 'Deleting...' : '✕'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Information Panel for Aliases */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <span className="text-blue-500 text-xl">ℹ️</span>
+            </div>
+            <div className="ml-3">
+              <h4 className="text-lg font-medium text-blue-800">How Location Aliases Work</h4>
+              <div className="mt-2 text-blue-700">
+                <ul className="list-disc list-inside space-y-1">
+                  <li>When users enter locations in transactions, aliases are automatically applied</li>
+                  <li>Multiple aliases can point to the same normalized location</li>
+                  <li>Aliases are case-insensitive (e.g., "SHOP" matches "shop")</li>
+                  <li>Existing transaction data is not automatically updated when you add new aliases</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

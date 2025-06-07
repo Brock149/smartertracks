@@ -123,6 +123,20 @@ serve(async (req) => {
       }
     }
 
+    // Normalize the location using our SQL function
+    const { data: normalizedLocationData, error: normalizeError } = await supabase
+      .rpc('normalize_location', {
+        p_company_id: userCompanyId,
+        p_input_location: location
+      })
+
+    if (normalizeError) {
+      console.error('Error normalizing location:', normalizeError)
+      // Continue with original location if normalization fails
+    }
+
+    const finalLocation = normalizedLocationData || location
+
     // Start a transaction with company_id
     const { data: transaction, error: transactionError } = await supabase
       .from('tool_transactions')
@@ -130,7 +144,7 @@ serve(async (req) => {
         tool_id,
         from_user_id,
         to_user_id,
-        location,
+        location: finalLocation,
         stored_at,
         notes,
         company_id: userCompanyId,
