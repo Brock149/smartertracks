@@ -424,6 +424,38 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     );
   };
 
+  const renderReadOnlyChecklistSection = () => {
+    if (checklistItems.length === 0) {
+      return (
+        <View style={styles.noChecklistContainer}>
+          <Text style={styles.noChecklistText}>No checklist items for this tool</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.checklistSection}>
+        <Text style={styles.checklistTitle}>Tool Inspection Checklist</Text>
+        <Text style={styles.checklistSubtitle}>
+          Items that will be checked during transfers and inspections
+        </Text>
+        
+        {checklistItems.map((item) => (
+          <View key={item.id} style={styles.readOnlyChecklistItem}>
+            <View style={styles.checklistItemInfo}>
+              <Text style={styles.checklistItemName}>{item.item_name}</Text>
+              {item.required && (
+                <View style={styles.requiredBadge}>
+                  <Text style={styles.requiredText}>Required</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderChecklistSection = () => {
     if (checklistItems.length === 0) {
       return (
@@ -630,16 +662,28 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           </View>
         )}
 
-        {/* Tool Checklist - Only show if user owns the tool */}
-        {tool.current_owner === user?.id && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tool Inspection Checklist</Text>
-            <Text style={styles.checklistSubtitle}>
-              Check any items that need attention and submit a report
-            </Text>
-            {renderChecklistSection()}
-          </View>
-        )}
+        {/* Tool Checklist */}
+        <View style={styles.section}>
+          {tool.current_owner === user?.id ? (
+            // Interactive checklist for owners
+            <>
+              <Text style={styles.sectionTitle}>Tool Inspection Checklist</Text>
+              <Text style={styles.checklistSubtitle}>
+                Check any items that need attention and submit a report
+              </Text>
+              {renderChecklistSection()}
+            </>
+          ) : (
+            // Read-only checklist for non-owners
+            <>
+              <Text style={styles.sectionTitle}>Tool Inspection Checklist</Text>
+              <Text style={styles.checklistSubtitle}>
+                Items that will be checked during transfers and inspections
+              </Text>
+              {renderReadOnlyChecklistSection()}
+            </>
+          )}
+        </View>
       </ScrollView>
 
       {/* Action Buttons */}
@@ -865,7 +909,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                 proceedWithClaim();
               }}
             >
-              <Text style={styles.proceedButtonText}>Understood, Claim Tool</Text>
+              <Text style={styles.proceedButtonText}>Understood, proceed</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -1166,6 +1210,15 @@ const styles = StyleSheet.create({
   checklistItem: {
     paddingVertical: 16,
     marginBottom: 16,
+  },
+  readOnlyChecklistItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   checklistHeader: {
     marginBottom: 12,

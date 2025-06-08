@@ -30,6 +30,13 @@ interface Tool {
   images?: ToolImage[];
   current_location?: string;
   current_stored_at?: string;
+  checklist_items?: ChecklistItem[];
+}
+
+interface ChecklistItem {
+  id: string;
+  item_name: string;
+  required: boolean;
 }
 
 interface ToolImage {
@@ -56,6 +63,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
   const { user } = useAuth();
 
   useEffect(() => {
@@ -90,26 +98,53 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         return;
       }
 
-      // Fetch images for all tools
+      // Fetch images and checklist items for all tools
       const toolIds = toolsData?.map(tool => tool.id) || [];
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('tool_images')
-        .select('*')
-        .in('tool_id', toolIds)
-        .order('uploaded_at', { ascending: false });
+      
+      const [imagesResponse, checklistResponse] = await Promise.all([
+        supabase
+          .from('tool_images')
+          .select('*')
+          .in('tool_id', toolIds)
+          .order('uploaded_at', { ascending: false }),
+        supabase
+          .from('tool_checklists')
+          .select('*')
+          .in('tool_id', toolIds)
+          .order('item_name')
+      ]);
 
-      if (imagesError) {
-        console.error('Error fetching tool images:', imagesError);
+      if (imagesResponse.error) {
+        console.error('Error fetching tool images:', imagesResponse.error);
       }
 
-      // Group images by tool_id
-      const imagesByTool = (imagesData || []).reduce((acc, image) => {
+      if (checklistResponse.error) {
+        console.error('Error fetching tool checklists:', checklistResponse.error);
+      }
+
+      const imagesData = imagesResponse.data || [];
+      const checklistData = checklistResponse.data || [];
+
+      // Group images and checklist items by tool_id
+      const imagesByTool = imagesData.reduce((acc, image) => {
         if (!acc[image.tool_id]) {
           acc[image.tool_id] = [];
         }
         acc[image.tool_id].push(image);
         return acc;
       }, {} as Record<string, ToolImage[]>);
+
+      const checklistsByTool = checklistData.reduce((acc, item) => {
+        if (!acc[item.tool_id]) {
+          acc[item.tool_id] = [];
+        }
+        acc[item.tool_id].push({
+          id: item.id,
+          item_name: item.item_name,
+          required: item.required,
+        });
+        return acc;
+      }, {} as Record<string, ChecklistItem[]>);
 
       // Fetch latest location and stored_at for each tool
       const { data: transactionsData, error: transactionsError } = await supabase
@@ -133,13 +168,14 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         return acc;
       }, {} as Record<string, { location: string; stored_at: string }>);
 
-      // Transform the data to include owner name, images, location, and stored_at
+      // Transform the data to include owner name, images, location, stored_at, and checklist items
       const transformedTools = toolsData?.map(tool => ({
         ...tool,
         owner_name: tool.owner?.name || null,
         images: imagesByTool[tool.id] || [],
         current_location: transactionsByTool[tool.id]?.location || 'Unknown',
         current_stored_at: transactionsByTool[tool.id]?.stored_at || 'Unknown',
+        checklist_items: checklistsByTool[tool.id] || [],
       })) || [];
 
       setTools(transformedTools);
@@ -195,6 +231,61 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
 
   const handleToolPress = (tool: Tool) => {
     navigation.navigate('ToolDetail', { tool });
+  };
+
+  const toggleChecklist = (toolId: string) => {
+    setExpandedChecklists(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolId)) {
+        newSet.delete(toolId);
+      } else {
+        newSet.add(toolId);
+      }
+      return newSet;
+    });
+  };
+
+  const renderChecklistSection = (tool: Tool) => {
+    if (!tool.checklist_items || tool.checklist_items.length === 0) {
+      return null;
+    }
+
+    const isExpanded = expandedChecklists.has(tool.id);
+
+    return (
+      <View style={styles.checklistContainer}>
+        <TouchableOpacity 
+          style={styles.checklistHeader}
+          onPress={() => toggleChecklist(tool.id)}
+        >
+          <Text style={styles.checklistTitle}>
+            Checklist ({tool.checklist_items.length} items)
+          </Text>
+          <Ionicons 
+            name={isExpanded ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color="#6b7280" 
+          />
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.checklistItems}>
+            {tool.checklist_items.map((item) => (
+              <View key={item.id} style={styles.checklistItem}>
+                <View style={styles.checklistItemContent}>
+                  <Text style={styles.checklistItemName}>{item.item_name}</Text>
+                  {item.required && (
+                    <View style={styles.requiredBadge}>
+                      <Text style={styles.requiredText}>Required</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   const renderToolItem = ({ item }: { item: Tool }) => (
@@ -256,6 +347,9 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
           </Text>
             </View>
           </View>
+          
+          {/* Checklist Section */}
+          {renderChecklistSection(item)}
         </View>
       </View>
     </TouchableOpacity>
@@ -493,5 +587,55 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 8,
     textAlign: 'center',
+  },
+  checklistContainer: {
+    marginTop: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  checklistHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#f3f4f6',
+  },
+  checklistTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  checklistItems: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  checklistItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  checklistItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  checklistItemName: {
+    fontSize: 14,
+    color: '#374151',
+    flex: 1,
+  },
+  requiredBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  requiredText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563eb',
   },
 }); 

@@ -52,7 +52,7 @@ interface ChecklistItem {
   comments?: string;
 }
 
-export default function TransferToolsScreen() {
+export default function TransferToolsScreen({ route }: { route?: any }) {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Tool[]>([]);
@@ -81,17 +81,31 @@ export default function TransferToolsScreen() {
   const [warningModalVisible, setWarningModalVisible] = useState(false);
   const [openIssues, setOpenIssues] = useState<any[]>([]);
   
+  // Current user info
+  const [currentUserName, setCurrentUserName] = useState<string>('');
+  
   const { user } = useAuth();
   const storedAtOptions = ['On Truck', 'On Job Site', 'N/A'];
 
   useEffect(() => {
     fetchUsers();
+    fetchCurrentUserName();
   }, []);
+
+  // Handle pre-selected tool from navigation params
+  useEffect(() => {
+    console.log('Route params:', route?.params);
+    if (route?.params?.selectedTool) {
+      console.log('Pre-selecting tool:', route.params.selectedTool);
+      selectTool(route.params.selectedTool);
+    }
+  }, [route?.params?.selectedTool]);
 
   // Auto-refresh when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       fetchUsers();
+      fetchCurrentUserName();
       // Don't reset form - let user maintain their workflow
     }, [])
   );
@@ -122,11 +136,34 @@ export default function TransferToolsScreen() {
     }
   };
 
+  const fetchCurrentUserName = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching current user name:', error);
+        return;
+      }
+
+      setCurrentUserName(userData?.name || 'Me');
+    } catch (error) {
+      console.error('Error fetching current user name:', error);
+      setCurrentUserName('Me');
+    }
+  };
+
   const searchTools = async () => {
     if (searchQuery.trim().length < 1) return;
 
     setSearching(true);
     try {
+      // First search by tool number and name
       const { data: toolsData, error } = await supabase
         .from('tools')
         .select(`
@@ -142,10 +179,37 @@ export default function TransferToolsScreen() {
         return;
       }
 
-      const transformedTools = toolsData?.map(tool => ({
+      // Then search by owner name if we don't have enough results
+      let ownerResults: any[] = [];
+      if (toolsData && toolsData.length < 10) {
+        const { data: ownerToolsData, error: ownerError } = await supabase
+          .from('tools')
+          .select(`
+            *,
+            owner:users!tools_current_owner_fkey(name)
+          `)
+          .not('current_owner', 'is', null)
+          .order('number')
+          .limit(10);
+
+        if (!ownerError && ownerToolsData) {
+          // Filter by owner name locally since joined table search is complex
+          ownerResults = ownerToolsData.filter(tool => 
+            tool.owner?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        }
+      }
+
+      // Combine results and remove duplicates
+      const allResults = [...(toolsData || []), ...ownerResults];
+      const uniqueResults = allResults.filter((tool, index, self) => 
+        index === self.findIndex(t => t.id === tool.id)
+      ).slice(0, 10);
+
+      const transformedTools = uniqueResults.map(tool => ({
         ...tool,
         owner_name: tool.owner?.name || null,
-      })) || [];
+      }));
 
       setSearchResults(transformedTools);
     } catch (error) {
@@ -169,7 +233,7 @@ export default function TransferToolsScreen() {
       setToUser('');
     } else {
       // User doesn't own tool - they're claiming it
-      setToUser(user?.user_metadata?.name || user?.email || 'Me');
+      setToUser(currentUserName || 'Me');
     }
 
     // Reset form fields
@@ -550,7 +614,7 @@ export default function TransferToolsScreen() {
             <Ionicons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by tool number or name..."
+              placeholder="Search by tool number, name, or owner..."
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoCapitalize="none"
@@ -871,7 +935,7 @@ export default function TransferToolsScreen() {
                 proceedWithTransfer();
               }}
             >
-              <Text style={styles.proceedButtonText}>Understood, Send Transfer</Text>
+              <Text style={styles.proceedButtonText}>Understood, proceed</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>

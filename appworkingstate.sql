@@ -1127,7 +1127,7 @@ CREATE POLICY "Users can create checklist reports in their company" ON "public".
 
 
 
-CREATE POLICY "Users can create transactions in their company" ON "public"."tool_transactions" FOR INSERT TO "authenticated" WITH CHECK ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND (("from_user_id" = "auth"."uid"()) OR ("from_user_id" IS NULL)) AND (EXISTS ( SELECT 1
+CREATE POLICY "Users can create transactions in their company" ON "public"."tool_transactions" FOR INSERT TO "authenticated" WITH CHECK ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND (("from_user_id" = "auth"."uid"()) OR ("to_user_id" = "auth"."uid"()) OR ("from_user_id" IS NULL)) AND (EXISTS ( SELECT 1
    FROM "public"."users"
   WHERE (("users"."id" = "tool_transactions"."to_user_id") AND ("users"."company_id" = "public"."get_user_company_id"("auth"."uid"())))))));
 
@@ -1145,6 +1145,10 @@ CREATE POLICY "Users can insert images in their company" ON "public"."tool_image
 
 
 
+CREATE POLICY "Users can update tool ownership for transfers" ON "public"."tools" FOR UPDATE TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"()))) WITH CHECK (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
 CREATE POLICY "Users can view checklist reports in their company" ON "public"."checklist_reports" FOR SELECT TO "authenticated" USING ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) OR (EXISTS ( SELECT 1
    FROM "public"."tool_transactions"
   WHERE (("tool_transactions"."id" = "checklist_reports"."transaction_id") AND (("tool_transactions"."from_user_id" = "auth"."uid"()) OR ("tool_transactions"."to_user_id" = "auth"."uid"())))))));
@@ -1158,6 +1162,10 @@ CREATE POLICY "Users can view checklists in their company" ON "public"."tool_che
 CREATE POLICY "Users can view images in their company" ON "public"."tool_images" FOR SELECT TO "authenticated" USING ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) OR (EXISTS ( SELECT 1
    FROM "public"."tools"
   WHERE (("tools"."id" = "tool_images"."tool_id") AND ("tools"."current_owner" = "auth"."uid"()))))));
+
+
+
+CREATE POLICY "Users can view other users in their company" ON "public"."users" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
 
 
 
