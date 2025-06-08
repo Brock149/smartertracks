@@ -18,9 +18,9 @@ interface SignupScreenProps {
 }
 
 export default function SignupScreen({ navigation }: SignupScreenProps) {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
@@ -54,13 +54,8 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
   };
 
   const handleSignup = async () => {
-    if (!email || !password || !confirmPassword || !accessCode) {
+    if (!name || !email || !password || !accessCode) {
       Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
       return;
     }
 
@@ -135,7 +130,7 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
           .insert({
             id: authData.user.id,
             email: email,
-            name: email.split('@')[0], // Use email prefix as default name
+            name: name, // Use the actual name field
             role: selectedCode.role,
             company_id: selectedCode.company_id,
           });
@@ -148,7 +143,7 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
 
       Alert.alert(
         'Success',
-        'Account created! Please check your email to verify your account.',
+        'Account created successfully! You can now log in.',
         [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
       );
     } catch (error) {
@@ -192,6 +187,18 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
             </View>
 
             <View style={styles.inputContainer}>
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your name"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
               <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
@@ -211,19 +218,6 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
                 placeholder="Enter your password"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
