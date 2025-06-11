@@ -78,15 +78,13 @@ export default function Tools() {
   })
   const [editChecklistLoading, setEditChecklistLoading] = useState(false)
   const [editChecklistError, setEditChecklistError] = useState<string | null>(null)
-  const [deleteChecklistLoading, setDeleteChecklistLoading] = useState(false)
-  const [deleteChecklistError, setDeleteChecklistError] = useState<string | null>(null)
-  const [checklistItemToDelete, setChecklistItemToDelete] = useState<ChecklistItem | null>(null)
+  const [deleteChecklistLoading] = useState(false)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editLoading, setEditLoading] = useState(false)
+  const [editLoading] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   useEffect(() => {
