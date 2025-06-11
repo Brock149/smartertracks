@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Login() {
@@ -25,7 +25,7 @@ export default function Login() {
 
       if (error) throw error
 
-      navigate('/tools')
+      navigate('/admin')
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -36,6 +36,24 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+        {/* Back Arrow */}
+        <div className="flex justify-start">
+          <Link
+            to="/"
+            className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors group"
+          >
+            <svg 
+              className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Home
+          </Link>
+        </div>
+        
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account

@@ -381,6 +381,20 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
         toUserId = user?.id;
       }
 
+      // Normalize the location using our SQL function
+      const { data: normalizedLocationData, error: normalizeError } = await supabase
+        .rpc('normalize_location', {
+          p_company_id: selectedTool.company_id,
+          p_input_location: location.trim()
+        });
+
+      if (normalizeError) {
+        console.error('Error normalizing location:', normalizeError);
+        // Continue with original location if normalization fails
+      }
+
+      const finalLocation = normalizedLocationData || location.trim();
+
       // Create the transaction record
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
@@ -388,7 +402,7 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
           tool_id: selectedTool.id,
           from_user_id: selectedTool.current_owner,
           to_user_id: toUserId,
-          location: location.trim(),
+          location: finalLocation,
           stored_at: storedAt.trim(),
           notes: notes.trim() || `Tool transferred via mobile app`,
           company_id: selectedTool.company_id,

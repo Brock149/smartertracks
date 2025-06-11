@@ -3,11 +3,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 const navLinks = [
-  { to: '/tools', label: 'Tools', icon: '🧰' },
-  { to: '/users', label: 'Users', icon: '👥' },
-  { to: '/transactions', label: 'Transactions', icon: '🔄' },
-  { to: '/reports', label: 'Reports', icon: '📊' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/admin/tools', label: 'Tools', icon: '🧰' },
+  { to: '/admin/users', label: 'Users', icon: '👥' },
+  { to: '/admin/transactions', label: 'Transactions', icon: '🔄' },
+  { to: '/admin/reports', label: 'Reports', icon: '📊' },
+  { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
 ]
 
 export default function Layout() {

@@ -248,6 +248,20 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     setClaiming(true);
 
     try {
+      // Normalize the location using our SQL function
+      const { data: normalizedLocationData, error: normalizeError } = await supabase
+        .rpc('normalize_location', {
+          p_company_id: tool.company_id,
+          p_input_location: location.trim()
+        });
+
+      if (normalizeError) {
+        console.error('Error normalizing location:', normalizeError);
+        // Continue with original location if normalization fails
+      }
+
+      const finalLocation = normalizedLocationData || location.trim();
+
       // Create the transaction record
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
@@ -255,7 +269,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           tool_id: tool.id,
           from_user_id: tool.current_owner,
           to_user_id: user?.id,
-          location: location.trim(),
+          location: finalLocation,
           stored_at: storedAt.trim(),
           notes: notes.trim() || `Tool claimed by ${user?.user_metadata?.name || user?.email}`,
           company_id: tool.company_id,
@@ -327,6 +341,21 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     setClaiming(true);
 
     try {
+      // Normalize the location using our SQL function
+      const originalLocation = latestTransaction?.location || 'Current Location';
+      const { data: normalizedLocationData, error: normalizeError } = await supabase
+        .rpc('normalize_location', {
+          p_company_id: tool.company_id,
+          p_input_location: originalLocation
+        });
+
+      if (normalizeError) {
+        console.error('Error normalizing location:', normalizeError);
+        // Continue with original location if normalization fails
+      }
+
+      const finalLocation = normalizedLocationData || originalLocation;
+
       // Create a "self-transfer" to generate checklist report
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
@@ -334,7 +363,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           tool_id: tool.id,
           from_user_id: user?.id,
           to_user_id: user?.id,
-          location: latestTransaction?.location || 'Current Location',
+          location: finalLocation,
           stored_at: latestTransaction?.stored_at || 'N/A',
           notes: `Checklist report submitted by ${user?.user_metadata?.name || user?.email}`,
           company_id: tool.company_id,
