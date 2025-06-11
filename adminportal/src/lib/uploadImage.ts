@@ -10,7 +10,7 @@ export async function uploadToolImageAndInsert(
     const fileName = `${toolId}-${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
     // Upload the file to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('tool-images')
       .upload(filePath, file);
     if (uploadError) {

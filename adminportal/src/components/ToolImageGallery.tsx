@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchToolImages } from '../lib/uploadImage';
 
 export function ToolImageGallery({ toolId }: { toolId: string }) {

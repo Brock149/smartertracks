@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { ToolImageUpload } from '../components/ToolImageUpload'
 import { ToolImageGallery } from '../components/ToolImageGallery'
-import { deleteToolImage, fetchToolImages, deleteToolImageRecord } from '../lib/uploadImage'
+import { fetchToolImages, deleteToolImageRecord } from '../lib/uploadImage'
 
 interface Tool {
   id: string
@@ -56,15 +56,8 @@ export default function Tools() {
   })
   const [isAddingItem, setIsAddingItem] = useState(false)
   const [editingTool, setEditingTool] = useState<Tool | null>(null)
-  const [editForm, setEditForm] = useState({
-    name: '',
-    description: '',
-    photo_url: '',
-    checklist: [] as Array<{ item_name: string; required: boolean }>
-  })
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [toolToDelete, setToolToDelete] = useState<Tool | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
+
+
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const [newToolImages, setNewToolImages] = useState<Array<{ id: string; image_url: string }>>([])
@@ -301,12 +294,6 @@ export default function Tools() {
   const handleEditTool = (tool: Tool) => {
     setEditingTool(tool)
     setSelectedTool(tool)
-    setEditForm({
-      name: tool.name,
-      description: tool.description,
-      photo_url: tool.photo_url || '',
-      checklist: tool.checklist || []
-    })
     setEditToolImages([])
     setEditImagesToDelete([])
     setEditImagesAdded([])
@@ -421,10 +408,7 @@ export default function Tools() {
 
 
 
-  function handleDeleteToolClose() {
-    setDeleteTool(null)
-    setDeleteError(null)
-  }
+
 
 
 

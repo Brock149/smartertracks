@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getMyCompanySettings, updateCompanySettings, type CompanySettings } from '../lib/companySettingsApi'
-import { getCompanyAliases, createLocationAlias, deleteLocationAlias, type LocationAlias, type CreateAliasData } from '../lib/locationAliasApi'
+import { getCompanyAliases, createLocationAlias, deleteLocationAlias, type LocationAlias } from '../lib/locationAliasApi'
 
 interface User {
   id: string
