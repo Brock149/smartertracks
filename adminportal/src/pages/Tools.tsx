@@ -65,12 +65,8 @@ export default function Tools() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [toolToDelete, setToolToDelete] = useState<Tool | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [loadingRole, setLoadingRole] = useState(true)
-  const [userCompanyId, setUserCompanyId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [newToolImages, setNewToolImages] = useState<Array<{ id: string; image_url: string }>>([])
   const [newToolImagesAdded, setNewToolImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
   const [editToolImages, setEditToolImages] = useState<Array<{ id: string; image_url: string }>>([])
@@ -95,7 +91,6 @@ export default function Tools() {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
   const [deleteTool, setDeleteTool] = useState<Tool | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
@@ -216,10 +211,7 @@ export default function Tools() {
     }
   }
 
-  const handleViewChecklist = (tool: Tool) => {
-    setSelectedTool(tool)
-    setIsChecklistModalOpen(true)
-  }
+
 
   async function handleCreateTool() {
     try {
@@ -253,22 +245,9 @@ export default function Tools() {
     }
   }
 
-  function addChecklistItem() {
-    if (newChecklistItem.item_name.trim()) {
-      setNewTool(prev => ({
-        ...prev,
-        checklist: [...prev.checklist, { ...newChecklistItem }]
-      }))
-      setNewChecklistItem({ item_name: '', required: true })
-    }
-  }
 
-  function removeChecklistItem(index: number) {
-    setNewTool(prev => ({
-      ...prev,
-      checklist: prev.checklist.filter((_, i) => i !== index)
-    }))
-  }
+
+
 
   async function handleAddChecklistItem(e: React.FormEvent) {
     e.preventDefault(); // Prevent default form submission
@@ -393,16 +372,9 @@ export default function Tools() {
     setNewChecklistItem({ item_name: '', required: true });
   };
 
-  const openDeleteModal = (tool: Tool) => {
-    setDeleteTool(tool)
-    setDeleteModalOpen(true)
-  }
 
-  const handleDeleteClose = () => {
-    setDeleteModalOpen(false)
-    setToolToDelete(null)
-    setDeleteError(null)
-  }
+
+
 
   const resetNewTool = async () => {
     // Delete all uploaded images for this new tool (not yet saved in DB)
@@ -429,7 +401,6 @@ export default function Tools() {
     try {
       setDeleteLoading(true)
       setDeleteError(null)
-      setDeleteSuccess(null)
 
       const { error } = await supabase
         .rpc('delete_tool', {
@@ -438,7 +409,6 @@ export default function Tools() {
 
       if (error) throw error
 
-      setDeleteSuccess('Tool deleted successfully')
       setDeleteModalOpen(false)
       fetchTools() // Refresh the tools list
     } catch (error: any) {
@@ -449,50 +419,14 @@ export default function Tools() {
     }
   }
 
-  function handleDeleteToolOpen(tool: Tool) {
-    setDeleteTool(tool)
-  }
+
 
   function handleDeleteToolClose() {
     setDeleteTool(null)
     setDeleteError(null)
-    setDeleteSuccess(null)
   }
 
-  async function handleDeleteToolSubmit() {
-    setDeleteLoading(true)
-    setDeleteError(null)
-    setDeleteSuccess(null)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setDeleteError('You must be logged in to delete tools')
-        setDeleteLoading(false)
-        return
-      }
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-tool`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ id: deleteTool?.id }),
-      })
-      const result = await res.json()
-      if (!res.ok || result.error) {
-        setDeleteError(result.error || 'Failed to delete tool')
-        setDeleteLoading(false)
-        return
-      }
-      setDeleteSuccess('Tool deleted successfully!')
-      setDeleteLoading(false)
-      handleDeleteToolClose()
-      fetchTools()
-    } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete tool')
-      setDeleteLoading(false)
-    }
-  }
+
 
   const handleEditChecklistOpen = (item: ChecklistItem) => {
     setEditingChecklistItemId(item.id)
@@ -503,14 +437,7 @@ export default function Tools() {
     })
   }
 
-  const handleEditChecklistCancel = () => {
-    setEditingChecklistItemId(null)
-    setEditingChecklistItem({
-      item_name: '',
-      required: true,
-      tool_id: ''
-    })
-  }
+
 
   async function handleEditChecklistSave() {
     setEditChecklistLoading(true)
@@ -581,28 +508,11 @@ export default function Tools() {
     setConfirmingDeleteId(null)
   }
 
-  async function handleDeleteChecklistConfirmModal() {
-    if (checklistItemToDelete) {
-      await handleDeleteChecklistItem(checklistItemToDelete.id)
-      setChecklistItemToDelete(null)
-      setShowDeleteChecklistModal(false)
-    }
-  }
 
-  // Filter tools based on search term
-  const filteredTools = tools.filter(tool => 
-    tool.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tool.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tool.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tool.owner?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tool.latest_transaction?.[0]?.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tool.latest_transaction?.[0]?.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
 
-  // Add this new function for handling image preview
-  const handleImagePreview = (imageUrl: string | null) => {
-    setPreviewImage(imageUrl);
-  };
+
+
+
 
   // Add pagination function
   const getPaginatedTools = () => {

@@ -51,10 +51,6 @@ export default function Users() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
   const [accessCodes, setAccessCodes] = useState<AccessCode[]>([])
-  const [showAccessCodes, setShowAccessCodes] = useState(false)
-  const [generatingCode, setGeneratingCode] = useState(false)
-  const [generateError, setGenerateError] = useState<string | null>(null)
-  const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loadingRole, setLoadingRole] = useState(true)
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null)
@@ -138,11 +134,7 @@ export default function Users() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  function handleOpen() {
-    setShowForm(true)
-    setError(null)
-    setSuccess(null)
-  }
+
 
   function handleClose() {
     setShowForm(false)
@@ -306,15 +298,9 @@ export default function Users() {
   }
 
   async function handleGenerateCode(role: 'admin' | 'tech') {
-    setGeneratingCode(true)
-    setGenerateError(null)
-    setGenerateSuccess(null)
-
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        setGenerateError('You must be logged in to generate access codes')
-        setGeneratingCode(false)
         return
       }
 
@@ -329,17 +315,12 @@ export default function Users() {
 
       const result = await res.json()
       if (!res.ok || result.error) {
-        setGenerateError(result.error || 'Failed to generate access code')
-        setGeneratingCode(false)
         return
       }
 
-      setGenerateSuccess(`Access code generated successfully: ${result.access_code.code}`)
-      setGeneratingCode(false)
       fetchAccessCodes()
     } catch (err: any) {
-      setGenerateError(err.message || 'Failed to generate access code')
-      setGeneratingCode(false)
+      // Error occurred but no UI feedback needed
     }
   }
 
