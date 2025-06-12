@@ -510,18 +510,18 @@ export default function Tools() {
   const getTotalPages = () => Math.ceil(tools.length / itemsPerPage)
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-2 md:px-4 py-4 md:py-8">
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
       ) : (
         <>
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Tools</h1>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Tools</h1>
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm md:text-base"
             >
               Add Tool
             </button>
@@ -544,8 +544,8 @@ export default function Tools() {
             </div>
           )}
 
-          {/* Tools List */}
-          <div className="bg-white shadow rounded-lg overflow-hidden">
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white shadow rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -607,65 +607,131 @@ export default function Tools() {
                 </tbody>
               </table>
             </div>
-            {/* Pagination */}
-            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-              <div className="flex-1 flex justify-between sm:hidden">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
-                  disabled={currentPage === getTotalPages()}
-                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-4">
+            {getPaginatedTools().map((tool) => (
+              <div key={tool.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-semibold text-lg text-gray-900">{tool.name}</h3>
+                    <p className="text-sm text-gray-500">#{tool.number}</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleEditTool(tool)}
+                      className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteTool(tool)
+                        setDeleteModalOpen(true)
+                      }}
+                      className="text-red-600 hover:text-red-900 text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <p className="text-gray-700">{tool.description}</p>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Owner:</span>
+                    <span className="text-gray-900">{tool.owner?.name || 'None'}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Location:</span>
+                    <span className="text-gray-900">
+                      {tool.latest_transaction && tool.latest_transaction.length > 0 
+                        ? tool.latest_transaction[0].location 
+                        : 'No Location'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Image:</span>
+                    <div>
+                      {toolsWithImages[tool.id] ? (
+                        <ToolImageGallery toolId={tool.id} />
+                      ) : (
+                        <button
+                          onClick={() => handleEditTool(tool)}
+                          className="text-blue-600 hover:text-blue-800 underline text-sm"
+                        >
+                          Upload Image
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-gray-700">
-                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                    <span className="font-medium">
-                      {Math.min(currentPage * itemsPerPage, tools.length)}
-                    </span>{' '}
-                    of <span className="font-medium">{tools.length}</span> tools
-                  </p>
-                </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4 rounded-lg shadow md:shadow-none">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                disabled={currentPage === getTotalPages()}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                  <span className="font-medium">
+                    {Math.min(currentPage * itemsPerPage, tools.length)}
+                  </span>{' '}
+                  of <span className="font-medium">{tools.length}</span> tools
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
                     <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        currentPage === page
+                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                      }`}
                     >
-                      Previous
+                      {page}
                     </button>
-                    {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                          currentPage === page
-                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
-                      disabled={currentPage === getTotalPages()}
-                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </nav>
-                </div>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                    disabled={currentPage === getTotalPages()}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </nav>
               </div>
             </div>
           </div>
@@ -674,9 +740,9 @@ export default function Tools() {
 
       {/* Add Tool Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
-            <div className="p-8 border-b">
+            <div className="p-4 md:p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
                 onClick={async () => { setIsCreateModalOpen(false); await resetNewTool(); }}
@@ -684,47 +750,47 @@ export default function Tools() {
               >
                 ×
               </button>
-              <h3 className="text-2xl font-semibold">Add New Tool</h3>
+              <h3 className="text-xl md:text-2xl font-semibold">Add New Tool</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-8">
-              <form onSubmit={handleCreateTool} className="space-y-5">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8">
+              <form onSubmit={handleCreateTool} className="space-y-4 md:space-y-5">
                 <div>
-                  <label className="block font-medium mb-2 text-lg">Tool Number</label>
+                  <label className="block font-medium mb-2 text-base md:text-lg">Tool Number</label>
                   <input
                     type="text"
                     value={newTool.number}
                     onChange={(e) => setNewTool(prev => ({ ...prev, number: e.target.value }))}
                     required
                     placeholder="Enter tool number"
-                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-medium mb-2 text-lg">Name</label>
+                  <label className="block font-medium mb-2 text-base md:text-lg">Name</label>
                   <input
                     type="text"
                     value={newTool.name}
                     onChange={(e) => setNewTool(prev => ({ ...prev, name: e.target.value }))}
                     required
                     placeholder="Enter tool name"
-                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-medium mb-2 text-lg">Description</label>
+                  <label className="block font-medium mb-2 text-base md:text-lg">Description</label>
                   <textarea
                     value={newTool.description}
                     onChange={(e) => setNewTool(prev => ({ ...prev, description: e.target.value }))}
                     placeholder="Enter tool description (optional)"
-                    className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   />
                 </div>
 
                 <div>
-                  <label className="block font-medium mb-2 text-lg">Checklist Items</label>
+                  <label className="block font-medium mb-2 text-base md:text-lg">Checklist Items</label>
                   <div className="space-y-3">
                     {newTool.checklist.map((item, index) => (
                       <div key={index} className="flex items-center gap-3">
@@ -737,9 +803,9 @@ export default function Tools() {
                             setNewTool(prev => ({ ...prev, checklist: newChecklist }))
                           }}
                           placeholder="Item name"
-                          className="flex-1 border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="flex-1 border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
-                        <label className="flex items-center gap-2 text-lg">
+                        <label className="flex items-center gap-2 text-base md:text-lg">
                           <input
                             type="checkbox"
                             checked={item.required}
@@ -758,7 +824,7 @@ export default function Tools() {
                             const newChecklist = newTool.checklist.filter((_, i) => i !== index)
                             setNewTool(prev => ({ ...prev, checklist: newChecklist }))
                           }}
-                          className="text-red-600 hover:text-red-900 text-lg"
+                          className="text-red-600 hover:text-red-900 text-base md:text-lg"
                         >
                           Remove
                         </button>
@@ -772,7 +838,7 @@ export default function Tools() {
                           checklist: [...prev.checklist, { item_name: '', required: true }]
                         }))
                       }}
-                      className="text-blue-600 hover:text-blue-900 text-lg"
+                      className="text-blue-600 hover:text-blue-900 text-base md:text-lg"
                     >
                       + Add Checklist Item
                     </button>
@@ -780,18 +846,18 @@ export default function Tools() {
                 </div>
               </form>
             </div>
-            <div className="p-8 border-t bg-gray-50">
+            <div className="p-4 md:p-8 border-t bg-gray-50">
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 rounded-lg border text-base md:text-lg hover:bg-gray-50 transition-colors"
                   onClick={async () => { setIsCreateModalOpen(false); await resetNewTool(); }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700 transition-colors"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-base md:text-lg hover:bg-blue-700 transition-colors"
                   onClick={handleCreateTool}
                 >
                   Create Tool

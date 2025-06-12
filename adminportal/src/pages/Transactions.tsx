@@ -268,15 +268,15 @@ export default function Transactions() {
   const getTotalPages = () => Math.ceil(filteredTransactions.length / itemsPerPage)
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto px-2 md:px-4 py-4 md:py-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-3xl font-bold">Tool Transactions</h2>
-          <p className="text-lg text-gray-500 mt-1">View all tool transfers and movements</p>
+          <h2 className="text-2xl md:text-3xl font-bold">Tool Transactions</h2>
+          <p className="text-base md:text-lg text-gray-500 mt-1">View all tool transfers and movements</p>
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="bg-blue-600 text-white px-6 py-3 rounded text-lg hover:bg-blue-700 transition-colors"
+          className="bg-blue-600 text-white px-4 md:px-6 py-2 md:py-3 rounded text-base md:text-lg hover:bg-blue-700 transition-colors"
         >
           Create New Transaction
         </button>
@@ -289,18 +289,18 @@ export default function Transactions() {
           placeholder="Search transactions..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-5 py-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-3 md:px-5 py-2 md:py-3 border rounded-lg text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-4 text-lg">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-3 md:px-5 py-2 md:py-3 rounded-lg mb-4 text-base md:text-lg">
           {error}
         </div>
       )}
 
-      {/* Transactions Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Desktop Transactions Table */}
+      <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-lg">Loading transactions...</div>
         ) : getPaginatedTransactions().length === 0 ? (
@@ -379,8 +379,71 @@ export default function Transactions() {
         )}
       </div>
 
+      {/* Mobile Transactions Cards */}
+      <div className="md:hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500 text-base">Loading transactions...</div>
+        ) : getPaginatedTransactions().length === 0 ? (
+          <div className="p-8 text-center text-gray-500 text-base">No transactions found</div>
+        ) : (
+          <div className="space-y-4">
+            {getPaginatedTransactions().map((transaction) => (
+              <div key={transaction.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
+                <div className="mb-3">
+                  <h3 className="font-semibold text-lg text-gray-900">
+                    {transaction.tool_id ? (
+                      <>#{transaction.tool?.number} - {transaction.tool?.name}</>
+                    ) : (
+                      <>#{transaction.deleted_tool_number} - {transaction.deleted_tool_name} (Deleted)</>
+                    )}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {new Date(transaction.timestamp).toLocaleString()}
+                  </p>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">From:</span>
+                    <span className="text-gray-900">
+                      {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">To:</span>
+                    <span className="text-gray-900">
+                      {transaction.deleted_to_user_name || transaction.to_user?.name}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Location:</span>
+                    <span className="text-gray-900">{transaction.location}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Stored At:</span>
+                    <span className="text-gray-900">{transaction.stored_at}</span>
+                  </div>
+                  
+                  {transaction.notes && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Notes:</span>
+                      <span className="text-gray-900 text-right max-w-48 truncate" title={transaction.notes}>
+                        {transaction.notes}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Pagination */}
-      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4 rounded-lg shadow md:shadow-none">
         <div className="flex-1 flex justify-between sm:hidden">
           <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
@@ -443,9 +506,9 @@ export default function Transactions() {
 
       {/* Create Transaction Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
-            <div className="p-8 border-b">
+            <div className="p-4 md:p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
                 onClick={() => setIsCreateModalOpen(false)}
@@ -453,10 +516,10 @@ export default function Transactions() {
               >
                 ×
               </button>
-              <h3 className="text-2xl font-semibold">Create New Transaction</h3>
+              <h3 className="text-xl md:text-2xl font-semibold">Create New Transaction</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-8">
-              <form onSubmit={(e) => { e.preventDefault(); handleCreateTransaction(); }} className="space-y-5">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8">
+              <form onSubmit={(e) => { e.preventDefault(); handleCreateTransaction(); }} className="space-y-4 md:space-y-5">
                 <div>
                   <label className="block font-medium mb-2 text-lg">Tool</label>
                   <select

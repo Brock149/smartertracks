@@ -132,11 +132,11 @@ export default function Reports() {
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto px-2 md:px-4 py-4 md:py-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-3xl font-bold">Reports</h2>
-          <p className="text-lg text-gray-500 mt-1">View and analyze tool tracking data</p>
+          <h2 className="text-2xl md:text-3xl font-bold">Reports</h2>
+          <p className="text-base md:text-lg text-gray-500 mt-1">View and analyze tool tracking data</p>
         </div>
       </div>
 
@@ -147,17 +147,18 @@ export default function Reports() {
           placeholder="Search reports..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full max-w-md px-5 py-3 border rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full max-w-md px-3 md:px-5 py-2 md:py-3 border rounded-lg text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-4 text-lg">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-3 md:px-5 py-2 md:py-3 rounded-lg mb-4 text-base md:text-lg">
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Desktop Reports Table */}
+      <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-lg">Loading reports...</div>
         ) : filteredReports.length === 0 ? (
@@ -254,10 +255,87 @@ export default function Reports() {
         )}
       </div>
 
+      {/* Mobile Reports Cards */}
+      <div className="md:hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500 text-base">Loading reports...</div>
+        ) : filteredReports.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 text-base">No reports found</div>
+        ) : (
+          <div className="space-y-4">
+            {filteredReports.map((report) => (
+              <div key={report.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1 mr-3">
+                    <h3 className="font-semibold text-base text-gray-900">
+                      #{report.transaction?.tool?.number} - {report.transaction?.tool?.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">{report.checklist_item?.item_name}</p>
+                    {report.checklist_item?.required && (
+                      <span className="inline-block mt-1 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Required</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleResolveOpen(report)}
+                    className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 transition-colors"
+                  >
+                    Resolve
+                  </button>
+                </div>
+                
+                <div className="mb-3">
+                  <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                    report.status === 'Damaged/Needs Repair'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : report.status === 'Needs Replacement/Resupply'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {report.status}
+                  </span>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">From:</span>
+                    <span className="text-gray-900">
+                      {report.transaction?.deleted_from_user_name || report.transaction?.from_user?.name || 'System'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">To:</span>
+                    <span className="text-gray-900">
+                      {report.transaction?.deleted_to_user_name || report.transaction?.to_user?.name}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Date:</span>
+                    <span className="text-gray-900">
+                      {new Date(report.transaction?.timestamp || report.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  
+                  {report.comments && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Comments:</span>
+                      <span className="text-gray-900 text-right max-w-48 truncate" title={report.comments}>
+                        {report.comments}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Resolve Report Modal */}
       {reportToResolve && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={handleResolveClose}
@@ -265,48 +343,48 @@ export default function Reports() {
             >
               ×
             </button>
-            <h3 className="text-2xl font-semibold mb-6 text-green-600">Resolve Report</h3>
-            <div className="space-y-5">
-              <div className="bg-gray-50 p-5 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-4 text-lg">Report Information</h4>
-                <div className="space-y-3">
+            <h3 className="text-xl md:text-2xl font-semibold mb-6 text-green-600">Resolve Report</h3>
+            <div className="space-y-4 md:space-y-5">
+              <div className="bg-gray-50 p-3 md:p-5 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3 md:mb-4 text-base md:text-lg">Report Information</h4>
+                <div className="space-y-2 md:space-y-3">
                   <div>
-                    <span className="text-base text-gray-500">Tool:</span>
-                    <p className="text-lg text-gray-900">
+                    <span className="text-sm md:text-base text-gray-500">Tool:</span>
+                    <p className="text-base md:text-lg text-gray-900">
                       #{reportToResolve.transaction?.tool?.number} - {reportToResolve.transaction?.tool?.name}
                     </p>
                   </div>
                   <div>
-                    <span className="text-base text-gray-500">Item:</span>
-                    <p className="text-lg text-gray-900">{reportToResolve.checklist_item?.item_name}</p>
+                    <span className="text-sm md:text-base text-gray-500">Item:</span>
+                    <p className="text-base md:text-lg text-gray-900">{reportToResolve.checklist_item?.item_name}</p>
                   </div>
                   <div>
-                    <span className="text-base text-gray-500">Status:</span>
-                    <p className="text-lg text-gray-900">{reportToResolve.status}</p>
+                    <span className="text-sm md:text-base text-gray-500">Status:</span>
+                    <p className="text-base md:text-lg text-gray-900">{reportToResolve.status}</p>
                   </div>
                   <div>
-                    <span className="text-base text-gray-500">Comments:</span>
-                    <p className="text-lg text-gray-900">{reportToResolve.comments || '-'}</p>
+                    <span className="text-sm md:text-base text-gray-500">Comments:</span>
+                    <p className="text-base md:text-lg text-gray-900">{reportToResolve.comments || '-'}</p>
                   </div>
                 </div>
               </div>
-              <p className="text-green-600 font-medium text-lg">
+              <p className="text-green-600 font-medium text-base md:text-lg">
                 Are you sure you want to mark this report as resolved? This action cannot be undone.
               </p>
               {resolveError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg text-lg">
+                <div className="bg-red-50 border border-red-200 text-red-600 px-3 md:px-5 py-2 md:py-3 rounded-lg text-base md:text-lg">
                   {resolveError}
                 </div>
               )}
               {resolveSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg text-lg">
+                <div className="bg-green-50 border border-green-200 text-green-600 px-3 md:px-5 py-2 md:py-3 rounded-lg text-base md:text-lg">
                   {resolveSuccess}
                 </div>
               )}
-              <div className="flex justify-end gap-3 pt-5">
+              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-3 md:pt-5">
                 <button
                   type="button"
-                  className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 md:px-6 py-2 md:py-3 rounded-lg border text-base md:text-lg hover:bg-gray-50 transition-colors"
                   onClick={handleResolveClose}
                   disabled={resolveLoading}
                 >
@@ -314,7 +392,7 @@ export default function Reports() {
                 </button>
                 <button
                   type="button"
-                  className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="bg-green-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg text-base md:text-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                   onClick={handleResolveReport}
                   disabled={resolveLoading}
                 >

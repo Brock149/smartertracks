@@ -134,8 +134,6 @@ export default function Users() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-
-
   function handleClose() {
     setShowForm(false)
     setForm({ name: '', email: '', password: '', role: 'tech' })
@@ -418,13 +416,13 @@ export default function Users() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Users</h1>
+    <div className="container mx-auto px-2 md:px-4 py-4 md:py-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">Users</h1>
         {userRole === 'admin' && (
           <button
             onClick={() => setShowForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm md:text-base"
           >
             Add User
           </button>
@@ -442,8 +440,8 @@ export default function Users() {
         />
       </div>
 
-      {/* Users List */}
-      <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
+      {/* Desktop Users Table */}
+      <div className="hidden md:block bg-white shadow rounded-lg overflow-hidden mb-8">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -546,22 +544,80 @@ export default function Users() {
         </div>
       </div>
 
+      {/* Mobile Users Cards */}
+      <div className="md:hidden space-y-4 mb-8">
+        {getPaginatedUsers().map((user) => (
+          <div key={user.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <h3 className="font-semibold text-lg text-gray-900">{user.name}</h3>
+                <p className="text-sm text-gray-500">{user.email}</p>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handleEditOpen(user)}
+                  className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                >
+                  Edit
+                </button>
+                {userRole === 'admin' && (
+                  <button
+                    onClick={() => handleDeleteOpen(user)}
+                    className="text-red-600 hover:text-red-900 text-sm font-medium"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Role:</span>
+                <span className="text-gray-900 capitalize">{user.role}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+        
+        {/* Mobile Users Pagination */}
+        <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 rounded-lg shadow">
+          <button
+            onClick={() => setCurrentUsersPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentUsersPage === 1}
+            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-700">
+            Page {currentUsersPage} of {getTotalPages(users)}
+          </span>
+          <button
+            onClick={() => setCurrentUsersPage(prev => Math.min(prev + 1, getTotalPages(users)))}
+            disabled={currentUsersPage === getTotalPages(users)}
+            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
       {/* Access Codes Section */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Access Codes</h2>
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900">Access Codes</h2>
             {userRole === 'admin' && (
-              <div className="flex space-x-4">
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
                 <button
                   onClick={() => handleGenerateCode('admin')}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm md:text-base"
                 >
                   Generate Admin Code
                 </button>
                 <button
                   onClick={() => handleGenerateCode('tech')}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-sm md:text-base"
                 >
                   Generate Tech Code
                 </button>
@@ -569,7 +625,8 @@ export default function Users() {
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Desktop Access Codes Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -632,8 +689,94 @@ export default function Users() {
               </tbody>
             </table>
           </div>
-          {/* Access Codes Pagination */}
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+
+          {/* Mobile Access Codes Cards */}
+          <div className="md:hidden space-y-4">
+            {getPaginatedAccessCodes().map((code) => (
+              <div key={code.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-semibold text-lg text-gray-900 capitalize">{code.role}</h3>
+                    <p className="text-sm text-gray-500">
+                      {code.is_active ? 'Active' : 'Inactive'}
+                    </p>
+                  </div>
+                  {userRole === 'admin' && (
+                    <button
+                      onClick={() => {
+                        setEditingAccessCode(code)
+                        setIsEditAccessCodeModalOpen(true)
+                      }}
+                      className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Code:</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-gray-900">
+                        {code.role === 'admin' ? maskCode(code, code.id) : code.code}
+                      </span>
+                      {code.role === 'admin' && (
+                        <button
+                          onClick={() => toggleCodeVisibility(code.id)}
+                          className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                          title={visibleAdminCodes.has(code.id) ? "Hide code" : "Show code"}
+                        >
+                          {visibleAdminCodes.has(code.id) ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                              <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Created:</span>
+                    <span className="text-gray-900">
+                      {new Date(code.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {/* Mobile Access Codes Pagination */}
+            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 rounded-lg shadow">
+              <button
+                onClick={() => setCurrentAccessCodesPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentAccessCodesPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-gray-700">
+                Page {currentAccessCodesPage} of {getTotalPages(accessCodes)}
+              </span>
+              <button
+                onClick={() => setCurrentAccessCodesPage(prev => Math.min(prev + 1, getTotalPages(accessCodes)))}
+                disabled={currentAccessCodesPage === getTotalPages(accessCodes)}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          {/* Desktop Access Codes Pagination */}
+          <div className="hidden md:block bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() => setCurrentAccessCodesPage(prev => Math.max(prev - 1, 1))}
@@ -698,8 +841,8 @@ export default function Users() {
 
       {/* Add User Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={handleClose}
@@ -707,39 +850,39 @@ export default function Users() {
             >
               ×
             </button>
-            <h3 className="text-2xl font-semibold mb-6">Add User</h3>
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <h3 className="text-xl md:text-2xl font-semibold mb-6">Add User</h3>
+            <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
               <div>
-                <label className="block font-medium mb-2 text-lg">Name</label>
+                <label className="block font-medium mb-2 text-base md:text-lg">Name</label>
                 <input
                   type="text"
                   name="name"
                   value={form.name}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-2 text-lg">Email</label>
+                <label className="block font-medium mb-2 text-base md:text-lg">Email</label>
                 <input
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block font-medium mb-2 text-lg">Password</label>
+                <label className="block font-medium mb-2 text-base md:text-lg">Password</label>
                 <input
                   type="password"
                   name="password"
                   value={form.password}
                   onChange={handleChange}
                   required
-                  className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
