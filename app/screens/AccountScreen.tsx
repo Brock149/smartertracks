@@ -52,8 +52,18 @@ export default function AccountScreen() {
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select(`
-          *,
-          company:companies(*)
+          id,
+          name,
+          email,
+          role,
+          company_id,
+          created_at,
+          company:companies!users_company_id_fkey(
+            id,
+            name,
+            is_active,
+            created_at
+          )
         `)
         .eq('id', user?.id)
         .single();

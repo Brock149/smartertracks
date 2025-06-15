@@ -1177,7 +1177,19 @@ CREATE POLICY "Service role can do everything on users" ON "public"."users" TO "
 
 
 
+CREATE POLICY "Superadmins can create access codes" ON "public"."company_access_codes" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_superadmin"("auth"."uid"()));
+
+
+
+CREATE POLICY "Superadmins can delete access codes" ON "public"."company_access_codes" FOR DELETE TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"()));
+
+
+
 CREATE POLICY "Superadmins can manage all companies" ON "public"."companies" TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"())) WITH CHECK ("public"."is_superadmin"("auth"."uid"()));
+
+
+
+CREATE POLICY "Superadmins can view all access codes" ON "public"."company_access_codes" FOR SELECT TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"()));
 
 
 

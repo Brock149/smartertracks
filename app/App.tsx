@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import AppNavigator from './components/AppNavigator';
+import SuspendedOverlay from './components/SuspendedOverlay';
 
 const Stack = createStackNavigator();
 
@@ -23,22 +24,23 @@ function AuthStack() {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, suspended } = useAuth();
 
-  if (loading) {
-    return null; // or a loading screen
+  if (loading) return null;
+
+  if (user && suspended) {
+    return (
+      <NavigationContainer>
+        <StatusBar style="auto" />
+        <SuspendedOverlay />
+      </NavigationContainer>
+    );
   }
 
   return (
     <NavigationContainer>
       <StatusBar style="auto" />
-      {user ? (
-        // Authenticated: Show the main app with bottom tabs
-        <AppNavigator />
-      ) : (
-        // Not authenticated: Show login/signup flow
-        <AuthStack />
-      )}
+      {user ? <AppNavigator /> : <AuthStack />}
     </NavigationContainer>
   );
 }
