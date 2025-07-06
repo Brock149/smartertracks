@@ -56,6 +56,7 @@ export default function Settings() {
   const [billingLoading, setBillingLoading] = useState(true)
   const [billingError, setBillingError] = useState<string | null>(null)
   const [creatingCheckout, setCreatingCheckout] = useState(false)
+  const [openingPortal, setOpeningPortal] = useState(false)
 
   useEffect(() => {
     fetchUserRole()
@@ -207,6 +208,28 @@ export default function Settings() {
       setBillingError('Failed to start checkout: ' + error.message)
     } finally {
       setCreatingCheckout(false)
+    }
+  }
+
+  async function handleOpenBillingPortal() {
+    try {
+      setOpeningPortal(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('No session')
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-billing-portal-session`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Failed to create portal session')
+      window.location.href = result.url
+    } catch (err: any) {
+      setBillingError(err.message)
+    } finally {
+      setOpeningPortal(false)
     }
   }
 
@@ -850,14 +873,13 @@ export default function Settings() {
                   >
                     {creatingCheckout ? 'Loading...' : 'Update Payment Method'}
                   </button>
-                  <a
-                    href="https://billing.stripe.com/p/login/test_your_portal_link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg text-lg font-medium text-center focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  <button
+                    onClick={handleOpenBillingPortal}
+                    disabled={openingPortal}
+                    className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
                   >
-                    Manage Billing
-                  </a>
+                    {openingPortal ? 'Loading...' : 'Manage Billing'}
+                  </button>
                 </>
               )}
             </div>
