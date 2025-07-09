@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -66,6 +67,7 @@ interface ToolDetailScreenProps {
 export default function ToolDetailScreen({ route, navigation }: ToolDetailScreenProps) {
   const { tool } = route.params;
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [images, setImages] = useState<ToolImage[]>([]);
   const [latestTransaction, setLatestTransaction] = useState<LatestTransaction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -570,7 +572,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
@@ -587,7 +589,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1f2937" />
@@ -596,7 +598,11 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
+      >
         {/* Tool Images */}
         <View style={styles.section}>
           {renderImageGallery()}
@@ -716,7 +722,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
       </ScrollView>
 
       {/* Action Buttons */}
-      <View style={styles.bottomSection}>
+      <View style={[styles.bottomSection, { paddingVertical: 8 }]}>
         {tool.current_owner !== user?.id ? (
           <TouchableOpacity
             style={styles.claimButton}

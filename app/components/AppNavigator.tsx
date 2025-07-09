@@ -5,10 +5,12 @@ import MyToolsStack from './MyToolsStack';
 import AllToolsStack from './AllToolsStack';
 import TransferToolsScreen from '../screens/TransferToolsScreen';
 import AccountScreen from '../screens/AccountScreen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const Tab = createBottomTabNavigator();
 
 export default function AppNavigator() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -35,9 +37,9 @@ export default function AppNavigator() {
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
-          paddingBottom: 5,
+          paddingBottom: 5 + insets.bottom,
           paddingTop: 5,
-          height: 60,
+          height: 60 + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 12,

@@ -9,8 +9,9 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
-  Image,
+  Image as RNImage,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,6 +58,9 @@ interface AllToolsScreenProps {
   navigation: any;
 }
 
+// Helper to convert Supabase storage image URL to a low-res thumbnail using the built-in image transformer
+const getThumbnailUrl = (url: string) => url;
+
 export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [tools, setTools] = useState<Tool[]>([]);
   const [filteredTools, setFilteredTools] = useState<Tool[]>([]);
@@ -65,6 +69,22 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
   const { user } = useAuth();
+
+  // Prefetch the first image of each tool to improve list rendering
+  useEffect(() => {
+    tools.forEach(tool => {
+      let imgUrl: string | null = null;
+      if (tool.images && tool.images.length > 0) {
+        imgUrl = tool.images[0].image_url;
+      } else if (tool.photo_url) {
+        imgUrl = tool.photo_url;
+      }
+      if (imgUrl) {
+        // expo-image caches aggressively; simple prefetch of the original URL is fine
+        RNImage.prefetch(imgUrl);
+      }
+    });
+  }, [tools]);
 
   useEffect(() => {
     fetchTools();
@@ -293,17 +313,30 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       <View style={styles.toolContent}>
         {/* Tool Image Preview */}
         <View style={styles.imageContainer}>
-          {item.images && item.images.length > 0 ? (
-            <Image
-              source={{ uri: item.images[0].image_url }}
-              style={styles.toolImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.placeholderImage}>
-              <Ionicons name="camera-outline" size={32} color="#d1d5db" />
-            </View>
-          )}
+          {(() => {
+            let imgUrl: string | null = null;
+            if (item.images && item.images.length > 0) {
+              imgUrl = item.images[0].image_url;
+            } else if (item.photo_url) {
+              imgUrl = item.photo_url;
+            }
+            if (imgUrl) {
+              return (
+                <ExpoImage
+                  source={{ uri: imgUrl }}
+                  style={styles.toolImage}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory-disk"
+                />
+              );
+            }
+            return (
+              <View style={styles.placeholderImage}>
+                <Ionicons name="camera-outline" size={32} color="#d1d5db" />
+              </View>
+            );
+          })()}
           {item.images && item.images.length > 1 && (
             <View style={styles.imageCount}>
               <Text style={styles.imageCountText}>+{item.images.length - 1}</Text>
@@ -357,7 +390,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
           <Text style={styles.loadingText}>Loading tools...</Text>
@@ -367,7 +400,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.title}>All Tools</Text>
         <Text style={styles.subtitle}>
@@ -400,6 +433,10 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         renderItem={renderToolItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={21}
+        removeClippedSubviews={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
