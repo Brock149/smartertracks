@@ -12,6 +12,7 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsAndConditions from './pages/TermsAndConditions'
+import AccountDeletion from './pages/AccountDeletion'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+        <Route path="/account-deletion" element={<AccountDeletion />} />
         <Route
           path="/admin"
           element={

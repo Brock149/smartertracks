@@ -265,6 +265,9 @@ export default function Landing() {
               <Link to="/terms-and-conditions" className="text-gray-400 hover:text-white transition-colors">
                 Terms & Conditions
               </Link>
+              <Link to="/account-deletion" className="text-gray-400 hover:text-white transition-colors">
+                Account Deletion
+              </Link>
             </div>
             <div className="mt-8 pt-8 border-t border-gray-800 text-gray-400">
               <p>&copy; 2024 SASI Tool Tracker. All rights reserved.</p>
