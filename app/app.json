@@ -4,7 +4,7 @@
     "slug": "smartertracks",
     "version": "1.0.0",
     "privacy": "public",
-    "privacyPolicyUrl": "https://example.com/privacy.html",
+    "privacyPolicyUrl": "https://www.smartertracks.com/privacy-policy",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,6 +28,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7d3d38c1-4cf3-4711-8bcf-5659c7ef24f7"
+      }
     }
   }
 }
