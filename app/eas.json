@@ -1,0 +1,13 @@
+{
+  "build": {
+    "production": {
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
+      }
+    }
+  },
+  "cli": {
+    "version": ">= 3.13.1"
+  }
+} 

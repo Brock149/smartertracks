@@ -746,23 +746,23 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   toolDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
   },
   locationInfo: {
     flex: 1,
     gap: 4,
   },
   detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
   },
   detailLabel: {
     fontSize: 14,
     color: '#374151',
     fontWeight: '500',
-    marginRight: 6,
+    marginBottom: 2,
   },
   detailText: {
     fontSize: 14,

@@ -1,8 +1,10 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "SmarterTracks",
+    "slug": "smartertracks",
     "version": "1.0.0",
+    "privacy": "public",
+    "privacyPolicyUrl": "https://example.com/privacy.html",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,6 +18,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.bactech.smartertracks",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

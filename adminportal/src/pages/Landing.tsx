@@ -259,6 +259,12 @@ export default function Landing() {
               <a href="mailto:brockcoburn@smartertracks.com" className="text-gray-400 hover:text-white transition-colors">
                 Contact
               </a>
+              <Link to="/privacy-policy" className="text-gray-400 hover:text-white transition-colors">
+                Privacy Policy
+              </Link>
+              <Link to="/terms-and-conditions" className="text-gray-400 hover:text-white transition-colors">
+                Terms & Conditions
+              </Link>
             </div>
             <div className="mt-8 pt-8 border-t border-gray-800 text-gray-400">
               <p>&copy; 2024 SASI Tool Tracker. All rights reserved.</p>

@@ -593,14 +593,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
   },
   detailLabel: {
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
+    marginBottom: 2,
   },
   detailText: {
     fontSize: 14,
