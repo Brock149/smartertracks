@@ -15,7 +15,7 @@ serve(async (req) => {
     // Use service role key for privileged access
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SERVICE_KEY') ?? ''
     )
 
     // Get the authorization header and verify the user

@@ -2,13 +2,7 @@
   "build": {
     "production": {
       "android": {
-        "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
-        "env": {
-          "EXPO_PUBLIC_SUPABASE_URL": "https://trcackummmixzocenxvm.supabase.co",
-          "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY2Fja3VtbW1peHpvY2VueHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgyOTc3NjIsImV4cCI6MjA2Mzg3Mzc2Mn0.1DofBneKlB_AooF51vw6GrQffHuFnbTEY5KJRB7Mt_I",
-          "EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyY2Fja3VtbW1peHpvY2VueHZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODI5Nzc2MiwiZXhwIjoyMDYzODczNzYyfQ.y5Nh269bgzvu49El4axZMp2CijsU98nkY1o4XODvAto"
-        }
+        "buildType": "app-bundle"
       }
     }
   },
