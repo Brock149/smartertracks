@@ -28,6 +28,7 @@ interface Tool {
   created_at: string;
   company_id: string;
   owner_name?: string;
+  latest_location?: string;
   images?: ToolImage[];
 }
 
@@ -163,55 +164,67 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
 
     setSearching(true);
     try {
-      // First search by tool number and name
-      const { data: toolsData, error } = await supabase
+      const term = searchQuery.toLowerCase();
+
+      // 1. Fetch all tools for the company with owner info
+      const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
         .select(`
           *,
           owner:users!tools_current_owner_fkey(name)
         `)
-        .or(`number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`)
-        .order('number')
-        .limit(10);
+        .order('number');
 
-      if (error) {
-        console.error('Error searching tools:', error);
+      if (toolsError) {
+        console.error('Error fetching tools for search:', toolsError);
         return;
       }
 
-      // Then search by owner name if we don't have enough results
-      let ownerResults: any[] = [];
-      if (toolsData && toolsData.length < 10) {
-        const { data: ownerToolsData, error: ownerError } = await supabase
-          .from('tools')
-          .select(`
-            *,
-            owner:users!tools_current_owner_fkey(name)
-          `)
-          .not('current_owner', 'is', null)
-          .order('number')
-          .limit(10);
+      const toolIds = (toolsData || []).map(t => t.id);
 
-        if (!ownerError && ownerToolsData) {
-          // Filter by owner name locally since joined table search is complex
-          ownerResults = ownerToolsData.filter(tool => 
-            tool.owner?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        }
+      // 2. Fetch latest transactions for these tools (needed for location)
+      const { data: transactionsData, error: txError } = await supabase
+        .from('tool_transactions')
+        .select('tool_id, location, timestamp')
+        .in('tool_id', toolIds)
+        .order('timestamp', { ascending: false });
+
+      if (txError) {
+        console.error('Error fetching transactions for search:', txError);
       }
 
-      // Combine results and remove duplicates
-      const allResults = [...(toolsData || []), ...ownerResults];
-      const uniqueResults = allResults.filter((tool, index, self) => 
-        index === self.findIndex(t => t.id === tool.id)
-      ).slice(0, 10);
+      // Build map tool_id -> latest location
+      const latestLocationByTool: Record<string, string> = {};
+      (transactionsData || []).forEach(tx => {
+        if (!latestLocationByTool[tx.tool_id]) {
+          latestLocationByTool[tx.tool_id] = tx.location || '';
+        }
+      });
 
-      const transformedTools = uniqueResults.map(tool => ({
+      // 3. Transform tools with owner and latest location
+      const transformed = (toolsData || []).map(tool => ({
         ...tool,
         owner_name: tool.owner?.name || null,
+        latest_location: latestLocationByTool[tool.id] || ''
       }));
 
-      setSearchResults(transformedTools);
+      // 4. Local filtering (number, name, description, owner, location)
+      const filtered = transformed.filter(tool => {
+        const matchesNumber = tool.number.toLowerCase().includes(term);
+        const matchesName = tool.name.toLowerCase().includes(term);
+        const matchesDescription = (tool.description || '').toLowerCase().includes(term);
+        const matchesOwner = (tool.owner_name || '').toLowerCase().includes(term);
+        const matchesLocation = (tool.latest_location || '').toLowerCase().includes(term);
+        return (
+          matchesNumber ||
+          matchesName ||
+          matchesDescription ||
+          matchesOwner ||
+          matchesLocation
+        );
+      }).slice(0, 20);
+
+      setSearchResults(filtered);
     } catch (error) {
       console.error('Error searching tools:', error);
     } finally {
@@ -655,6 +668,11 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
                     <Text style={styles.searchResultOwner}>
                       Owner: {item.owner_name || 'Unassigned'}
                     </Text>
+                    {item.latest_location !== undefined && (
+                      <Text style={styles.searchResultOwner}>
+                        Location: {item.latest_location || 'Unknown'}
+                      </Text>
+                    )}
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
                 </TouchableOpacity>

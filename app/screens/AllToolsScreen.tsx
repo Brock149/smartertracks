@@ -214,11 +214,23 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       return;
     }
 
-    const filtered = tools.filter(tool =>
-      tool.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (tool.owner_name && tool.owner_name.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const lowerSearch = searchQuery.toLowerCase();
+
+    const filtered = tools.filter(tool => {
+      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch);
+      const matchesName = tool.name.toLowerCase().includes(lowerSearch);
+      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch);
+      const matchesOwner = (tool.owner_name || '').toLowerCase().includes(lowerSearch);
+      const matchesLocation = (tool.current_location || '').toLowerCase().includes(lowerSearch);
+
+      return (
+        matchesNumber ||
+        matchesName ||
+        matchesDescription ||
+        matchesOwner ||
+        matchesLocation
+      );
+    });
 
     setFilteredTools(filtered);
   };

@@ -30,6 +30,7 @@ interface Tool {
   images?: ToolImage[];
   latest_location?: string;
   latest_stored_at?: string;
+  owner_name?: string;
 }
 
 interface ToolImage {
@@ -120,6 +121,18 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     await saveDismissedNotifications(newDismissed);
   };
 
+  // Dismiss **all** notifications related to a given tool (used when user presses Accept/X)
+  const dismissNotificationsByTool = async (toolId: string) => {
+    const idsToDismiss = notifications
+      .filter((n) => n.tool_id === toolId)
+      .map((n) => n.id);
+
+    const newDismissed = new Set(dismissedNotifications);
+    idsToDismiss.forEach((id) => newDismissed.add(id));
+    setDismissedNotifications(newDismissed);
+    await saveDismissedNotifications(newDismissed);
+  };
+  
   const fetchMyTools = async () => {
     try {
       // Get only tools owned by the current user
@@ -201,10 +214,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     if (!user?.id) return;
 
     try {
-      // Get recent tool transfers where user is the recipient (last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
+      // Get ALL transfers where current user is the recipient (no time limit)
       const { data: transfers, error } = await supabase
         .from('tool_transactions')
         .select(`
@@ -220,9 +230,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
           from_user:users!from_user_id(name)
         `)
         .eq('to_user_id', user.id)
-        .gte('timestamp', sevenDaysAgo.toISOString())
-        .order('timestamp', { ascending: false })
-        .limit(5);
+        .order('timestamp', { ascending: false });
 
       if (error) {
         console.error('Error fetching notifications:', error);
@@ -234,9 +242,17 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         return;
       }
 
+      // Keep only the most recent transfer per tool_id
+      const seenTools = new Set<string>();
+      const uniqueTransfers = transfers.filter((t) => {
+        if (seenTools.has(t.tool_id)) return false;
+        seenTools.add(t.tool_id);
+        return true;
+      });
+
       // For each transfer, check if the tool has open checklist issues
       const notificationsWithIssues = await Promise.all(
-        transfers.map(async (transfer) => {
+        uniqueTransfers.map(async (transfer) => {
           let hasIssues = false;
           let issueCount = 0;
           let reports: ChecklistReport[] = [];
@@ -322,10 +338,23 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
       return;
     }
 
-    const filtered = tools.filter(tool =>
-      tool.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tool.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const lowerSearch = searchQuery.toLowerCase();
+
+    const filtered = tools.filter(tool => {
+      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch);
+      const matchesName = tool.name.toLowerCase().includes(lowerSearch);
+      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch);
+      const matchesLocation = (tool.latest_location || '').toLowerCase().includes(lowerSearch);
+      const matchesOwner = ((tool as any).owner_name || '').toLowerCase().includes(lowerSearch);
+
+      return (
+        matchesNumber ||
+        matchesName ||
+        matchesDescription ||
+        matchesLocation ||
+        matchesOwner
+      );
+    });
 
     setFilteredTools(filtered);
   };
@@ -424,8 +453,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
               <TouchableOpacity 
                 style={[styles.notificationActionButton, styles.acceptButton]}
                 onPress={async () => {
-                  // Accept notification - dismiss it permanently
-                  await dismissNotification(notification.id);
+                  // Accept notification - dismiss ALL notifications for this tool
+                  await dismissNotificationsByTool(notification.tool_id);
                   setExpandedNotifications(prev => {
                     const newSet = new Set(prev);
                     newSet.delete(item.id);
@@ -440,8 +469,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
               <TouchableOpacity 
                 style={styles.notificationActionButton}
                 onPress={async () => {
-                  // Dismiss notification - remove it permanently
-                  await dismissNotification(notification.id);
+                  // Dismiss notification - remove ALL notifications for this tool
+                  await dismissNotificationsByTool(notification.tool_id);
                   setExpandedNotifications(prev => {
                     const newSet = new Set(prev);
                     newSet.delete(item.id);

@@ -498,13 +498,28 @@ export default function Tools() {
 
   // Add pagination function
   const getPaginatedTools = () => {
-    const filtered = tools.filter(tool => 
-      tool.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tool.name.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-    return filtered.slice(startIndex, endIndex)
+    const lowerSearch = searchTerm.toLowerCase();
+    const filtered = tools.filter(tool => {
+      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch);
+      const matchesName = tool.name.toLowerCase().includes(lowerSearch);
+      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch);
+      const matchesOwner = (tool.owner?.name || '').toLowerCase().includes(lowerSearch);
+      const latestLocation = (tool.latest_transaction && tool.latest_transaction.length > 0)
+        ? (tool.latest_transaction[0].location || '')
+        : '';
+      const matchesLocation = latestLocation.toLowerCase().includes(lowerSearch);
+
+      return (
+        matchesNumber ||
+        matchesName ||
+        matchesDescription ||
+        matchesOwner ||
+        matchesLocation
+      );
+    });
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
   }
 
   const getTotalPages = () => Math.ceil(tools.length / itemsPerPage)
@@ -1008,7 +1023,7 @@ export default function Tools() {
                                 id="required-checkbox"
                                 checked={newChecklistItem.required}
                                 onChange={(e) => setNewChecklistItem(prev => ({ ...prev, required: e.target.checked }))}
-                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
                               />
                               <label htmlFor="required-checkbox" className="text-lg">Required</label>
                             </div>
