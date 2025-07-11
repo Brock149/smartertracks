@@ -32,7 +32,9 @@
     "extra": {
       "eas": {
         "projectId": "7d3d38c1-4cf3-4711-8bcf-5659c7ef24f7"
-      }
+      },
+      "SUPABASE_URL": "https://trcackummmixzocenxvm.supabase.co",
+      "SUPABASE_ANON_KEY": "sb_publishable_VgbzZy7pUztLz7pbIccbcg_MteF3EkQ"
     }
   }
 }

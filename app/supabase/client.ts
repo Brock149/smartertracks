@@ -1,9 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!;
+// Fetch values from app.json -> expo.extra
+const {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  SERVICE_KEY,
+} = (Constants.expoConfig?.extra || {}) as Record<string, string>;
+
+// Fallback to env vars if running in environments where extra isn't set
+const supabaseUrl = SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = SERVICE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!;
 
 // Custom storage implementation using Expo SecureStore
 const ExpoSecureStoreAdapter = {
