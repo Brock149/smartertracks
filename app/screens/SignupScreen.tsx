@@ -11,7 +11,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { supabase, supabaseAdmin } from '../supabase/client';
+import { supabase } from '../supabase/client';
 
 interface SignupScreenProps {
   navigation: any;
@@ -25,33 +25,8 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
 
-  // Debug function to test access code lookup
-  const debugAccessCode = async () => {
-    if (!accessCode) {
-      Alert.alert('Debug', 'Please enter an access code first');
-      return;
-    }
-
-    try {
-      console.log('Debug: Testing access code:', accessCode);
-      
-      // Test with admin client to bypass RLS
-      const { data, error } = await supabaseAdmin
-        .from('company_access_codes')
-        .select('*');
-      
-      console.log('All access codes:', data);
-      console.log('Query error:', error);
-      
-      Alert.alert(
-        'Debug Results', 
-        `Found ${data?.length || 0} total access codes. Check console for details.`
-      );
-    } catch (err) {
-      console.error('Debug error:', err);
-      Alert.alert('Debug Error', String(err));
-    }
-  };
+  // Signup is now delegated to a secure Supabase Edge Function so the
+  // mobile app never needs the service-role key.
 
   const handleSignup = async () => {
     if (!name || !email || !password || !accessCode) {
@@ -67,78 +42,24 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
     setLoading(true);
 
     try {
-      // Debug: Log the access code being searched
-      console.log('Searching for access code:', accessCode.trim());
+      // Delegate signup to Edge Function (handles validation + user creation securely)
+      const { data, error } = await supabase.functions.invoke('signup-with-code', {
+        body: {
+          name,
+          email,
+          password,
+          accessCode: accessCode.trim(),
+        },
+      });
 
-      // Use admin client to validate the access code (bypasses RLS)
-      const { data: accessCodeData, error: accessCodeError } = await supabaseAdmin
-        .from('company_access_codes')
-        .select('id, company_id, role, code')
-        .ilike('code', accessCode.trim()) // Use ilike for case-insensitive search
-        .eq('is_active', true);
-
-      console.log('Access code query result:', { accessCodeData, accessCodeError });
-
-      if (accessCodeError) {
-        console.error('Access code query error:', accessCodeError);
-        Alert.alert('Error', `Database error: ${accessCodeError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      if (!accessCodeData || accessCodeData.length === 0) {
-        // Let's also try a broader search to debug
-        const { data: allCodes } = await supabaseAdmin
-          .from('company_access_codes')
-          .select('code, is_active')
-          .limit(5);
-        
-        console.log('Available codes for debugging:', allCodes);
-        
+      if (error || !data?.success) {
+        console.error('Signup error:', error ?? data?.error);
         Alert.alert(
-          'Invalid Access Code', 
-          'The access code you entered was not found. Please check the code and try again.'
+          'Signup Error',
+          (error?.message as string) || data?.error || 'Failed to create account. Please try again.'
         );
         setLoading(false);
         return;
-      }
-
-      const selectedCode = accessCodeData[0]; // Take the first match
-
-      // Create the user account using admin client to bypass email confirmation
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true, // Auto-confirm email
-        user_metadata: {
-          company_id: selectedCode.company_id,
-          role: selectedCode.role,
-        }
-      });
-
-      if (authError) {
-        console.error('Auth error:', authError);
-        Alert.alert('Signup Error', authError.message);
-        setLoading(false);
-        return;
-      }
-
-      if (authData.user) {
-        // Insert user data into the users table using admin client
-        const { error: userError } = await supabaseAdmin
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email: email,
-            name: name, // Use the actual name field
-            role: selectedCode.role,
-            company_id: selectedCode.company_id,
-          });
-
-        if (userError) {
-          console.error('Error creating user record:', userError);
-          // Continue anyway - the auth user was created successfully
-        }
       }
 
       Alert.alert(
@@ -177,13 +98,7 @@ export default function SignupScreen({ navigation }: SignupScreenProps) {
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
-              {/* Debug button - remove in production */}
-              <TouchableOpacity 
-                style={styles.debugButton} 
-                onPress={debugAccessCode}
-              >
-                <Text style={styles.debugButtonText}>Debug Access Code</Text>
-              </TouchableOpacity>
+              {/* Debug button removed – access code validation now handled server-side */}
             </View>
 
             <View style={styles.inputContainer}>

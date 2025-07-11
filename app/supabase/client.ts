@@ -6,13 +6,11 @@ import Constants from 'expo-constants';
 const {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
-  SERVICE_KEY,
 } = (Constants.expoConfig?.extra || {}) as Record<string, string>;
 
 // Fallback to env vars if running in environments where extra isn't set
 const supabaseUrl = SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = SERVICE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!;
 
 // Custom storage implementation using Expo SecureStore
 const ExpoSecureStoreAdapter = {
@@ -44,18 +42,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Admin client for operations that need to bypass RLS (like access code validation)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'mobile-app-admin',
-    },
-  },
-});
+// Removed supabaseAdmin – service-role operations are now handled exclusively via Supabase Edge Functions.
 
 // Types for our database
 export interface Database {
