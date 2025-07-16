@@ -3,6 +3,17 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "distribution": "store",
+        "resourceClass": "m1-medium"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "arkreset@gmail.com"
       }
     }
   },

@@ -15,7 +15,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.bactech.smartertracks",
+      "buildNumber": "1.0.0",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.bactech.smartertracks",
