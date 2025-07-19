@@ -107,6 +107,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
+    // Ensure local state updates immediately even if onAuthStateChange is delayed
+    setSession(null);
+    setUser(null);
     return { error };
   };
 

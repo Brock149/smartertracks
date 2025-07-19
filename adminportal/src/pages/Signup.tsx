@@ -36,12 +36,13 @@ export default function Signup() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
-          email: form.email,
+          email: form.email.trim(),
           password: form.password,
           name: form.name,
-          accessCode: form.accessCode
+          accessCode: form.accessCode.trim()
         })
       })
 

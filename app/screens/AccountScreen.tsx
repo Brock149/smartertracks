@@ -7,6 +7,7 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -94,6 +95,21 @@ export default function AccountScreen() {
           text: 'Sign Out', 
           style: 'destructive',
           onPress: signOut 
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will open a web page where you can permanently delete your Smarter Tracks account. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => Linking.openURL('https://www.smartertracks.com/account-deletion'),
         },
       ]
     );
@@ -246,7 +262,7 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        {/* Sign Out Button */}
+        {/* Sign Out & Delete Account Buttons */}
         <View style={styles.section}>
           <TouchableOpacity style={styles.signOutCard} onPress={handleSignOut}>
             <View style={styles.signOutContent}>
@@ -254,6 +270,16 @@ export default function AccountScreen() {
               <Text style={styles.signOutText}>Sign Out</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#dc2626" />
+          </TouchableOpacity>
+
+          <View style={{ height: 12 }} />
+
+          <TouchableOpacity style={styles.deleteCard} onPress={handleDeleteAccount}>
+            <View style={styles.signOutContent}>
+              <Ionicons name="trash-outline" size={24} color="#b91c1c" />
+              <Text style={styles.deleteText}>Delete Account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#b91c1c" />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -393,6 +419,22 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: 16,
     color: '#dc2626',
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  deleteCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  deleteText: {
+    fontSize: 16,
+    color: '#b91c1c',
     fontWeight: '600',
     marginLeft: 12,
   },
