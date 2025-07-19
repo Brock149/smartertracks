@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
 import { useNavigate, Link } from 'react-router-dom'
 
 interface SignupForm {
@@ -30,25 +31,19 @@ export default function Signup() {
     setError(null)
 
     try {
-      // Use the signup-with-code Edge Function which handles everything
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-with-code`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
+      // Call via Supabase client to ensure identical headers/domain as mobile app
+      const { data, error } = await supabase.functions.invoke('signup-with-code', {
+        body: {
           email: form.email.trim(),
           password: form.password,
           name: form.name,
-          accessCode: form.accessCode.trim()
-        })
+          accessCode: form.accessCode.trim(),
+        },
       })
 
-      const result = await res.json()
-      if (!res.ok || result.error) {
-        setError(result.error || 'Failed to create account')
+      if (error || !data?.success) {
+        console.error('Signup error:', error ?? data?.error)
+        setError((error?.message as string) || data?.error || 'Failed to create account')
         setLoading(false)
         return
       }
