@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 
 interface SignupForm {
@@ -19,6 +19,12 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
+
+  // Debug: log env vars once on mount
+  useEffect(() => {
+    console.log('Debug Signup: VITE_SUPABASE_URL =', import.meta.env.VITE_SUPABASE_URL)
+    console.log('Debug Signup: VITE_SUPABASE_ANON_KEY =', import.meta.env.VITE_SUPABASE_ANON_KEY?.slice(0, 20) + '...')
+  }, [])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({ ...form, [e.target.name]: e.target.value })
