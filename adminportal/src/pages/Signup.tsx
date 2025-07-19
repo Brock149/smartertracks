@@ -39,18 +39,25 @@ export default function Signup() {
       const email = form.email.trim().toLowerCase()
       const accessCode = form.accessCode.trim().toUpperCase()
       // Call via Supabase client to ensure identical headers/domain as mobile app
-      const { data, error } = await supabase.functions.invoke('signup-with-code', {
-        body: {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-with-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
           email,
           password: form.password,
           name: form.name,
           accessCode,
-        },
+        })
       })
 
-      if (error || !data?.success) {
-        console.error('Signup error:', error ?? data?.error)
-        setError((error?.message as string) || data?.error || 'Failed to create account')
+      const result = await res.json()
+      if (!res.ok || result.error || !result.success) {
+        console.error('Signup error:', result.error)
+        setError(result.error || 'Failed to create account')
         setLoading(false)
         return
       }
