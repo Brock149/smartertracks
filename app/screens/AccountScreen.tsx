@@ -7,7 +7,6 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -103,13 +102,25 @@ export default function AccountScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will open a web page where you can permanently delete your Smarter Tracks account. Continue?',
+      'Are you sure you want to permanently delete your Smarter Tracks account? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Continue',
+          text: 'Delete',
           style: 'destructive',
-          onPress: () => Linking.openURL('https://www.smartertracks.com/account-deletion'),
+          onPress: async () => {
+            try {
+              const { error } = await supabase.functions.invoke('delete-account');
+              if (error) {
+                Alert.alert('Error', error.message || 'Failed to delete account');
+                return;
+              }
+              Alert.alert('Account Deleted', 'Your account has been deleted.');
+              signOut();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete account');
+            }
+          },
         },
       ]
     );
