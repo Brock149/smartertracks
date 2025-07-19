@@ -30,14 +30,21 @@ export default function Signup() {
     setLoading(true)
     setError(null)
 
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+
     try {
+      const email = form.email.trim().toLowerCase()
+      const accessCode = form.accessCode.trim().toUpperCase()
       // Call via Supabase client to ensure identical headers/domain as mobile app
       const { data, error } = await supabase.functions.invoke('signup-with-code', {
         body: {
-          email: form.email.trim(),
+          email,
           password: form.password,
           name: form.name,
-          accessCode: form.accessCode.trim(),
+          accessCode,
         },
       })
 
