@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
+import { resize } from '../utils';
 
 interface Tool {
   id: string;
@@ -58,8 +59,8 @@ interface AllToolsScreenProps {
   navigation: any;
 }
 
-// Helper to convert Supabase storage image URL to a low-res thumbnail using the built-in image transformer
-const getThumbnailUrl = (url: string) => url;
+// Helper to convert Supabase storage image URL to a low-res thumbnail using Supabase CDN transforms
+const getThumbnailUrl = (url: string) => resize(url, 200, 80);
 
 export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [tools, setTools] = useState<Tool[]>([]);
@@ -81,7 +82,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       }
       if (imgUrl) {
         // expo-image caches aggressively; simple prefetch of the original URL is fine
-        RNImage.prefetch(imgUrl);
+        RNImage.prefetch(getThumbnailUrl(imgUrl));
       }
     });
   }, [tools]);
@@ -262,6 +263,8 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   };
 
   const handleToolPress = (tool: Tool) => {
+    // Prefetch medium-sized images for the detail screen
+    tool.images?.forEach(img => RNImage.prefetch(resize(img.image_url, 800, 80)));
     navigation.navigate('ToolDetail', { tool });
   };
 
@@ -333,9 +336,10 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
               imgUrl = item.photo_url;
             }
             if (imgUrl) {
+              const thumbUrl = getThumbnailUrl(imgUrl);
               return (
                 <ExpoImage
-                  source={{ uri: imgUrl }}
+                  source={{ uri: thumbUrl }}
                   style={styles.toolImage}
                   contentFit="cover"
                   transition={200}

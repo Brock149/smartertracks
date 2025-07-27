@@ -23,4 +23,16 @@ export const formatDate = (date: string | Date): string => {
 export const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
+};
+
+export const resize = (
+  url: string,
+  width: number = 800,
+  quality: number = 80,
+  format: 'webp' | 'jpeg' = 'webp'
+): string => {
+  if (!url) return url;
+  // Supabase will treat additional query strings as transformation directives.
+  const delimiter = url.includes('?') ? '&' : '?';
+  return `${url}${delimiter}width=${width}&quality=${quality}&format=${format}`;
 }; 

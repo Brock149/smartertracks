@@ -7,11 +7,12 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Image,
   Dimensions,
   Modal,
   TextInput,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { resize } from '../utils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
@@ -443,12 +444,14 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         style={styles.imageGallery}
         contentContainerStyle={styles.imageGalleryContent}
       >
-        {images.map((image, index) => (
-          <Image
+        {images.map((image) => (
+          <ExpoImage
             key={image.id}
-            source={{ uri: image.image_url }}
+            source={{ uri: resize(image.image_url, 800, 80) }}
             style={styles.toolImage}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
           />
         ))}
       </ScrollView>

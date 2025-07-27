@@ -867,11 +867,11 @@ export default function Settings() {
               ) : (
                 <>
                   <button
-                    onClick={handleCreateCheckout}
-                    disabled={creatingCheckout}
+                    onClick={handleOpenBillingPortal}
+                    disabled={openingPortal}
                     className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {creatingCheckout ? 'Loading...' : 'Update Payment Method'}
+                    {openingPortal ? 'Loading...' : 'Update Payment Method'}
                   </button>
                   <button
                     onClick={handleOpenBillingPortal}
