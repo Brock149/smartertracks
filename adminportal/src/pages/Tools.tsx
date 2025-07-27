@@ -116,12 +116,12 @@ export default function Tools() {
 
   useEffect(() => {
     async function checkImages() {
-      const result: { [toolId: string]: boolean } = {};
-      for (const tool of tools) {
+      // Run all fetches in parallel for speed
+      const entries = await Promise.all(tools.map(async (tool) => {
         const imgs = await fetchToolImages(tool.id);
-        result[tool.id] = imgs.length > 0;
-      }
-      setToolsWithImages(result);
+        return [tool.id, imgs.length > 0] as [string, boolean];
+      }));
+      setToolsWithImages(Object.fromEntries(entries));
     }
     if (tools.length > 0) checkImages();
   }, [tools]);
@@ -611,7 +611,9 @@ export default function Tools() {
                           : 'No Location'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {toolsWithImages[tool.id] ? (
+                        {toolsWithImages[tool.id] === undefined ? (
+                          <span className="text-gray-500">Loading image…</span>
+                        ) : toolsWithImages[tool.id] ? (
                           <ToolImageGallery toolId={tool.id} />
                         ) : (
                           <button
@@ -694,7 +696,9 @@ export default function Tools() {
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500">Image:</span>
                     <div>
-                      {toolsWithImages[tool.id] ? (
+                      {toolsWithImages[tool.id] === undefined ? (
+                        <span className="text-gray-500">Loading image…</span>
+                      ) : toolsWithImages[tool.id] ? (
                         <ToolImageGallery toolId={tool.id} />
                       ) : (
                         <button
