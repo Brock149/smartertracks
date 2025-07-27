@@ -164,7 +164,9 @@ serve(async (req) => {
             stripe_status: 'canceled',
             current_period_end: subscription.current_period_end 
               ? new Date(subscription.current_period_end * 1000).toISOString()
-              : null
+              : null,
+            is_active: false,
+            suspended_at: 'now()'
           })
           .eq('stripe_subscription_id', subscription.id)
 
@@ -184,7 +186,9 @@ serve(async (req) => {
           const { error } = await supabase
             .from('companies')
             .update({
-              stripe_status: 'past_due'
+              stripe_status: 'past_due',
+              is_active: false,
+              suspended_at: 'now()'
             })
             .eq('stripe_subscription_id', invoice.subscription as string)
 

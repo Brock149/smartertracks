@@ -206,6 +206,14 @@ export default function Tools() {
 
   async function handleCreateTool() {
     try {
+      const baseChecklist = newTool.checklist ? [...newTool.checklist] : []
+      const hasOverall = baseChecklist.some(
+        (it) => it.item_name.trim().toLowerCase() === 'overall tool condition'
+      )
+      const checklistToSend = hasOverall
+        ? baseChecklist
+        : [...baseChecklist, { item_name: 'Overall Tool Condition', required: true }]
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-tool`,
         {
@@ -214,7 +222,7 @@ export default function Tools() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
           },
-          body: JSON.stringify(newTool)
+          body: JSON.stringify({ ...newTool, checklist: checklistToSend })
         }
       )
       const data = await response.json()
@@ -524,6 +532,20 @@ export default function Tools() {
 
   const getTotalPages = () => Math.ceil(tools.length / itemsPerPage)
 
+  // Ensure default checklist item present when opening create modal
+  const openCreateModal = () => {
+    setNewTool(prev => {
+      const existing = prev.checklist || []
+      const hasOverall = existing.some(
+        (it) => it.item_name.trim().toLowerCase() === 'overall tool condition'
+      )
+      return hasOverall
+        ? { ...prev }
+        : { ...prev, checklist: [...existing, { item_name: 'Overall Tool Condition', required: true }] }
+    })
+    setIsCreateModalOpen(true)
+  }
+
   return (
     <div className="container mx-auto px-2 md:px-4 py-4 md:py-8">
       {loading ? (
@@ -535,7 +557,7 @@ export default function Tools() {
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
             <h1 className="text-xl md:text-2xl font-bold text-gray-900">Tools</h1>
             <button
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={openCreateModal}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm md:text-base"
             >
               Add Tool
