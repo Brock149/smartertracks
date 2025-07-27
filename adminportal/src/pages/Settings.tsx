@@ -862,7 +862,7 @@ export default function Settings() {
                   disabled={creatingCheckout}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {creatingCheckout ? 'Starting Checkout...' : 'Start Subscription - $29/month'}
+                  {creatingCheckout ? 'Starting Checkout...' : 'Start Subscription - $350/month'}
                 </button>
               ) : (
                 <>
@@ -894,8 +894,7 @@ export default function Settings() {
                   <h4 className="text-lg font-medium text-blue-800">Billing Information</h4>
                   <div className="mt-2 text-blue-700">
                     <ul className="list-disc list-inside space-y-1">
-                      <li>Monthly subscription: $29/month</li>
-                      <li>Includes unlimited tools and users</li>
+                      <li>Monthly subscription: $350/month</li>
                       <li>Cancel anytime - no long-term contracts</li>
                       <li>Secure payments processed by Stripe</li>
                     </ul>
