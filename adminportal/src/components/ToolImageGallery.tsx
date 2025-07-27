@@ -3,7 +3,7 @@ import { fetchToolImages } from '../lib/uploadImage';
 
 export function ToolImageGallery({ toolId }: { toolId: string }) {
   const [images, setImages] = useState<Array<{ id: string; image_url: string }>>([]);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
@@ -15,35 +15,55 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
   if (!toolId) return <span className="text-gray-500">No image uploaded</span>;
   if (images.length === 0) return <span className="text-gray-500">No image uploaded</span>;
 
+  const closePreview = () => setSelectedIdx(null);
+  const nextImg = () => setSelectedIdx((prev) => (prev! + 1) % images.length);
+  const prevImg = () => setSelectedIdx((prev) => (prev! - 1 + images.length) % images.length);
+
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {images.map(img => (
+        {images.map((img, idx) => (
           <img
             key={img.id}
             src={img.image_url}
             alt="Tool"
             className="w-12 h-12 object-cover rounded cursor-pointer border"
-            onClick={() => { setPreviewImage(img.image_url); setImgError(false); }}
+            onClick={() => { setSelectedIdx(idx); setImgError(false); }}
             onError={() => setImgError(true)}
           />
         ))}
       </div>
-      {previewImage && (
+
+      {selectedIdx !== null && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 max-w-2xl w-full relative">
+          <div className="bg-white rounded-lg p-4 max-w-2xl w-full relative flex items-center">
+            {/* Close Button */}
             <button
-              onClick={() => setPreviewImage(null)}
+              onClick={closePreview}
               className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+              aria-label="Close"
             >
               ×
             </button>
-            <div className="mt-4">
+
+            {/* Prev Arrow */}
+            {images.length > 1 && (
+              <button
+                onClick={prevImg}
+                className="absolute left-2 md:left-4 text-4xl text-gray-700 hover:text-gray-900 select-none"
+                aria-label="Previous"
+              >
+                ‹
+              </button>
+            )}
+
+            {/* Image */}
+            <div className="mx-auto max-h-[80vh] overflow-hidden">
               {!imgError ? (
                 <img
-                  src={previewImage}
+                  src={images[selectedIdx].image_url}
                   alt="Tool Preview"
-                  className="w-full h-auto rounded-lg"
+                  className="max-h-[80vh] w-auto rounded-lg"
                   onError={() => setImgError(true)}
                 />
               ) : (
@@ -51,11 +71,18 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
                   <span className="text-red-500 text-lg">Image failed to load.</span>
                 </div>
               )}
-              <div className="mt-4 text-sm text-gray-600 break-all">
-                <p className="font-semibold">Image URL:</p>
-                <p>{previewImage}</p>
-              </div>
             </div>
+
+            {/* Next Arrow */}
+            {images.length > 1 && (
+              <button
+                onClick={nextImg}
+                className="absolute right-2 md:right-4 text-4xl text-gray-700 hover:text-gray-900 select-none"
+                aria-label="Next"
+              >
+                ›
+              </button>
+            )}
           </div>
         </div>
       )}
