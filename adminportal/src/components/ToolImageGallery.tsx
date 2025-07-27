@@ -50,7 +50,7 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
             {images.length > 1 && (
               <button
                 onClick={prevImg}
-                className="absolute left-2 md:left-4 text-4xl text-gray-700 hover:text-gray-900 select-none"
+                className="text-6xl font-bold text-white bg-gray-800 bg-opacity-70 hover:bg-opacity-90 rounded-full p-2 mx-4 select-none"
                 aria-label="Previous"
               >
                 ‹
@@ -77,7 +77,7 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
             {images.length > 1 && (
               <button
                 onClick={nextImg}
-                className="absolute right-2 md:right-4 text-4xl text-gray-700 hover:text-gray-900 select-none"
+                className="text-6xl font-bold text-white bg-gray-800 bg-opacity-70 hover:bg-opacity-90 rounded-full p-2 mx-4 select-none"
                 aria-label="Next"
               >
                 ›
