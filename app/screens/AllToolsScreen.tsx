@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -71,8 +71,9 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
   const { user } = useAuth();
 
-  // Prefetch the first image of each tool to improve list rendering
-  useEffect(() => {
+  // Map tool.id -> thumbnail URL for quick lookup during viewability changes
+  const firstImageUrlMap = useMemo(() => {
+    const map: Record<string, string> = {};
     tools.forEach(tool => {
       let imgUrl: string | null = null;
       if (tool.images && tool.images.length > 0) {
@@ -81,11 +82,32 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         imgUrl = tool.photo_url;
       }
       if (imgUrl) {
-        // expo-image caches aggressively; simple prefetch of the original URL is fine
-        RNImage.prefetch(getThumbnailUrl(imgUrl));
+        map[tool.id] = getThumbnailUrl(imgUrl);
       }
     });
+    return map;
   }, [tools]);
+
+  // Prefetch thumbnails only for rows currently on screen (+/- few) using FlatList viewability API
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  const prefetched = useRef<Set<string>>(new Set()).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined; item: Tool }> }) => {
+    viewableItems.forEach(({ index }) => {
+      if (index === null || index === undefined) return;
+      // Prefetch for rows index-3 .. index+3
+      for (let offset = -3; offset <= 3; offset++) {
+        const targetIdx = index + offset;
+        if (targetIdx < 0 || targetIdx >= tools.length) continue;
+        const toolId = tools[targetIdx].id;
+        if (prefetched.has(toolId)) continue;
+        const url = firstImageUrlMap[toolId];
+        if (url) {
+          prefetched.add(toolId);
+          RNImage.prefetch(url);
+        }
+      }
+    });
+  }).current;
 
   useEffect(() => {
     fetchTools();
@@ -263,8 +285,6 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   };
 
   const handleToolPress = (tool: Tool) => {
-    // Prefetch medium-sized images for the detail screen
-    tool.images?.forEach(img => RNImage.prefetch(resize(img.image_url, 800, 80)));
     navigation.navigate('ToolDetail', { tool });
   };
 
@@ -452,7 +472,9 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={21}
-        removeClippedSubviews={false}
+        removeClippedSubviews={true}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

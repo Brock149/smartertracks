@@ -72,7 +72,10 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
   const [storedAtPickerVisible, setStoredAtPickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
   const [transferring, setTransferring] = useState(false);
-  
+
+  // Derived state – are the required transfer fields filled in?
+  // 'user' is defined later, so wrap validity computation in a function we'll call after that
+
   // User picker state
   const [userPickerVisible, setUserPickerVisible] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -86,6 +89,16 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
   const [currentUserName, setCurrentUserName] = useState<string>('');
   
   const { user } = useAuth();
+
+  const isTransferFormValid = (
+    location.trim().length > 0 &&
+    storedAt.trim().length > 0 &&
+    (
+      // If user owns the tool, 'toUser' must be selected, otherwise ok
+      (selectedTool?.current_owner === user?.id ? toUser.trim().length > 0 : true)
+    )
+  );
+  
   const storedAtOptions = ['On Truck', 'On Job Site', 'N/A'];
 
   useEffect(() => {
@@ -107,8 +120,14 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
     React.useCallback(() => {
       fetchUsers();
       fetchCurrentUserName();
-      // Don't reset form - let user maintain their workflow
-    }, [])
+
+      // If a tool was passed via navigation params, (re)select it on focus
+      if (route?.params?.selectedTool) {
+        selectTool(route.params.selectedTool);
+      }
+      // We intentionally do NOT clear the param here so that repeated navigations
+      // with the same tool still trigger this logic when the screen gains focus again.
+    }, [route?.params?.selectedTool])
   );
 
   useEffect(() => {
@@ -690,9 +709,19 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
         </View>
       ) : (
         // Transfer Form
-        <ScrollView style={styles.transferForm}>
+        <ScrollView
+          style={[
+            styles.transferForm,
+            isTransferFormValid ? styles.formContainerValid : styles.formContainerInitial,
+          ]}
+        >
           {/* Selected Tool Info */}
-          <View style={styles.selectedToolSection}>
+          <View
+            style={[
+              styles.selectedToolSection,
+              isTransferFormValid ? styles.sectionValid : styles.sectionInitial,
+            ]}
+          >
             <View style={styles.toolHeaderInfo}>
               <View style={styles.toolTitleRow}>
                 <View>
@@ -751,7 +780,10 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
             <View style={styles.inputSection}>
               <Text style={styles.inputLabel}>Location *</Text>
               <TextInput
-                style={styles.textInput}
+                style={[
+                  styles.textInput,
+                  location.trim() === '' ? styles.inputInvalid : styles.inputValid,
+                ]}
                 placeholder="Where are you taking this?"
                 value={location}
                 onChangeText={setLocation}
@@ -762,7 +794,10 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
             <View style={styles.inputSection}>
               <Text style={styles.inputLabel}>Stored At *</Text>
               <TouchableOpacity
-                style={styles.dropdownButton}
+                style={[
+                  styles.dropdownButton,
+                  storedAt.trim() === '' ? styles.inputInvalid : styles.inputValid,
+                ]}
                 onPress={() => setStoredAtPickerVisible(!storedAtPickerVisible)}
               >
                 <Text style={[styles.dropdownText, !storedAt && { color: '#9ca3af' }]}>
@@ -823,12 +858,17 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
             <View style={styles.bottomButtonSection}>
               <TouchableOpacity
                 onPress={handleTransfer}
-                disabled={transferring}
-                style={[styles.transferButton, transferring && styles.transferButtonDisabled]}
+                disabled={!isTransferFormValid || transferring}
+                style={[
+                  styles.transferButton,
+                  (!isTransferFormValid || transferring)
+                    ? styles.finishTransferButtonDisabled
+                    : styles.finishTransferButtonEnabled,
+                ]}
               >
                 <Ionicons name="swap-horizontal-outline" size={20} color="#ffffff" />
                 <Text style={styles.transferButtonText}>
-                  {transferring ? 'Transferring...' : 'Transfer Tool'}
+                  {transferring ? 'Transferring...' : 'Finish Tool Transfer'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -875,7 +915,7 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
               <TouchableOpacity
                 style={styles.userItem}
                 onPress={() => {
-                  setToUser(`${item.name} (${item.role})`);
+                  setToUser(item.name);
                   setUserPickerVisible(false);
                   setUserSearchQuery('');
                 }}
@@ -1088,12 +1128,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedToolSection: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#ffffff', // default but overridden dynamically
     margin: 16,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  sectionInitial: {
+    backgroundColor: '#fef9c3',
+  },
+  sectionValid: {
+    backgroundColor: '#ecfdf5',
   },
   toolHeaderInfo: {
     marginBottom: 16,
@@ -1342,6 +1388,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  // ---- Transfer flow enhanced styles ----
+  finishTransferButtonEnabled: {
+    backgroundColor: '#22c55e',
+  },
+  finishTransferButtonDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  formContainerInitial: {
+    backgroundColor: '#fef9c3',
+  },
+  formContainerValid: {
+    backgroundColor: '#ecfdf5',
+  },
+  inputInvalid: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+  },
+  inputValid: {
+    backgroundColor: '#d1fae5',
+    borderColor: '#6ee7b7',
   },
   modalContainer: {
     flex: 1,

@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -12,6 +13,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
+import ImageViewing from 'react-native-image-viewing';
 import { resize } from '../utils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,6 +75,10 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   const [latestTransaction, setLatestTransaction] = useState<LatestTransaction | null>(null);
   const [loading, setLoading] = useState(true);
   
+  // Image viewer state
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  
   // Claim modal state
   const [claimModalVisible, setClaimModalVisible] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -81,6 +87,9 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   const [storedAtPickerVisible, setStoredAtPickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  
+  // Derived state – are the required claim fields filled in?
+  const isClaimFormValid = location.trim().length > 0 && storedAt.trim().length > 0;
   
   // Warning modal state
   const [warningModalVisible, setWarningModalVisible] = useState(false);
@@ -437,26 +446,65 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
       );
     }
 
+    const viewabilityConfig = { viewAreaCoveragePercentThreshold: 50 };
+    const prefetched = new Set<string>();
+
+    const onViewableItemsChanged = ({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined }> }) => {
+      viewableItems.forEach(({ index }) => {
+        if (index === null || index === undefined) return;
+        // Prefetch next 2 images to make swiping instant
+        for (let offset = 0; offset <= 2; offset++) {
+          const targetIdx = index + offset;
+          if (targetIdx >= images.length) continue;
+          const id = images[targetIdx].id;
+          if (prefetched.has(id)) continue;
+          prefetched.add(id);
+          ExpoImage.prefetch?.(resize(images[targetIdx].image_url, 400, 70));
+        }
+      });
+    };
+
     return (
-      <ScrollView 
-        horizontal 
+      <FlatList
+        horizontal
+        data={images}
+        keyExtractor={(item) => item.id}
         showsHorizontalScrollIndicator={false}
         style={styles.imageGallery}
         contentContainerStyle={styles.imageGalleryContent}
-      >
-        {images.map((image) => (
-          <ExpoImage
-            key={image.id}
-            source={{ uri: resize(image.image_url, 800, 80) }}
-            style={styles.toolImage}
-            contentFit="cover"
-            transition={200}
-            cachePolicy="memory-disk"
-          />
-        ))}
-      </ScrollView>
+        renderItem={({ item, index }) => (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              setViewerIndex(index);
+              setViewerVisible(true);
+            }}
+          >
+            <ExpoImage
+              source={{ uri: resize(item.image_url, 400, 70) }}
+              style={styles.toolImage}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+            />
+          </TouchableOpacity>
+        )}
+        initialNumToRender={1}
+        maxToRenderPerBatch={2}
+        windowSize={5}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
+      />
     );
   };
+
+  // Prefetch all gallery images (400px) as soon as the images array is populated
+  useEffect(() => {
+    if (images.length === 0) return;
+    images.forEach(img => {
+      ExpoImage.prefetch?.(resize(img.image_url, 400, 70));
+    });
+  }, [images]);
 
   const renderReadOnlyChecklistSection = () => {
     if (checklistItems.length === 0) {
@@ -732,19 +780,31 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
             onPress={handleClaimOwnership}
           >
             <Ionicons name="hand-left-outline" size={20} color="#ffffff" />
-            <Text style={styles.claimButtonText}>Claim Ownership</Text>
+            <Text style={styles.claimButtonText}>Start Tool Claim</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={styles.submitChecklistButton}
-            onPress={handleChecklistSubmit}
-            disabled={claiming}
-          >
-            <Ionicons name="checkmark-circle-outline" size={20} color="#ffffff" />
-            <Text style={styles.submitChecklistButtonText}>
-              {claiming ? 'Submitting...' : 'Submit Checklist Report'}
-            </Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={styles.submitChecklistButton}
+              onPress={handleChecklistSubmit}
+              disabled={claiming}
+            >
+              <Ionicons name="checkmark-circle-outline" size={20} color="#ffffff" />
+              <Text style={styles.submitChecklistButtonText}>
+                {claiming ? 'Submitting...' : 'Submit Checklist Report'}
+              </Text>
+            </TouchableOpacity>
+            {/* Transfer Tool Button */}
+            <TouchableOpacity
+              style={[styles.submitChecklistButton, { marginTop: 8, backgroundColor: '#2563eb' }]}
+              onPress={() => {
+                navigation.getParent()?.navigate('Transfer', { selectedTool: tool });
+              }}
+            >
+              <Ionicons name="swap-horizontal-outline" size={20} color="#ffffff" />
+              <Text style={styles.submitChecklistButtonText}>Start Tool Transfer</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -755,7 +815,10 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         presentationStyle="pageSheet"
         onRequestClose={() => setClaimModalVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <SafeAreaView style={[
+          styles.modalContainer,
+          isClaimFormValid ? styles.modalContainerValid : styles.modalContainerInitial,
+        ]}>
           <View style={styles.modalHeader}>
             <TouchableOpacity 
               onPress={() => setClaimModalVisible(false)}
@@ -786,7 +849,10 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
             <View style={styles.inputSection}>
               <Text style={styles.inputLabel}>Location *</Text>
               <TextInput
-                style={styles.textInput}
+                style={[
+                  styles.textInput,
+                  location.trim() === '' ? styles.inputInvalid : styles.inputValid,
+                ]}
                 placeholder="Where are you taking this?"
                 value={location}
                 onChangeText={setLocation}
@@ -797,7 +863,10 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
             <View style={styles.inputSection}>
               <Text style={styles.inputLabel}>Stored At *</Text>
               <TouchableOpacity
-                style={styles.dropdownButton}
+                style={[
+                  styles.dropdownButton,
+                  storedAt.trim() === '' ? styles.inputInvalid : styles.inputValid,
+                ]}
                 onPress={() => setStoredAtPickerVisible(!storedAtPickerVisible)}
               >
                 <Text style={[styles.dropdownText, !storedAt && { color: '#9ca3af' }]}>
@@ -858,12 +927,17 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
             <View style={styles.bottomButtonSection}>
               <TouchableOpacity
                 onPress={handleClaimSubmit}
-                disabled={claiming}
-                style={[styles.claimButton, claiming && styles.claimButtonDisabled]}
+                disabled={!isClaimFormValid || claiming}
+                style={[
+                  styles.claimButton,
+                  (!isClaimFormValid || claiming)
+                    ? styles.finishClaimButtonDisabled
+                    : styles.finishClaimButtonEnabled,
+                ]}
               >
                 <Ionicons name="hand-left-outline" size={20} color="#ffffff" />
                 <Text style={styles.claimButtonText}>
-                  {claiming ? 'Claiming...' : 'Claim Tool'}
+                  {claiming ? 'Claiming...' : 'Finish Tool Claim'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -952,6 +1026,14 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Full-screen image viewer */}
+      <ImageViewing
+        images={images.map(img => ({ uri: img.image_url }))}
+        imageIndex={viewerIndex}
+        visible={viewerVisible}
+        onRequestClose={() => setViewerVisible(false)}
+      />
 
     </SafeAreaView>
   );
@@ -1087,21 +1169,21 @@ const styles = StyleSheet.create({
   statusCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
+    padding: 4, // further reduced padding
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 4, // even tighter row spacing
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
   statusIcon: {
-    width: 40,
+    width: 24, // even smaller icon column
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 8, // reduced spacing
   },
   statusContent: {
     flex: 1,
@@ -1148,6 +1230,27 @@ const styles = StyleSheet.create({
   },
   claimButtonDisabled: {
     opacity: 0.5,
+  },
+  // ----- Claim-flow enhancements -----
+  finishClaimButtonEnabled: {
+    backgroundColor: '#22c55e', // green when ready
+  },
+  finishClaimButtonDisabled: {
+    backgroundColor: '#d1d5db', // light grey by default / disabled
+  },
+  modalContainerInitial: {
+    backgroundColor: '#fef9c3', // light yellow until required filled
+  },
+  modalContainerValid: {
+    backgroundColor: '#ecfdf5', // light green once valid
+  },
+  inputInvalid: {
+    backgroundColor: '#fee2e2', // light red highlight
+    borderColor: '#fca5a5',
+  },
+  inputValid: {
+    backgroundColor: '#d1fae5', // light green highlight
+    borderColor: '#6ee7b7',
   },
   claimButtonText: {
     color: '#ffffff',
@@ -1228,6 +1331,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    color: '#1f2937', // ensure text is visible across themes
   },
   notesInput: {
     height: 100,
@@ -1314,6 +1418,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    color: '#1f2937', // ensure text is visible across themes
   },
   noChecklistContainer: {
     padding: 16,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
-  Image,
+  Image as RNImage,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
+import { Image as ExpoImage } from 'expo-image';
+import { resize } from '../utils';
 
 interface Tool {
   id: string;
@@ -76,6 +78,43 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
   const { user } = useAuth();
+
+  // Map tool.id -> thumbnail URL for quick lookup
+  const firstImageUrlMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    tools.forEach(tool => {
+      let imgUrl: string | null = null;
+      if (tool.images && tool.images.length > 0) {
+        imgUrl = tool.images[0].image_url;
+      } else if (tool.photo_url) {
+        imgUrl = tool.photo_url;
+      }
+      if (imgUrl) {
+        map[tool.id] = resize(imgUrl, 200, 80);
+      }
+    });
+    return map;
+  }, [tools]);
+
+  // Scroll-aware thumbnail prefetch
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  const prefetched = useRef<Set<string>>(new Set()).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined }> }) => {
+    viewableItems.forEach(({ index }) => {
+      if (index === null || index === undefined) return;
+      for (let offset = -3; offset <= 3; offset++) {
+        const targetIdx = index + offset;
+        if (targetIdx < 0 || targetIdx >= tools.length) continue;
+        const toolId = tools[targetIdx].id;
+        if (prefetched.has(toolId)) continue;
+        const url = firstImageUrlMap[toolId];
+        if (url) {
+          prefetched.add(toolId);
+          RNImage.prefetch(url);
+        }
+      }
+    });
+  }).current;
 
   useEffect(() => {
     fetchMyTools();
@@ -489,17 +528,31 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
           <View style={styles.toolContent}>
             {/* Tool Image Preview */}
             <View style={styles.imageContainer}>
-              {item.images && item.images.length > 0 ? (
-                <Image
-                  source={{ uri: item.images[0].image_url }}
-                  style={styles.toolImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.placeholderImage}>
-                  <Ionicons name="camera-outline" size={32} color="#d1d5db" />
-                </View>
-              )}
+              {(() => {
+                let imgUrl: string | null = null;
+                if (item.images && item.images.length > 0) {
+                  imgUrl = item.images[0].image_url;
+                } else if (item.photo_url) {
+                  imgUrl = item.photo_url;
+                }
+                if (imgUrl) {
+                  const thumbUrl = firstImageUrlMap[item.id] || resize(imgUrl, 200, 80);
+                  return (
+                    <ExpoImage
+                      source={{ uri: thumbUrl }}
+                      style={styles.toolImage}
+                      contentFit="cover"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
+                  );
+                }
+                return (
+                  <View style={styles.placeholderImage}>
+                    <Ionicons name="camera-outline" size={32} color="#d1d5db" />
+                  </View>
+                );
+              })()}
               {item.images && item.images.length > 1 && (
                 <View style={styles.imageCount}>
                   <Text style={styles.imageCountText}>+{item.images.length - 1}</Text>
@@ -623,6 +676,9 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
             </Text>
           </View>
         }
+        removeClippedSubviews={true}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
       />
     </SafeAreaView>
   );
