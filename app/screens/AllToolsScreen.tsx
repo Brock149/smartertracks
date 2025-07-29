@@ -149,7 +149,8 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
           .from('tool_images')
           .select('*')
           .in('tool_id', toolIds)
-          .order('uploaded_at', { ascending: false }),
+          .order('is_primary', { ascending: false })
+          .order('uploaded_at', { ascending: true }),
         supabase
           .from('tool_checklists')
           .select('*')

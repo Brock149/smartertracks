@@ -196,7 +196,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         .from('tool_images')
         .select('*')
         .in('tool_id', toolIds)
-        .order('uploaded_at', { ascending: false });
+        .order('is_primary', { ascending: false })
+        .order('uploaded_at', { ascending: true });
 
       if (imagesError) {
         console.error('Error fetching tool images:', imagesError);

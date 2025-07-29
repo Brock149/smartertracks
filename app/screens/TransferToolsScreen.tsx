@@ -286,7 +286,8 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
         .from('tool_images')
         .select('*')
         .eq('tool_id', toolId)
-        .order('uploaded_at', { ascending: false });
+        .order('is_primary', { ascending: false })
+        .order('uploaded_at', { ascending: true });
 
       if (error) {
         console.error('Error fetching tool images:', error);

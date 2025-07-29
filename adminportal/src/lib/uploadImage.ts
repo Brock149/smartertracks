@@ -66,6 +66,7 @@ export async function fetchToolImages(toolId: string): Promise<Array<{ id: strin
     .from('tool_images')
     .select('id, image_url')
     .eq('tool_id', toolId)
+    .order('is_primary', { ascending: false })
     .order('uploaded_at', { ascending: true });
   if (error) {
     console.error('Error fetching tool images:', error);
