@@ -14,8 +14,32 @@ export default function ResetPassword() {
   useEffect(() => {
     async function verifyToken() {
       try {
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.hash)
-        if (error) throw error
+        // Supabase JS automatically parses the URL fragment and sets the session
+        // when detectSessionInUrl is enabled (default). We just check if a session
+        // exists and the link type is recovery.
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
+        if (hashParams.get('error')) {
+          throw new Error(hashParams.get('error_description') || 'Invalid link')
+        }
+        const type = hashParams.get('type')
+        if (type !== 'recovery') {
+          throw new Error('Invalid recovery link')
+        }
+
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          // As a fallback, try to recover the session manually
+          const access_token = hashParams.get('access_token')
+          const refresh_token = hashParams.get('refresh_token')
+          if (!access_token || !refresh_token) {
+            throw new Error('Missing session information in link')
+          }
+          const { error: setError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          })
+          if (setError) throw setError
+        }
         setVerified(true)
       } catch (err) {
         setError(
