@@ -33,7 +33,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
     // Allow development and test emails
-    flowType: 'pkce',
+    // Use implicit flow so password recovery links contain the access token.
+    flowType: 'implicit',
   },
   global: {
     headers: {
