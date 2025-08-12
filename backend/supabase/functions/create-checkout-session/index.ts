@@ -86,7 +86,21 @@ serve(async (req) => {
 
     let customerId = companyData.stripe_customer_id
 
-    // Create Stripe customer if they don't have one
+    // Validate existing Stripe customer; recreate if missing or deleted
+    if (customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(customerId)
+        // If the retrieved object is a DeletedCustomer, it will have deleted = true
+        if ((existing as any).deleted) {
+          customerId = null as unknown as string
+        }
+      } catch (e) {
+        // Stored ID is invalid for this Stripe environment (e.g., test vs live) – recreate
+        customerId = null as unknown as string
+      }
+    }
+
+    // Create Stripe customer if they don't have one or previous was invalid
     if (!customerId) {
       const customer = await stripe.customers.create({
         name: companyData.name,
@@ -104,13 +118,22 @@ serve(async (req) => {
         .eq('id', companyId)
     }
 
+    // Ensure price is configured
+    const priceId = Deno.env.get('STRIPE_PRICE_ID')
+    if (!priceId) {
+      return new Response(
+        JSON.stringify({ error: 'Billing is not configured: missing STRIPE_PRICE_ID' }),
+        { status: 500, headers: corsHeaders }
+      )
+    }
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
       line_items: [
         {
-          price: Deno.env.get('STRIPE_PRICE_ID')!,
+          price: priceId,
           quantity: 1,
         },
       ],
