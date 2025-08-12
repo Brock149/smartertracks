@@ -11,6 +11,10 @@ import {
   Dimensions,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import ImageViewing from 'react-native-image-viewing';
@@ -641,7 +645,8 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1f2937" />
@@ -652,6 +657,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
 
       <ScrollView
         style={styles.content}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
       >
@@ -807,22 +813,24 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         presentationStyle="pageSheet"
         onRequestClose={() => setClaimModalVisible(false)}
       >
-        <SafeAreaView style={[
-          styles.modalContainer,
-          isClaimFormValid ? styles.modalContainerValid : styles.modalContainerInitial,
-        ]}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity 
-              onPress={() => setClaimModalVisible(false)}
-              style={styles.cancelButton}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Claim Tool Ownership</Text>
-            <View style={styles.placeholder} />
-          </View>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={80}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <SafeAreaView style={[
+              styles.modalContainer,
+              isClaimFormValid ? styles.modalContainerValid : styles.modalContainerInitial,
+            ]}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity 
+                  onPress={() => setClaimModalVisible(false)}
+                  style={styles.cancelButton}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Claim Tool Ownership</Text>
+                <View style={styles.placeholder} />
+              </View>
 
-          <ScrollView style={styles.modalContent}>
+              <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
             {/* Tool Info */}
             <View style={styles.modalToolInfo}>
               <Text style={styles.modalToolNumber}>#{tool.number}</Text>
@@ -912,6 +920,9 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                 onChangeText={setNotes}
                 multiline
                 numberOfLines={3}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
               />
             </View>
 
@@ -933,8 +944,10 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                 </Text>
               </TouchableOpacity>
             </View>
-          </ScrollView>
-        </SafeAreaView>
+              </ScrollView>
+            </SafeAreaView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Warning Modal for Open Issues */}
@@ -1027,7 +1040,8 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         onRequestClose={() => setViewerVisible(false)}
       />
 
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 

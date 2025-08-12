@@ -240,6 +240,16 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         owner_name: tool.owner?.name || null,
       })) || [];
 
+      // Ensure numeric sort by tool number (handles lexicographic DB order)
+      transformedTools.sort((a, b) => {
+        const an = parseInt(String(a.number), 10);
+        const bn = parseInt(String(b.number), 10);
+        if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number));
+        if (Number.isNaN(an)) return 1;
+        if (Number.isNaN(bn)) return -1;
+        return an - bn;
+      });
+
       setTools(transformedTools);
     } catch (error) {
       console.error('Error fetching my tools:', error);

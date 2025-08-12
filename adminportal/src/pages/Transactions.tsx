@@ -124,7 +124,16 @@ export default function Transactions() {
         .order('number', { ascending: true })
 
       if (error) throw error
-      setTools(data || [])
+      const list = data || []
+      list.sort((a, b) => {
+        const an = parseInt(String(a.number), 10)
+        const bn = parseInt(String(b.number), 10)
+        if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number))
+        if (Number.isNaN(an)) return 1
+        if (Number.isNaN(bn)) return -1
+        return an - bn
+      })
+      setTools(list)
     } catch (error: any) {
       console.error('Error fetching tools:', error)
     }
