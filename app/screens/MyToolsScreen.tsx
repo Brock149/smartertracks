@@ -595,16 +595,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
                     </Text>
                   </View>
                 </View>
-                <TouchableOpacity 
-                  style={styles.transferButton}
-                  onPress={() => {
-                    console.log('Navigating to Transfer with tool:', item);
-                    navigation.getParent()?.navigate('Transfer', { selectedTool: item });
-                  }}
-                >
-                  <Ionicons name="swap-horizontal-outline" size={16} color="#2563eb" />
-                  <Text style={styles.transferButtonText}>Transfer</Text>
-                </TouchableOpacity>
+                {/* Transfer removed: users can only claim tools */}
               </View>
             </View>
           </View>

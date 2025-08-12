@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 interface Transaction {
@@ -76,6 +76,11 @@ export default function Transactions() {
   const [checklistStatus, setChecklistStatus] = useState<{ [itemId: string]: null | 'damaged' | 'replace' }>({})
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  // Searchable selects state
+  const [toolSearchTerm, setToolSearchTerm] = useState('')
+  const [userSearchTerm, setUserSearchTerm] = useState('')
+  const [showToolResults, setShowToolResults] = useState(false)
+  const [showUserResults, setShowUserResults] = useState(false)
 
   // Fetch transactions
   useEffect(() => {
@@ -138,6 +143,45 @@ export default function Transactions() {
       console.error('Error fetching users:', error)
     }
   }
+
+  // Keep search inputs in sync when selection changes
+  useEffect(() => {
+    if (newTransaction.tool_id) {
+      const t = tools.find(t => t.id === newTransaction.tool_id)
+      if (t) setToolSearchTerm(`#${t.number} - ${t.name}`)
+    } else {
+      setToolSearchTerm('')
+    }
+  }, [newTransaction.tool_id, tools])
+
+  useEffect(() => {
+    if (newTransaction.to_user_id) {
+      const u = users.find(u => u.id === newTransaction.to_user_id)
+      if (u) setUserSearchTerm(u.name)
+    } else {
+      setUserSearchTerm('')
+    }
+  }, [newTransaction.to_user_id, users])
+
+  // Filtered results for search dropdowns
+  const filteredToolResults = useMemo(() => {
+    const term = toolSearchTerm.trim().toLowerCase()
+    if (!term) return tools.slice(0, 50)
+    return tools
+      .filter(t =>
+        t.number.toLowerCase().includes(term) ||
+        (t.name || '').toLowerCase().includes(term)
+      )
+      .slice(0, 50)
+  }, [toolSearchTerm, tools])
+
+  const filteredUserResults = useMemo(() => {
+    const term = userSearchTerm.trim().toLowerCase()
+    if (!term) return users.slice(0, 50)
+    return users
+      .filter(u => (u.name || '').toLowerCase().includes(term))
+      .slice(0, 50)
+  }, [userSearchTerm, users])
 
   async function handleCreateTransaction() {
     try {
@@ -520,30 +564,51 @@ export default function Transactions() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 md:p-8">
               <form onSubmit={(e) => { e.preventDefault(); handleCreateTransaction(); }} className="space-y-4 md:space-y-5">
-                <div>
+                <div className="relative">
                   <label className="block font-medium mb-2 text-lg">Tool</label>
-                  <select
-                    value={newTransaction.tool_id}
+                  <input
+                    type="text"
+                    placeholder="Search tools by number or name..."
+                    value={toolSearchTerm}
                     onChange={(e) => {
-                      setNewTransaction(prev => ({ ...prev, tool_id: e.target.value }))
-                      if (e.target.value) {
-                        fetchCurrentToolHolder(e.target.value)
-                        fetchChecklist(e.target.value)
-                      } else {
+                      setToolSearchTerm(e.target.value)
+                      if (newTransaction.tool_id) {
+                        setNewTransaction(prev => ({ ...prev, tool_id: '' }))
                         setCurrentToolHolder(null)
                         setChecklistItems([])
                       }
                     }}
-                    required
+                    onFocus={() => setShowToolResults(true)}
+                    onBlur={() => setTimeout(() => setShowToolResults(false), 150)}
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select a tool</option>
-                    {tools.map(tool => (
-                      <option key={tool.id} value={tool.id}>
-                        #{tool.number} - {tool.name}
-                      </option>
-                    ))}
-                  </select>
+                    required
+                  />
+                  {showToolResults && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-72 overflow-y-auto">
+                      {filteredToolResults.length === 0 ? (
+                        <div className="px-4 py-3 text-gray-500">No tools found</div>
+                      ) : (
+                        filteredToolResults.map(tool => (
+                          <button
+                            type="button"
+                            key={tool.id}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setNewTransaction(prev => ({ ...prev, tool_id: tool.id }))
+                              setToolSearchTerm(`#${tool.number} - ${tool.name}`)
+                              setShowToolResults(false)
+                              fetchCurrentToolHolder(tool.id)
+                              fetchChecklist(tool.id)
+                            }}
+                          >
+                            <span className="text-gray-900 font-medium">#{tool.number}</span>
+                            <span className="text-gray-600">- {tool.name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -559,21 +624,46 @@ export default function Transactions() {
                   )}
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="block font-medium mb-2 text-lg">To User</label>
-                  <select
-                    value={newTransaction.to_user_id}
-                    onChange={(e) => setNewTransaction(prev => ({ ...prev, to_user_id: e.target.value }))}
-                    required
+                  <input
+                    type="text"
+                    placeholder="Search users by name..."
+                    value={userSearchTerm}
+                    onChange={(e) => {
+                      setUserSearchTerm(e.target.value)
+                      if (newTransaction.to_user_id) {
+                        setNewTransaction(prev => ({ ...prev, to_user_id: '' }))
+                      }
+                    }}
+                    onFocus={() => setShowUserResults(true)}
+                    onBlur={() => setTimeout(() => setShowUserResults(false), 150)}
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select a user</option>
-                    {users.map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                      </option>
-                    ))}
-                  </select>
+                    required
+                  />
+                  {showUserResults && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-72 overflow-y-auto">
+                      {filteredUserResults.length === 0 ? (
+                        <div className="px-4 py-3 text-gray-500">No users found</div>
+                      ) : (
+                        filteredUserResults.map(user => (
+                          <button
+                            type="button"
+                            key={user.id}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setNewTransaction(prev => ({ ...prev, to_user_id: user.id }))
+                              setUserSearchTerm(user.name)
+                              setShowUserResults(false)
+                            }}
+                          >
+                            <span className="text-gray-900 font-medium">{user.name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>

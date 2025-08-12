@@ -795,16 +795,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                 {claiming ? 'Submitting...' : 'Submit Checklist Report'}
               </Text>
             </TouchableOpacity>
-            {/* Transfer Tool Button */}
-            <TouchableOpacity
-              style={[styles.submitChecklistButton, { marginTop: 8, backgroundColor: '#2563eb' }]}
-              onPress={() => {
-                navigation.getParent()?.navigate('Transfer', { selectedTool: tool });
-              }}
-            >
-              <Ionicons name="swap-horizontal-outline" size={20} color="#ffffff" />
-              <Text style={styles.submitChecklistButtonText}>Start Tool Transfer</Text>
-            </TouchableOpacity>
+            {/* Transfer removed: owners can submit checklist, transfers are disabled */}
           </>
         )}
       </View>
