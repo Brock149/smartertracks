@@ -37,7 +37,7 @@ export async function uploadToolImageAndInsert(
     }
 
     // Insert into tool_images table with company_id
-    const { data: insertData, error: insertError } = await supabase
+      const { data: insertData, error: insertError } = await supabase
       .from('tool_images')
       .insert([{ 
         tool_id: toolId, 
@@ -66,8 +66,8 @@ export async function uploadToolImageAndInsert(
         body: JSON.stringify({ image_id: insertData.id, file_path: filePath })
       });
       if (res.ok) {
-        const { thumb_url } = await res.json();
-        return { ...insertData, thumb_url };
+        const { thumb_url, thumb_small_url } = await res.json();
+        return { ...insertData, thumb_url, thumb_small_url };
       }
     } catch (e) {
       console.warn('generate-thumbnail failed (continuing without thumb):', e);

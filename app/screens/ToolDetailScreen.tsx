@@ -43,6 +43,7 @@ interface ToolImage {
   id: string;
   image_url: string;
   uploaded_at: string;
+  thumb_url?: string | null;
 }
 
 interface LatestTransaction {
@@ -110,7 +111,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
       // Fetch tool images
       const { data: imagesData, error: imagesError } = await supabase
         .from('tool_images')
-        .select('*')
+        .select('id, image_url, thumb_url, uploaded_at, is_primary')
         .eq('tool_id', tool.id)
         .order('is_primary', { ascending: false })
         .order('uploaded_at', { ascending: true });
@@ -457,14 +458,15 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     const onViewableItemsChanged = ({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined }> }) => {
       viewableItems.forEach(({ index }) => {
         if (index === null || index === undefined) return;
-        // Prefetch next 2 images to make swiping instant
-        for (let offset = 0; offset <= 2; offset++) {
+        // Prefetch next 1 image to make swiping instant (lighter on bandwidth)
+        for (let offset = 0; offset <= 1; offset++) {
           const targetIdx = index + offset;
           if (targetIdx >= images.length) continue;
           const id = images[targetIdx].id;
           if (prefetched.has(id)) continue;
           prefetched.add(id);
-          ExpoImage.prefetch?.(resize(images[targetIdx].image_url, 400, 70));
+          const u = images[targetIdx].thumb_url || resize(images[targetIdx].image_url, 400, 70);
+          ExpoImage.prefetch?.(u);
         }
       });
     };
@@ -486,7 +488,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
             }}
           >
             <ExpoImage
-              source={{ uri: resize(item.image_url, 400, 70) }}
+              source={{ uri: item.thumb_url || resize(item.image_url, 256, 60) }}
               style={styles.toolImage}
               contentFit="cover"
               transition={200}
@@ -495,19 +497,20 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           </TouchableOpacity>
         )}
         initialNumToRender={1}
-        maxToRenderPerBatch={2}
-        windowSize={5}
+        maxToRenderPerBatch={1}
+        windowSize={3}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
       />
     );
   };
 
-  // Prefetch all gallery images (400px) as soon as the images array is populated
+  // Prefetch first two gallery images once (lightweight)
   useEffect(() => {
     if (images.length === 0) return;
-    images.forEach(img => {
-      ExpoImage.prefetch?.(resize(img.image_url, 400, 70));
+    images.slice(0, 2).forEach(img => {
+      const u = img.thumb_url || resize(img.image_url, 400, 70);
+      ExpoImage.prefetch?.(u);
     });
   }, [images]);
 

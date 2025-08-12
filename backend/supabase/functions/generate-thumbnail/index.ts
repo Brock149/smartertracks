@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-service-role-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Content-Type': 'application/json',
 }
@@ -19,14 +19,15 @@ serve(async (req) => {
       Deno.env.get('SERVICE_KEY') ?? ''
     )
     
-    // Authorization: either a user access token or the service role key (for backfill)
+    // Authorization: either a user access token OR x-service-role-key (for backfill)
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    const svcHeader = req.headers.get('x-service-role-key')
+    const serviceKey = Deno.env.get('SERVICE_KEY') ?? ''
+    const token = authHeader ? authHeader.replace('Bearer ', '') : ''
+    const isServiceBypass = !!svcHeader && svcHeader === serviceKey
+    if (!isServiceBypass && !authHeader) {
       return new Response(JSON.stringify({ error: 'No authorization header' }), { headers: corsHeaders, status: 401 })
     }
-    const token = authHeader.replace('Bearer ', '')
-
-    const isServiceBypass = token === (Deno.env.get('SERVICE_KEY') ?? '')
 
     const { image_id } = await req.json()
     if (!image_id) {

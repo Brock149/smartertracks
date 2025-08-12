@@ -54,8 +54,8 @@ async function run() {
       console.warn(`Failed to gen thumb for ${row.id}: ${res.status} ${txt}`)
       continue
     }
-    const json = await res.json()
-    console.log(`✓ ${row.id} -> ${json.thumb_url}`)
+    const { thumb_url } = (await res.json()) as { thumb_url?: string }
+    console.log(`✓ ${row.id} -> ${thumb_url}`)
   }
 
   console.log('Done.')

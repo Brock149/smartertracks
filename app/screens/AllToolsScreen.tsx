@@ -42,9 +42,9 @@ interface ChecklistItem {
 }
 
 interface ToolImage {
-  id: string;
+  id?: string;
   image_url: string;
-  uploaded_at: string;
+  uploaded_at?: string;
   thumb_url?: string | null;
 }
 
@@ -61,7 +61,7 @@ interface AllToolsScreenProps {
 }
 
 // Helper to convert Supabase storage image URL to a low-res thumbnail using Supabase CDN transforms
-const getThumbnailUrl = (url: string) => resize(url, 200, 80);
+const getThumbnailUrl = (url: string) => resize(url, 96, 55);
 
 export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [tools, setTools] = useState<Tool[]>([]);
@@ -71,6 +71,18 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
   const { user } = useAuth();
+
+  // Pagination
+  const PAGE_SIZE = 40;
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalToolsCount, setTotalToolsCount] = useState<number | null>(null);
+
+  // Lazy checklist cache
+  const [checklistsByTool, setChecklistsByTool] = useState<Record<string, ChecklistItem[]>>({});
+  const [checklistsLoading, setChecklistsLoading] = useState<Set<string>>(new Set());
+  const [checklistCounts, setChecklistCounts] = useState<Record<string, number>>({});
 
   // Map tool.id -> thumbnail URL for quick lookup during viewability changes
   const firstImageUrlMap = useMemo(() => {
@@ -96,8 +108,8 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined; item: Tool }> }) => {
     viewableItems.forEach(({ index }) => {
       if (index === null || index === undefined) return;
-      // Prefetch for rows index-3 .. index+3
-      for (let offset = -3; offset <= 3; offset++) {
+      // Prefetch for rows index-1 .. index+1 (tighter window)
+      for (let offset = -1; offset <= 1; offset++) {
         const targetIdx = index + offset;
         if (targetIdx < 0 || targetIdx >= tools.length) continue;
         const toolId = tools[targetIdx].id;
@@ -112,13 +124,13 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   }).current;
 
   useEffect(() => {
-    fetchTools();
+    fetchTools(true);
   }, []);
 
   // Auto-refresh when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      fetchTools();
+      fetchTools(true);
     }, [])
   );
 
@@ -126,16 +138,18 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
     filterTools();
   }, [searchQuery, tools]);
 
-  const fetchTools = async () => {
+  const fetchTools = async (reset = false) => {
     try {
-      // Get all tools for the user's company with owner information
-      const { data: toolsData, error: toolsError } = await supabase
+      // Get paginated tools for the user's company with owner information
+      const currentOffset = reset ? 0 : offset;
+      const { data: toolsData, error: toolsError, count } = await supabase
         .from('tools')
         .select(`
           *,
           owner:users!tools_current_owner_fkey(name)
-        `)
-        .order('number');
+        `, { count: 'exact' })
+        .order('number')
+        .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
       if (toolsError) {
         console.error('Error fetching tools:', toolsError);
@@ -143,33 +157,28 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         return;
       }
 
-      // Fetch images and checklist items for all tools
+      // Fetch images for this page of tools
       const toolIds = toolsData?.map(tool => tool.id) || [];
       
-      const [imagesResponse, checklistResponse] = await Promise.all([
+      const [imagesResponse, countsResponse] = await Promise.all([
         supabase
           .from('tool_images')
-          .select('id, tool_id, image_url, uploaded_at, thumb_url, is_primary')
+          .select('tool_id, thumb_url, is_primary, image_url')
           .in('tool_id', toolIds)
           .order('is_primary', { ascending: false })
           .order('uploaded_at', { ascending: true }),
         supabase
           .from('tool_checklists')
-          .select('*')
+          .select('tool_id')
           .in('tool_id', toolIds)
-          .order('item_name')
       ]);
 
       if (imagesResponse.error) {
         console.error('Error fetching tool images:', imagesResponse.error);
       }
 
-      if (checklistResponse.error) {
-        console.error('Error fetching tool checklists:', checklistResponse.error);
-      }
-
-      const imagesData = imagesResponse.data || [];
-      const checklistData = checklistResponse.data || [];
+      const imagesData = (imagesResponse.data || []).filter((img: any) => img.is_primary === true);
+      const countsData = countsResponse.data || [];
 
       // Group images and checklist items by tool_id
       const imagesByTool = imagesData.reduce((acc, image) => {
@@ -180,24 +189,23 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         return acc;
       }, {} as Record<string, ToolImage[]>);
 
-      const checklistsByTool = checklistData.reduce((acc, item) => {
-        if (!acc[item.tool_id]) {
-          acc[item.tool_id] = [];
-        }
-        acc[item.tool_id].push({
-          id: item.id,
-          item_name: item.item_name,
-          required: item.required,
-        });
-        return acc;
-      }, {} as Record<string, ChecklistItem[]>);
-
       // Fetch latest location and stored_at for each tool
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('tool_transactions')
-        .select('tool_id, location, stored_at, timestamp')
-        .in('tool_id', toolIds)
-        .order('timestamp', { ascending: false });
+      // Prefer RPC for latest transactions per tool; fallback to client reduction
+      let transactionsData: any[] | null = null;
+      let transactionsError: any = null;
+      const { data: latestRows, error: rpcErr } = await supabase.rpc('latest_transactions_for_tools', { p_tool_ids: toolIds });
+      if (!rpcErr && latestRows) {
+        transactionsData = latestRows as any[];
+      } else {
+        const { data, error } = await supabase
+          .from('tool_transactions')
+          .select('tool_id, location, stored_at, timestamp')
+          .in('tool_id', toolIds)
+          .order('timestamp', { ascending: false })
+          .limit(toolIds.length * 5);
+        transactionsData = data || [];
+        transactionsError = error;
+      }
 
       if (transactionsError) {
         console.error('Error fetching tool transactions:', transactionsError);
@@ -221,7 +229,6 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         images: imagesByTool[tool.id] || [],
         current_location: transactionsByTool[tool.id]?.location || 'Unknown',
         current_stored_at: transactionsByTool[tool.id]?.stored_at || 'Unknown',
-        checklist_items: checklistsByTool[tool.id] || [],
       })) || [];
 
       // Ensure numeric sort by tool number
@@ -234,13 +241,32 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         return an - bn;
       });
 
-      setTools(transformedTools);
+      // Build counts map for this page
+      const pageCounts = countsData.reduce((acc: Record<string, number>, row: any) => {
+        acc[row.tool_id] = (acc[row.tool_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      if (reset) {
+        setTools(transformedTools);
+        setOffset(PAGE_SIZE);
+        setHasMore((count ?? 0) > PAGE_SIZE);
+        setChecklistCounts(pageCounts);
+        setTotalToolsCount(count ?? transformedTools.length);
+      } else {
+        setTools(prev => [...prev, ...transformedTools]);
+        setOffset(currentOffset + PAGE_SIZE);
+        setHasMore((count ?? 0) > currentOffset + PAGE_SIZE);
+        setChecklistCounts(prev => ({ ...prev, ...pageCounts }));
+        if (count !== null && count !== undefined) setTotalToolsCount(count);
+      }
     } catch (error) {
       console.error('Error fetching tools:', error);
       Alert.alert('Error', 'Failed to load tools');
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
@@ -301,6 +327,18 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
     navigation.navigate('ToolDetail', { tool });
   };
 
+  const fetchChecklistForTool = async (toolId: string) => {
+    if (checklistsByTool[toolId] || checklistsLoading.has(toolId)) return;
+    const newLoading = new Set(checklistsLoading); newLoading.add(toolId); setChecklistsLoading(newLoading);
+    const { data } = await supabase
+      .from('tool_checklists')
+      .select('id, item_name, required')
+      .eq('tool_id', toolId)
+      .order('item_name');
+    setChecklistsByTool(prev => ({ ...prev, [toolId]: (data || []).map(i => ({ id: i.id, item_name: i.item_name, required: i.required })) }));
+    newLoading.delete(toolId); setChecklistsLoading(newLoading);
+  };
+
   const toggleChecklist = (toolId: string) => {
     setExpandedChecklists(prev => {
       const newSet = new Set(prev);
@@ -308,17 +346,16 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         newSet.delete(toolId);
       } else {
         newSet.add(toolId);
+        fetchChecklistForTool(toolId);
       }
       return newSet;
     });
   };
 
   const renderChecklistSection = (tool: Tool) => {
-    if (!tool.checklist_items || tool.checklist_items.length === 0) {
-      return null;
-    }
-
     const isExpanded = expandedChecklists.has(tool.id);
+    const items = checklistsByTool[tool.id] || [];
+    const count = checklistCounts[tool.id] ?? (items ? items.length : 0);
 
     return (
       <View style={styles.checklistContainer}>
@@ -326,9 +363,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
           style={styles.checklistHeader}
           onPress={() => toggleChecklist(tool.id)}
         >
-          <Text style={styles.checklistTitle}>
-            Checklist ({tool.checklist_items.length} items)
-          </Text>
+          <Text style={styles.checklistTitle}>Checklist{!isExpanded && typeof count === 'number' ? ` (${count})` : ''}</Text>
           <Ionicons 
             name={isExpanded ? "chevron-up" : "chevron-down"} 
             size={20} 
@@ -338,7 +373,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
 
         {isExpanded && (
           <View style={styles.checklistItems}>
-            {tool.checklist_items.map((item) => (
+            {(items || []).map((item) => (
               <View key={item.id} style={styles.checklistItem}>
                 <View style={styles.checklistItemContent}>
                   <Text style={styles.checklistItemName}>{item.item_name}</Text>
@@ -453,7 +488,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       <View style={styles.header}>
         <Text style={styles.title}>All Tools</Text>
         <Text style={styles.subtitle}>
-          {filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''} in company
+          {(totalToolsCount ?? filteredTools.length)} tool{(totalToolsCount ?? filteredTools.length) !== 1 ? 's' : ''} in company
         </Text>
       </View>
 
@@ -482,9 +517,16 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         renderItem={renderToolItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={21}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={9}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (!loadingMore && hasMore) {
+            setLoadingMore(true);
+            fetchTools(false);
+          }
+        }}
         removeClippedSubviews={true}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}

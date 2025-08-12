@@ -36,9 +36,9 @@ interface Tool {
 }
 
 interface ToolImage {
-  id: string;
+  id?: string;
   image_url: string;
-  uploaded_at: string;
+  uploaded_at?: string;
   thumb_url?: string | null;
 }
 
@@ -87,9 +87,9 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
       let resolvedThumb: string | null = null;
       if (tool.images && tool.images.length > 0) {
         const first = tool.images[0];
-        resolvedThumb = first.thumb_url || resize(first.image_url, 200, 80);
+        resolvedThumb = first.thumb_url || resize(first.image_url, 96, 55);
       } else if (tool.photo_url) {
-        resolvedThumb = resize(tool.photo_url, 200, 80);
+        resolvedThumb = resize(tool.photo_url, 96, 55);
       }
       if (resolvedThumb) {
         map[tool.id] = resolvedThumb;
@@ -98,13 +98,13 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     return map;
   }, [tools]);
 
-  // Scroll-aware thumbnail prefetch
+  // Scroll-aware thumbnail prefetch (tight window)
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
   const prefetched = useRef<Set<string>>(new Set()).current;
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined }> }) => {
     viewableItems.forEach(({ index }) => {
       if (index === null || index === undefined) return;
-      for (let offset = -3; offset <= 3; offset++) {
+      for (let offset = -1; offset <= 1; offset++) {
         const targetIdx = index + offset;
         if (targetIdx < 0 || targetIdx >= tools.length) continue;
         const toolId = tools[targetIdx].id;
@@ -196,7 +196,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
       const toolIds = toolsData?.map(tool => tool.id) || [];
       const { data: imagesData, error: imagesError } = await supabase
         .from('tool_images')
-        .select('id, tool_id, image_url, uploaded_at, thumb_url, is_primary')
+        .select('tool_id, image_url, thumb_url, is_primary')
         .in('tool_id', toolIds)
         .order('is_primary', { ascending: false })
         .order('uploaded_at', { ascending: true });
@@ -210,7 +210,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         .from('tool_transactions')
         .select('tool_id, location, stored_at, timestamp')
         .in('tool_id', toolIds)
-        .order('timestamp', { ascending: false });
+        .order('timestamp', { ascending: false })
+        .limit(toolIds.length * 5);
 
       if (transactionsError) {
         console.error('Error fetching tool transactions:', transactionsError);
