@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchToolImages } from '../lib/uploadImage';
 
 export function ToolImageGallery({ toolId }: { toolId: string }) {
-  const [images, setImages] = useState<Array<{ id: string; image_url: string }>>([]);
+  const [images, setImages] = useState<Array<{ id: string; image_url: string; thumb_url?: string | null }>>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -25,7 +25,7 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
         {images.map((img, idx) => (
           <img
             key={img.id}
-            src={img.image_url}
+            src={img.thumb_url || img.image_url}
             alt="Tool"
             className="w-12 h-12 object-cover rounded cursor-pointer border"
             onClick={() => { setSelectedIdx(idx); setImgError(false); }}

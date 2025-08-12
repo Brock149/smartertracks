@@ -45,6 +45,7 @@ interface ToolImage {
   id: string;
   image_url: string;
   uploaded_at: string;
+  thumb_url?: string | null;
 }
 
 interface ToolTransaction {
@@ -75,14 +76,15 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const firstImageUrlMap = useMemo(() => {
     const map: Record<string, string> = {};
     tools.forEach(tool => {
-      let imgUrl: string | null = null;
+      let resolvedThumb: string | null = null;
       if (tool.images && tool.images.length > 0) {
-        imgUrl = tool.images[0].image_url;
+        const first = tool.images[0];
+        resolvedThumb = first.thumb_url || getThumbnailUrl(first.image_url);
       } else if (tool.photo_url) {
-        imgUrl = tool.photo_url;
+        resolvedThumb = getThumbnailUrl(tool.photo_url);
       }
-      if (imgUrl) {
-        map[tool.id] = getThumbnailUrl(imgUrl);
+      if (resolvedThumb) {
+        map[tool.id] = resolvedThumb;
       }
     });
     return map;
@@ -147,7 +149,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       const [imagesResponse, checklistResponse] = await Promise.all([
         supabase
           .from('tool_images')
-          .select('*')
+          .select('id, tool_id, image_url, uploaded_at, thumb_url, is_primary')
           .in('tool_id', toolIds)
           .order('is_primary', { ascending: false })
           .order('uploaded_at', { ascending: true }),
@@ -360,14 +362,14 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         {/* Tool Image Preview */}
         <View style={styles.imageContainer}>
           {(() => {
-            let imgUrl: string | null = null;
+            let thumbUrl: string | null = null;
             if (item.images && item.images.length > 0) {
-              imgUrl = item.images[0].image_url;
+              const first = item.images[0];
+              thumbUrl = first.thumb_url || getThumbnailUrl(first.image_url);
             } else if (item.photo_url) {
-              imgUrl = item.photo_url;
+              thumbUrl = getThumbnailUrl(item.photo_url);
             }
-            if (imgUrl) {
-              const thumbUrl = getThumbnailUrl(imgUrl);
+            if (thumbUrl) {
               return (
                 <ExpoImage
                   source={{ uri: thumbUrl }}

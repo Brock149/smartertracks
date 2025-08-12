@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 export async function uploadToolImageAndInsert(
   file: File,
   toolId: string
-): Promise<{ image_url: string, id: string } | null> {
+): Promise<{ image_url: string, id: string, thumb_url?: string | null } | null> {
   try {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${toolId}-${Date.now()}.${fileExt}`;
@@ -53,6 +53,26 @@ export async function uploadToolImageAndInsert(
       await supabase.storage.from('tool-images').remove([filePath]);
       return null;
     }
+
+    // Try to generate and persist a thumbnail via Edge Function (non-blocking on failure)
+    try {
+      const session = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-thumbnail`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session.data.session?.access_token ? { 'Authorization': `Bearer ${session.data.session.access_token}` } : {})
+        },
+        body: JSON.stringify({ image_id: insertData.id, file_path: filePath })
+      });
+      if (res.ok) {
+        const { thumb_url } = await res.json();
+        return { ...insertData, thumb_url };
+      }
+    } catch (e) {
+      console.warn('generate-thumbnail failed (continuing without thumb):', e);
+    }
+
     return insertData;
   } catch (error) {
     console.error('Error in uploadToolImageAndInsert:', error);
@@ -61,10 +81,10 @@ export async function uploadToolImageAndInsert(
 }
 
 // Fetch all images for a tool
-export async function fetchToolImages(toolId: string): Promise<Array<{ id: string, image_url: string }>> {
+export async function fetchToolImages(toolId: string): Promise<Array<{ id: string, image_url: string, thumb_url?: string | null }>> {
   const { data, error } = await supabase
     .from('tool_images')
-    .select('id, image_url')
+    .select('id, image_url, thumb_url')
     .eq('tool_id', toolId)
     .order('is_primary', { ascending: false })
     .order('uploaded_at', { ascending: true });

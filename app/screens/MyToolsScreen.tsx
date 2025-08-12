@@ -39,6 +39,7 @@ interface ToolImage {
   id: string;
   image_url: string;
   uploaded_at: string;
+  thumb_url?: string | null;
 }
 
 interface ChecklistReport {
@@ -83,14 +84,15 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   const firstImageUrlMap = useMemo(() => {
     const map: Record<string, string> = {};
     tools.forEach(tool => {
-      let imgUrl: string | null = null;
+      let resolvedThumb: string | null = null;
       if (tool.images && tool.images.length > 0) {
-        imgUrl = tool.images[0].image_url;
+        const first = tool.images[0];
+        resolvedThumb = first.thumb_url || resize(first.image_url, 200, 80);
       } else if (tool.photo_url) {
-        imgUrl = tool.photo_url;
+        resolvedThumb = resize(tool.photo_url, 200, 80);
       }
-      if (imgUrl) {
-        map[tool.id] = resize(imgUrl, 200, 80);
+      if (resolvedThumb) {
+        map[tool.id] = resolvedThumb;
       }
     });
     return map;
@@ -194,7 +196,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
       const toolIds = toolsData?.map(tool => tool.id) || [];
       const { data: imagesData, error: imagesError } = await supabase
         .from('tool_images')
-        .select('*')
+        .select('id, tool_id, image_url, uploaded_at, thumb_url, is_primary')
         .in('tool_id', toolIds)
         .order('is_primary', { ascending: false })
         .order('uploaded_at', { ascending: true });
@@ -540,14 +542,14 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
             {/* Tool Image Preview */}
             <View style={styles.imageContainer}>
               {(() => {
-                let imgUrl: string | null = null;
+                let thumbUrl: string | null = null;
                 if (item.images && item.images.length > 0) {
-                  imgUrl = item.images[0].image_url;
+                  const first = item.images[0];
+                  thumbUrl = first.thumb_url || (firstImageUrlMap[item.id] || resize(first.image_url, 200, 80));
                 } else if (item.photo_url) {
-                  imgUrl = item.photo_url;
+                  thumbUrl = firstImageUrlMap[item.id] || resize(item.photo_url, 200, 80);
                 }
-                if (imgUrl) {
-                  const thumbUrl = firstImageUrlMap[item.id] || resize(imgUrl, 200, 80);
+                if (thumbUrl) {
                   return (
                     <ExpoImage
                       source={{ uri: thumbUrl }}
