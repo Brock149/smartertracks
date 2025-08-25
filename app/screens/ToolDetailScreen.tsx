@@ -648,8 +648,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1f2937" />
@@ -1044,7 +1043,6 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
       />
 
       </SafeAreaView>
-    </TouchableWithoutFeedback>
   );
 }
 

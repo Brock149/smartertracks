@@ -2,7 +2,7 @@
   "expo": {
     "name": "SmarterTracks",
     "slug": "smartertracks",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "privacy": "public",
     "privacyPolicyUrl": "https://www.smartertracks.com/privacy-policy",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.bactech.smartertracks",
-      "buildNumber": "12",
+      "buildNumber": "20",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.bactech.smartertracks",
-      "versionCode": 12,
+      "versionCode": 20,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
