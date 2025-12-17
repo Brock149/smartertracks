@@ -9,7 +9,7 @@ export default function Landing() {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-gray-900">SASI Tool Tracker</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Smarter Tracks - Tool Tracking System</h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -35,20 +35,20 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
-              Track Your HVAC Tools
-              <span className="block text-blue-600">Like Never Before</span>
+              Smarter Tracks - Tool Tracking System
+              <span className="block text-blue-600">Track Your Tools Like Never Before</span>
             </h2>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
-              Professional tool tracking system designed for HVAC companies. Keep track of equipment, 
+              Professional tool tracking system designed for teams of any size. Keep track of equipment,
               manage inventory, and streamline your operations with our comprehensive platform.
             </p>
             <div className="mt-10 flex justify-center space-x-6">
-              <Link
-                to="/signup"
+              <a
+                href="#contact"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
               >
-                Get Started Free
-              </Link>
+                Email for Demo / Company Setup
+              </a>
               <Link
                 to="/login"
                 className="bg-white hover:bg-gray-50 text-gray-900 px-8 py-3 rounded-lg text-lg font-semibold border border-gray-300 transition-colors shadow-lg"
@@ -56,6 +56,13 @@ export default function Landing() {
                 Sign In
               </Link>
             </div>
+            <p className="mt-4 text-gray-600">
+              Have a company code?{' '}
+              <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
+                Sign Up here
+              </Link>
+              .
+            </p>
           </div>
         </div>
       </section>
@@ -68,7 +75,7 @@ export default function Landing() {
               Everything You Need to Manage Your Tools
             </h3>
             <p className="mt-4 text-xl text-gray-600">
-              Comprehensive tool management for HVAC professionals
+              Comprehensive tool management for your entire team
             </p>
           </div>
           
@@ -82,7 +89,7 @@ export default function Landing() {
               </div>
               <h4 className="mt-4 text-lg font-semibold text-gray-900">Tool Inventory</h4>
               <p className="mt-2 text-gray-600">
-                Complete inventory management with photos, descriptions, and location tracking for all your HVAC equipment.
+                Complete inventory management with photos, descriptions, and location tracking for all your equipment.
               </p>
             </div>
 
@@ -132,9 +139,9 @@ export default function Landing() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
               </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Analytics & Reports</h4>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Analytics & History</h4>
               <p className="mt-2 text-gray-600">
-                Get insights into tool usage, track trends, and generate reports to optimize your operations.
+                Get insights into tool usage and track tool history and transactions to optimize your operations.
               </p>
             </div>
 
@@ -168,7 +175,9 @@ export default function Landing() {
             <div className="mt-8 flex justify-center space-x-6">
               {/* App Store Button */}
               <a
-                href="#"
+                href="https://apps.apple.com/in/app/smarter-tracks/id6748660773"
+                target="_blank"
+                rel="noreferrer"
                 className="inline-flex items-center bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-colors"
               >
                 <svg className="w-8 h-8 mr-3" viewBox="0 0 24 24" fill="currentColor">
@@ -181,18 +190,19 @@ export default function Landing() {
               </a>
 
               {/* Google Play Button */}
-              <a
-                href="#"
-                className="inline-flex items-center bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-colors"
+              <div
+                className="inline-flex items-center bg-black text-white px-6 py-3 rounded-lg opacity-80 cursor-not-allowed"
+                aria-disabled="true"
+                role="button"
               >
                 <svg className="w-8 h-8 mr-3" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/>
                 </svg>
                 <div className="text-left">
-                  <div className="text-xs">Get it on</div>
+                  <div className="text-xs">Coming soon to</div>
                   <div className="text-xl font-semibold">Google Play</div>
                 </div>
-              </a>
+              </div>
             </div>
           </div>
         </div>
@@ -205,28 +215,28 @@ export default function Landing() {
             Ready to Transform Your Tool Management?
           </h3>
           <p className="mt-4 text-xl text-blue-100">
-            Join HVAC companies already using SASI Tool Tracker to streamline their operations.
+            Join teams already using Smarter Tracks to streamline their operations.
           </p>
           <div className="mt-8">
-            <Link
-              to="/signup"
-              className="bg-white hover:bg-gray-100 text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
+            <a
+              href="#contact"
+              className="bg-white hover:bg-gray-100 text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
             >
-              Start Free Trial
-            </Link>
+              Email for Demo / Company Setup
+            </a>
           </div>
         </div>
       </section>
 
       {/* Contact Section */}
-      <section className="py-16 bg-white">
+      <section id="contact" className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h3 className="text-3xl font-extrabold text-gray-900">
             Want to Sign Your Company Up?
           </h3>
-          <p className="mt-4 text-xl text-gray-600">
-            Get in touch with us to discuss enterprise features, custom implementations, or bulk pricing for your HVAC company.
-          </p>
+            <p className="mt-4 text-xl text-gray-600">
+              Email to discuss enterprise features, company setup with access codes, or to schedule a demo.
+            </p>
           <div className="mt-8">
             <a
               href="mailto:brockcoburn@smartertracks.com"
@@ -245,9 +255,9 @@ export default function Landing() {
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h4 className="text-2xl font-bold mb-4">SASI Tool Tracker</h4>
+            <h4 className="text-2xl font-bold mb-4">Smarter Tracks</h4>
             <p className="text-gray-400 mb-8">
-              Professional HVAC tool management for modern contractors.
+              Professional tool management for modern teams.
             </p>
             <div className="flex justify-center space-x-6">
               <Link to="/login" className="text-gray-400 hover:text-white transition-colors">
@@ -270,7 +280,7 @@ export default function Landing() {
               </Link>
             </div>
             <div className="mt-8 pt-8 border-t border-gray-800 text-gray-400">
-              <p>&copy; 2024 SASI Tool Tracker. All rights reserved.</p>
+              <p>&copy; 2024 Smarter Tracks. All rights reserved.</p>
             </div>
           </div>
         </div>
