@@ -602,7 +602,6 @@ export default function Tools() {
     return sortedTools.slice(startIndex, endIndex)
   }
 
-  const getTotalPages = () => Math.ceil(tools.length / itemsPerPage)
 
   // Ensure default checklist item present when opening create modal
   const openCreateModal = () => {
