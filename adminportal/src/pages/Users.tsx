@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 interface User {
@@ -82,9 +82,16 @@ export default function Users() {
     const { data, error } = await supabase
       .from('users')
       .select('id, name, email, role, company_id, created_at')
-      .order('created_at', { ascending: false })
-    if (error) setError(error.message)
-    else setUsers(data || [])
+      .order('name', { ascending: true })
+
+    if (error) {
+      setError(error.message)
+    } else {
+      const sorted = (data || []).slice().sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+      )
+      setUsers(sorted)
+    }
     setLoading(false)
   }
 
@@ -386,14 +393,61 @@ export default function Users() {
     return code.code
   }
 
+  const filteredUsers = useMemo(
+    () =>
+      users.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [users, searchTerm]
+  )
+
+  const usersTotalPages = useMemo(
+    () => Math.max(Math.ceil(filteredUsers.length / itemsPerPage), 1),
+    [filteredUsers.length]
+  )
+
+  useEffect(() => {
+    if (currentUsersPage > usersTotalPages) {
+      setCurrentUsersPage(usersTotalPages)
+    }
+  }, [currentUsersPage, usersTotalPages])
+
+  const usersPaginationRange = useMemo<(number | string)[]>(() => {
+    const siblingCount = 1
+    const totalPageNumbers = siblingCount * 2 + 5
+    if (usersTotalPages <= totalPageNumbers) {
+      return Array.from({ length: usersTotalPages }, (_, i) => i + 1)
+    }
+    const leftSibling = Math.max(currentUsersPage - siblingCount, 1)
+    const rightSibling = Math.min(currentUsersPage + siblingCount, usersTotalPages)
+    const showLeftEllipsis = leftSibling > 2
+    const showRightEllipsis = rightSibling < usersTotalPages - 1
+    if (!showLeftEllipsis && showRightEllipsis) {
+      const leftRange = Array.from({ length: 4 }, (_, i) => i + 1)
+      return [...leftRange, '…', usersTotalPages]
+    }
+    if (showLeftEllipsis && !showRightEllipsis) {
+      const rightRange = Array.from({ length: 4 }, (_, i) => usersTotalPages - 3 + i)
+      return [1, '…', ...rightRange]
+    }
+    const middleRange = Array.from({ length: rightSibling - leftSibling + 1 }, (_, i) => leftSibling + i)
+    return [1, '…', ...middleRange, '…', usersTotalPages]
+  }, [currentUsersPage, usersTotalPages])
+
+  const handleUsersPageJump = () => {
+    const input = window.prompt(`Go to page (1-${usersTotalPages})`)
+    if (!input) return
+    const parsed = parseInt(input, 10)
+    if (Number.isNaN(parsed)) return
+    const clamped = Math.min(Math.max(1, parsed), usersTotalPages)
+    setCurrentUsersPage(clamped)
+  }
+
   const getPaginatedUsers = () => {
-    const filtered = users.filter(user => 
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    )
     const startIndex = (currentUsersPage - 1) * itemsPerPage
     const endIndex = startIndex + itemsPerPage
-    return filtered.slice(startIndex, endIndex)
+    return filteredUsers.slice(startIndex, endIndex)
   }
 
   const getPaginatedAccessCodes = () => {
@@ -504,9 +558,9 @@ export default function Users() {
               <p className="text-sm text-gray-700">
                 Showing <span className="font-medium">{(currentUsersPage - 1) * itemsPerPage + 1}</span> to{' '}
                 <span className="font-medium">
-                  {Math.min(currentUsersPage * itemsPerPage, users.length)}
+                  {Math.min(currentUsersPage * itemsPerPage, filteredUsers.length)}
                 </span>{' '}
-                of <span className="font-medium">{users.length}</span> users
+                of <span className="font-medium">{filteredUsers.length}</span> users
               </p>
             </div>
             <div>
@@ -518,22 +572,34 @@ export default function Users() {
                 >
                   Previous
                 </button>
-                {Array.from({ length: getTotalPages(users) }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentUsersPage(page)}
-                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                      currentUsersPage === page
-                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
+                {usersPaginationRange.map((item, idx) =>
+                  item === '…' ? (
+                    <button
+                      key={`ellipsis-${idx}`}
+                      type="button"
+                      onClick={handleUsersPageJump}
+                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                      title="Jump to page"
+                    >
+                      …
+                    </button>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setCurrentUsersPage(Number(item))}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        currentUsersPage === item
+                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
                 <button
-                  onClick={() => setCurrentUsersPage(prev => Math.min(prev + 1, getTotalPages(users)))}
-                  disabled={currentUsersPage === getTotalPages(users)}
+                  onClick={() => setCurrentUsersPage(prev => Math.min(prev + 1, usersTotalPages))}
+                  disabled={currentUsersPage === usersTotalPages}
                   className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Next
@@ -590,11 +656,11 @@ export default function Users() {
             Previous
           </button>
           <span className="text-sm text-gray-700">
-            Page {currentUsersPage} of {getTotalPages(users)}
+            Page {currentUsersPage} of {usersTotalPages}
           </span>
           <button
-            onClick={() => setCurrentUsersPage(prev => Math.min(prev + 1, getTotalPages(users)))}
-            disabled={currentUsersPage === getTotalPages(users)}
+            onClick={() => setCurrentUsersPage(prev => Math.min(prev + 1, usersTotalPages))}
+            disabled={currentUsersPage === usersTotalPages}
             className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             Next

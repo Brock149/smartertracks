@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { ToolImageUpload } from '../components/ToolImageUpload'
 import { ToolImageGallery } from '../components/ToolImageGallery'
@@ -44,6 +44,7 @@ export default function Tools() {
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
   const [loadingChecklist, setLoadingChecklist] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [sortMode, setSortMode] = useState<'number' | 'name'>('number')
   const [newTool, setNewTool] = useState({
     number: '',
     name: '',
@@ -515,29 +516,90 @@ export default function Tools() {
 
 
   // Add pagination function
-  const getPaginatedTools = () => {
-    const lowerSearch = searchTerm.toLowerCase();
-    const filtered = tools.filter(tool => {
-      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch);
-      const matchesName = tool.name.toLowerCase().includes(lowerSearch);
-      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch);
-      const matchesOwner = (tool.owner?.name || '').toLowerCase().includes(lowerSearch);
-      const latestLocation = (tool.latest_transaction && tool.latest_transaction.length > 0)
-        ? (tool.latest_transaction[0].location || '')
-        : '';
-      const matchesLocation = latestLocation.toLowerCase().includes(lowerSearch);
+  const filteredTools = useMemo(() => {
+    const lowerSearch = searchTerm.toLowerCase()
+    return tools.filter(tool => {
+      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch)
+      const matchesName = tool.name.toLowerCase().includes(lowerSearch)
+      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch)
+      const matchesOwner = (tool.owner?.name || '').toLowerCase().includes(lowerSearch)
+      const latestLocation =
+        tool.latest_transaction && tool.latest_transaction.length > 0
+          ? tool.latest_transaction[0].location || ''
+          : ''
+      const matchesLocation = latestLocation.toLowerCase().includes(lowerSearch)
 
-      return (
-        matchesNumber ||
-        matchesName ||
-        matchesDescription ||
-        matchesOwner ||
-        matchesLocation
-      );
-    });
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filtered.slice(startIndex, endIndex);
+      return matchesNumber || matchesName || matchesDescription || matchesOwner || matchesLocation
+    })
+  }, [tools, searchTerm])
+
+  const sortedTools = useMemo(() => {
+    return [...filteredTools].sort((a, b) => {
+      if (sortMode === 'number') {
+        const an = parseInt(String(a.number), 10)
+        const bn = parseInt(String(b.number), 10)
+        if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number))
+        if (Number.isNaN(an)) return 1
+        if (Number.isNaN(bn)) return -1
+        return an - bn
+      }
+      const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+      if (nameCompare !== 0) return nameCompare
+      const an = parseInt(String(a.number), 10)
+      const bn = parseInt(String(b.number), 10)
+      if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number))
+      if (Number.isNaN(an)) return 1
+      if (Number.isNaN(bn)) return -1
+      return an - bn
+    })
+  }, [filteredTools, sortMode])
+
+  const totalPages = useMemo(
+    () => Math.max(Math.ceil(sortedTools.length / itemsPerPage), 1),
+    [sortedTools.length]
+  )
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const paginationRange = useMemo<(number | string)[]>(() => {
+    const siblingCount = 1
+    const totalPageNumbers = siblingCount * 2 + 5
+    if (totalPages <= totalPageNumbers) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1)
+    }
+    const leftSibling = Math.max(currentPage - siblingCount, 1)
+    const rightSibling = Math.min(currentPage + siblingCount, totalPages)
+    const showLeftEllipsis = leftSibling > 2
+    const showRightEllipsis = rightSibling < totalPages - 1
+    if (!showLeftEllipsis && showRightEllipsis) {
+      const leftRange = Array.from({ length: 4 }, (_, i) => i + 1)
+      return [...leftRange, '…', totalPages]
+    }
+    if (showLeftEllipsis && !showRightEllipsis) {
+      const rightRange = Array.from({ length: 4 }, (_, i) => totalPages - 3 + i)
+      return [1, '…', ...rightRange]
+    }
+    const middleRange = Array.from({ length: rightSibling - leftSibling + 1 }, (_, i) => leftSibling + i)
+    return [1, '…', ...middleRange, '…', totalPages]
+  }, [currentPage, totalPages])
+
+  const handleToolsPageJump = () => {
+    const input = window.prompt(`Go to page (1-${totalPages})`)
+    if (!input) return
+    const parsed = parseInt(input, 10)
+    if (Number.isNaN(parsed)) return
+    const clamped = Math.min(Math.max(1, parsed), totalPages)
+    setCurrentPage(clamped)
+  }
+
+  const getPaginatedTools = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return sortedTools.slice(startIndex, endIndex)
   }
 
   const getTotalPages = () => Math.ceil(tools.length / itemsPerPage)
@@ -566,12 +628,41 @@ export default function Tools() {
         <>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
             <h1 className="text-xl md:text-2xl font-bold text-gray-900">Tools</h1>
-            <button
-              onClick={openCreateModal}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm md:text-base"
-            >
-              Add Tool
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Sort by:</span>
+                <div className="inline-flex rounded-md shadow-sm overflow-hidden border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => { setSortMode('number'); setCurrentPage(1); }}
+                    className={`px-3 py-1 text-sm font-medium ${
+                      sortMode === 'number'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Number
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSortMode('name'); setCurrentPage(1); }}
+                    className={`px-3 py-1 text-sm font-medium border-l border-gray-200 ${
+                      sortMode === 'name'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Name
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={openCreateModal}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm md:text-base"
+              >
+                Add Tool
+              </button>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -736,8 +827,8 @@ export default function Tools() {
                 Previous
               </button>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
-                disabled={currentPage === getTotalPages()}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
                 className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
                 Next
@@ -748,9 +839,9 @@ export default function Tools() {
                 <p className="text-sm text-gray-700">
                   Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
                   <span className="font-medium">
-                    {Math.min(currentPage * itemsPerPage, tools.length)}
+                    {Math.min(currentPage * itemsPerPage, sortedTools.length)}
                   </span>{' '}
-                  of <span className="font-medium">{tools.length}</span> tools
+                  of <span className="font-medium">{sortedTools.length}</span> tools
                 </p>
               </div>
               <div>
@@ -762,22 +853,34 @@ export default function Tools() {
                   >
                     Previous
                   </button>
-                  {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                        currentPage === page
-                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+                  {paginationRange.map((item, idx) =>
+                    item === '…' ? (
+                      <button
+                        key={`ellipsis-${idx}`}
+                        type="button"
+                        onClick={handleToolsPageJump}
+                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                        title="Jump to page"
+                      >
+                        …
+                      </button>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => setCurrentPage(Number(item))}
+                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          currentPage === item
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
-                    disabled={currentPage === getTotalPages()}
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
                     className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
                     Next

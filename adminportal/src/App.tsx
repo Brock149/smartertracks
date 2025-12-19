@@ -62,7 +62,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<div>Welcome to Sasi HVAC Tool Tracker</div>} />
+          <Route index element={<div>Welcome to Smarter Tracks - Tool Tracking System</div>} />
           <Route path="tools" element={<Tools />} />
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />

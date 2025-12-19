@@ -54,7 +54,7 @@ export default function Layout() {
       `}>
         <div className="mb-8 flex items-center gap-2 px-2">
           <span className="text-3xl font-bold">🛠️</span>
-          <span className="text-xl font-bold tracking-wide">Sasi Admin</span>
+          <span className="text-xl font-bold tracking-wide">Smarter Tracks Admin</span>
         </div>
         <nav className="flex-1">
           <ul className="space-y-2">
@@ -105,7 +105,7 @@ export default function Layout() {
           <div className="flex items-center gap-2 md:gap-4 flex-1 md:flex-none">
             <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">{navLinks.find(l => location.pathname.startsWith(l.to))?.label || 'Dashboard'}</h1>
             <span className="hidden md:inline ml-4 text-gray-400">|</span>
-            <span className="hidden md:inline text-gray-500">Sasi HVAC Tool Tracker</span>
+            <span className="hidden md:inline text-gray-500">Smarter Tracks - Tool Tracking System</span>
           </div>
           
           <div className="flex items-center gap-2 md:gap-4">

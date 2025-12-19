@@ -302,13 +302,22 @@ export default function Transactions() {
   }
 
   // Filter transactions based on search term
-  const filteredTransactions = transactions.filter(transaction => 
-    transaction.tool?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.tool?.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.from_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.to_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTransactions = useMemo(
+    () =>
+      transactions.filter(transaction =>
+        transaction.tool?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.tool?.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.from_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.to_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [transactions, searchTerm]
+  )
+
+  const totalPages = useMemo(
+    () => Math.max(Math.ceil(filteredTransactions.length / itemsPerPage), 1),
+    [filteredTransactions.length]
   )
 
   // Add pagination function
@@ -318,7 +327,51 @@ export default function Transactions() {
     return filteredTransactions.slice(startIndex, endIndex)
   }
 
-  const getTotalPages = () => Math.ceil(filteredTransactions.length / itemsPerPage)
+  // Keep page in range when results change
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const paginationRange = useMemo<(number | string)[]>(() => {
+    const siblingCount = 1
+    const totalPageNumbers = siblingCount * 2 + 5 // first, last, current + 2 ellipses
+
+    if (totalPages <= totalPageNumbers) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1)
+    }
+
+    const leftSibling = Math.max(currentPage - siblingCount, 1)
+    const rightSibling = Math.min(currentPage + siblingCount, totalPages)
+    const showLeftEllipsis = leftSibling > 2
+    const showRightEllipsis = rightSibling < totalPages - 1
+
+    if (!showLeftEllipsis && showRightEllipsis) {
+      const leftRange = Array.from({ length: 4 }, (_, i) => i + 1)
+      return [...leftRange, '…', totalPages]
+    }
+
+    if (showLeftEllipsis && !showRightEllipsis) {
+      const rightRange = Array.from({ length: 4 }, (_, i) => totalPages - 3 + i)
+      return [1, '…', ...rightRange]
+    }
+
+    const middleRange = Array.from(
+      { length: rightSibling - leftSibling + 1 },
+      (_, i) => leftSibling + i
+    )
+    return [1, '…', ...middleRange, '…', totalPages]
+  }, [currentPage, totalPages])
+
+  const handlePageJump = (targetTotalPages: number, setPage: (page: number) => void) => {
+    const input = window.prompt(`Go to page (1-${targetTotalPages})`)
+    if (!input) return
+    const parsed = parseInt(input, 10)
+    if (Number.isNaN(parsed)) return
+    const clamped = Math.min(Math.max(1, parsed), targetTotalPages)
+    setPage(clamped)
+  }
 
   return (
     <div className="container mx-auto px-2 md:px-4 py-4 md:py-8">
@@ -506,8 +559,8 @@ export default function Transactions() {
             Previous
           </button>
           <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
-            disabled={currentPage === getTotalPages()}
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
             className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             Next
@@ -532,22 +585,34 @@ export default function Transactions() {
               >
                 Previous
               </button>
-              {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                    currentPage === page
-                      ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
+              {paginationRange.map((item, idx) =>
+                item === '…' ? (
+                  <button
+                    key={`ellipsis-${idx}`}
+                    type="button"
+                    onClick={() => handlePageJump(totalPages, setCurrentPage)}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    title="Jump to page"
+                  >
+                    …
+                  </button>
+                ) : (
+                  <button
+                    key={item}
+                    onClick={() => setCurrentPage(Number(item))}
+                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                      currentPage === item
+                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
-                disabled={currentPage === getTotalPages()}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
                 className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
               >
                 Next
