@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
 import { resize } from '../utils';
+import Constants from 'expo-constants';
 
 interface Tool {
   id: string;
@@ -78,6 +79,12 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalToolsCount, setTotalToolsCount] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const SEARCH_LIMIT = 50;
 
   // Lazy checklist cache
   const [checklistsByTool, setChecklistsByTool] = useState<Record<string, ChecklistItem[]>>({});
@@ -85,9 +92,10 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [checklistCounts, setChecklistCounts] = useState<Record<string, number>>({});
 
   // Map tool.id -> thumbnail URL for quick lookup during viewability changes
+  // Use the currently displayed list (filteredTools) so search results also benefit from prefetch.
   const firstImageUrlMap = useMemo(() => {
     const map: Record<string, string> = {};
-    tools.forEach(tool => {
+    filteredTools.forEach(tool => {
       let resolvedThumb: string | null = null;
       if (tool.images && tool.images.length > 0) {
         const first = tool.images[0];
@@ -100,28 +108,31 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       }
     });
     return map;
-  }, [tools]);
+  }, [filteredTools]);
 
   // Prefetch thumbnails only for rows currently on screen (+/- few) using FlatList viewability API
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
   const prefetched = useRef<Set<string>>(new Set()).current;
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined; item: Tool }> }) => {
-    viewableItems.forEach(({ index }) => {
-      if (index === null || index === undefined) return;
-      // Prefetch for rows index-1 .. index+1 (tighter window)
-      for (let offset = -1; offset <= 1; offset++) {
-        const targetIdx = index + offset;
-        if (targetIdx < 0 || targetIdx >= tools.length) continue;
-        const toolId = tools[targetIdx].id;
-        if (prefetched.has(toolId)) continue;
-        const url = firstImageUrlMap[toolId];
-        if (url) {
-          prefetched.add(toolId);
-          RNImage.prefetch(url);
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: Array<{ index: number | null | undefined; item: Tool }> }) => {
+      viewableItems.forEach(({ index }) => {
+        if (index === null || index === undefined) return;
+        // Prefetch for rows index-1 .. index+1 (tighter window)
+        for (let offset = -1; offset <= 1; offset++) {
+          const targetIdx = index + offset;
+          if (targetIdx < 0 || targetIdx >= filteredTools.length) continue;
+          const toolId = filteredTools[targetIdx].id;
+          if (prefetched.has(toolId)) continue;
+          const url = firstImageUrlMap[toolId];
+          if (url) {
+            prefetched.add(toolId);
+            RNImage.prefetch(url);
+          }
         }
-      }
-    });
-  }).current;
+      });
+    },
+    [filteredTools, firstImageUrlMap, prefetched]
+  );
 
   useEffect(() => {
     fetchTools(true);
@@ -136,7 +147,7 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
 
   useEffect(() => {
     filterTools();
-  }, [searchQuery, tools]);
+  }, [tools]);
 
   const fetchTools = async (reset = false) => {
     try {
@@ -271,30 +282,97 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   };
 
   const filterTools = () => {
+    // When search is empty, show the paginated browse list
     if (!searchQuery.trim()) {
       setFilteredTools(tools);
+      setSearchOffset(0);
+      setSearchHasMore(false);
+    }
+  };
+
+  const performRemoteSearch = async (term: string, offset = 0, append = false) => {
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('No active session');
+
+      const { SUPABASE_URL } = (Constants.expoConfig?.extra || {}) as Record<string, string>;
+      const supabaseUrl = SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL!;
+
+      const url = `${supabaseUrl}/functions/v1/search-tools?q=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}&offset=${offset}`;
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Search failed (${resp.status})`);
+      }
+
+      const json = await resp.json();
+      const results = (json?.results || []).map((t: any) => {
+        const images =
+          t.primary_thumb_url || t.primary_image_url
+            ? [
+                {
+                  thumb_url: t.primary_thumb_url || null,
+                  image_url: t.primary_image_url || t.primary_thumb_url || '',
+                },
+              ]
+            : [];
+        return {
+          ...t,
+          current_location: t.location ?? '',
+          owner_name: t.owner_name ?? null,
+          images,
+        };
+      });
+      if (append) {
+        setFilteredTools(prev => [...prev, ...results]);
+      } else {
+        setFilteredTools(results);
+      }
+      const fetched = results.length;
+      setSearchOffset(offset + fetched);
+      setSearchHasMore(fetched >= SEARCH_LIMIT);
+    } catch (err: any) {
+      console.error('Search error', err);
+      setSearchError('Search failed. Please try again.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Debounced remote search when the user types
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (!term) {
+      setSearching(false);
+      setSearchError(null);
+      setFilteredTools(tools);
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
       return;
     }
 
-    const lowerSearch = searchQuery.toLowerCase();
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      performRemoteSearch(term, 0, false);
+    }, 300);
 
-    const filtered = tools.filter(tool => {
-      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch);
-      const matchesName = tool.name.toLowerCase().includes(lowerSearch);
-      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch);
-      const matchesOwner = (tool.owner_name || '').toLowerCase().includes(lowerSearch);
-      const matchesLocation = (tool.current_location || '').toLowerCase().includes(lowerSearch);
+    return () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
-      return (
-        matchesNumber ||
-        matchesName ||
-        matchesDescription ||
-        matchesOwner ||
-        matchesLocation
-      );
-    });
-
-    setFilteredTools(filtered);
+  const loadMoreSearchResults = () => {
+    const term = searchQuery.trim();
+    if (!term || searching || !searchHasMore) return;
+    performRemoteSearch(term, searchOffset, true);
   };
 
   const getToolLocation = async (toolId: string): Promise<string> => {
@@ -502,6 +580,9 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
           autoCapitalize="none"
           autoCorrect={false}
         />
+        {searching && (
+          <ActivityIndicator size="small" color="#2563eb" style={styles.searchSpinner} />
+        )}
         {searchQuery.length > 0 && (
           <TouchableOpacity
             onPress={() => setSearchQuery('')}
@@ -511,12 +592,30 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
           </TouchableOpacity>
         )}
       </View>
+      {searchError ? <Text style={styles.searchError}>{searchError}</Text> : null}
 
       <FlatList
         data={filteredTools}
         renderItem={renderToolItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
+        ListFooterComponent={
+          searchQuery.trim().length > 0 && searchHasMore ? (
+            <View style={styles.loadMoreContainer}>
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={loadMoreSearchResults}
+                disabled={searching}
+              >
+                {searching ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <Text style={styles.loadMoreText}>Load more</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={9}
@@ -768,5 +867,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#2563eb',
+  },
+  searchSpinner: {
+    marginLeft: 8,
+  },
+  searchError: {
+    marginHorizontal: 16,
+    marginTop: -4,
+    marginBottom: 8,
+    color: '#b91c1c',
+    fontSize: 13,
+  },
+  loadMoreContainer: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  loadMoreButton: {
+    backgroundColor: '#2563eb',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 }); 
