@@ -14,18 +14,76 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [user, setUser] = useState<any>(null)
+  const [companyName, setCompanyName] = useState<string | null>(null)
+  const [companyLoading, setCompanyLoading] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
+  async function fetchCompanyName(userId: string, isActive: () => boolean = () => true) {
+    try {
+      setCompanyLoading(true)
+
+      const { data: userRecord, error: userError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', userId)
+        .single()
+
+      if (userError) throw userError
+
+      if (!userRecord?.company_id) {
+        setCompanyName(null)
+        return
+      }
+
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('name')
+        .eq('id', userRecord.company_id)
+        .single()
+
+      if (companyError) throw companyError
+
+      if (!isActive()) return
+      setCompanyName(company?.name || null)
+    } catch (error) {
+      console.error('Error fetching company name:', error)
+      if (isActive()) {
+        setCompanyName(null)
+      }
+    } finally {
+      if (isActive()) {
+        setCompanyLoading(false)
+      }
+    }
+  }
+
   useEffect(() => {
+    let isMounted = true
+
     supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!isMounted) return
       setUser(user)
+      if (user) {
+        fetchCompanyName(user.id, () => isMounted)
+      } else {
+        setCompanyName(null)
+      }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return
       setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchCompanyName(session.user.id, () => isMounted)
+      } else {
+        setCompanyName(null)
+      }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function handleLogout() {
@@ -52,9 +110,14 @@ export default function Layout() {
         fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-800 text-white flex flex-col py-6 px-4 transform transition-transform duration-300 ease-in-out
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="mb-8 flex items-center gap-2 px-2">
+        <div className="mb-8 flex items-center gap-3 px-2">
           <span className="text-3xl font-bold">🛠️</span>
-          <span className="text-xl font-bold tracking-wide">Smarter Tracks Admin</span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-xl font-bold tracking-wide">Smarter Tracks Admin</span>
+            <span className="text-sm text-gray-300">
+              {companyLoading ? 'Loading company...' : companyName || 'Company'}
+            </span>
+          </div>
         </div>
         <nav className="flex-1">
           <ul className="space-y-2">
