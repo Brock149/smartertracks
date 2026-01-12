@@ -12,6 +12,7 @@ import Users from './pages/Users'
 import Transactions from './pages/Transactions'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import Billing from './pages/Billing'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsAndConditions from './pages/TermsAndConditions'
 import AccountDeletion from './pages/AccountDeletion'
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="billing" element={<Billing />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

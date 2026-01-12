@@ -7,6 +7,7 @@ const navLinks = [
   { to: '/admin/users', label: 'Users', icon: '👥' },
   { to: '/admin/transactions', label: 'Transactions', icon: '🔄' },
   { to: '/admin/reports', label: 'Reports', icon: '📊' },
+  { to: '/admin/billing', label: 'Billing', icon: '💳' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
 ]
 
