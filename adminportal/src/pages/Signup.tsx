@@ -51,6 +51,10 @@ export default function Signup() {
           name: form.name,
           accessCode,
         },
+        headers: {
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
       })
 
       if (fnError || result?.error || !result?.success) {
