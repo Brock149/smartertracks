@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
 
 interface SignupForm {
   email: string
@@ -44,26 +43,25 @@ export default function Signup() {
       const email = form.email.trim().toLowerCase()
       const accessCode = form.accessCode.trim().toUpperCase()
 
-      const { data: result, error: fnError } = await supabase.functions.invoke('signup-with-code', {
-        body: {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-with-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
           email,
           password: form.password,
           name: form.name,
           accessCode,
-        },
-        headers: {
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
+        }),
       })
 
-      if (fnError || result?.error || !result?.success) {
-        console.error('Signup error:', fnError ?? result?.error)
-        setError(
-          (fnError?.message as string) ||
-          (result?.error as string) ||
-          'Failed to create account'
-        )
+      const result = await res.json().catch(() => ({}))
+
+      if (!res.ok || result?.error || result?.success === false) {
+        console.error('Signup error:', result?.error || res.statusText)
+        setError(result?.error || res.statusText || 'Failed to create account')
         setLoading(false)
         return
       }

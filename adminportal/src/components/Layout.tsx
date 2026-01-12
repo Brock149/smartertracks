@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 const navLinks = [
@@ -18,6 +18,8 @@ export default function Layout() {
   const [companyName, setCompanyName] = useState<string | null>(null)
   const [companyLoading, setCompanyLoading] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const profileMenuRef = useRef<HTMLDivElement | null>(null)
 
   async function fetchCompanyName(userId: string, isActive: () => boolean = () => true) {
     try {
@@ -86,6 +88,22 @@ export default function Layout() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isProfileMenuOpen])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -172,17 +190,32 @@ export default function Layout() {
             <span className="hidden md:inline text-gray-500">Smarter Tracks - Tool Tracking System</span>
           </div>
           
-          <div className="flex items-center gap-2 md:gap-4">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="hidden sm:block rounded-md border border-gray-300 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-32 md:w-auto"
-            />
-            <button className="relative">
-              <span className="text-xl md:text-2xl">🔔</span>
-              <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500"></span>
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-200 text-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              aria-haspopup="true"
+              aria-expanded={isProfileMenuOpen}
+            >
+              👤
             </button>
-            <span className="inline-block w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-300 flex items-center justify-center text-base md:text-lg">👤</span>
+            {isProfileMenuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
+                <div className="px-4 py-3 border-b">
+                  <p className="text-sm text-gray-500">Signed in as</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{user?.email || 'Loading...'}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false)
+                    handleLogout()
+                  }}
+                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
