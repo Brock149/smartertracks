@@ -8,6 +8,11 @@ interface CompanyData {
   stripe_subscription_id: string | null
   stripe_status: string | null
   current_period_end: string | null
+  user_limit: number | null
+  tool_limit: number | null
+  tier_name: string | null
+  user_count: number
+  tool_count: number
 }
 
 export default function Billing() {
@@ -60,14 +65,36 @@ export default function Billing() {
       setBillingLoading(true)
       setBillingError(null)
 
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id, name, stripe_customer_id, stripe_subscription_id, stripe_status, current_period_end')
-        .eq('id', userCompanyId)
-        .single()
+      const [
+        { data: company, error: companyError },
+        { count: usersCount, error: usersError },
+        { count: toolsCount, error: toolsError },
+      ] = await Promise.all([
+        supabase
+          .from('companies')
+          .select('id, name, stripe_customer_id, stripe_subscription_id, stripe_status, current_period_end, user_limit, tool_limit, tier_name')
+          .eq('id', userCompanyId)
+          .single(),
+        supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', userCompanyId),
+        supabase
+          .from('tools')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', userCompanyId),
+      ])
 
-      if (error) throw error
-      setCompanyData(data)
+      if (companyError) throw companyError
+      if (usersError) throw usersError
+      if (toolsError) throw toolsError
+      if (!company) throw new Error('Company not found')
+
+      setCompanyData({
+        ...company,
+        user_count: usersCount ?? 0,
+        tool_count: toolsCount ?? 0,
+      })
     } catch (error: any) {
       console.error('Error fetching company data:', error)
       setBillingError('Failed to fetch billing information: ' + error.message)
@@ -131,6 +158,24 @@ export default function Billing() {
       setOpeningPortal(false)
     }
   }
+
+  const formatLimit = (limit: number | null | undefined) => {
+    if (limit === null || limit === undefined) return 'Unlimited'
+    return limit.toString()
+  }
+
+  const usageItems = [
+    {
+      label: 'Users',
+      used: companyData?.user_count ?? 0,
+      limit: companyData?.user_limit ?? null,
+    },
+    {
+      label: 'Tools',
+      used: companyData?.tool_count ?? 0,
+      limit: companyData?.tool_limit ?? null,
+    },
+  ]
 
   if (userLoading) {
     return <div className="text-center py-8 text-gray-500 text-lg">Loading billing...</div>
@@ -234,22 +279,52 @@ export default function Billing() {
             )}
           </div>
 
-          {/* Information Panel */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <span className="text-blue-500 text-xl">💳</span>
+          {/* Usage & Limits */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+            <div className="flex items-start justify-between mb-4 gap-3">
+              <div>
+                <h4 className="text-lg font-medium text-gray-800">Usage & Limits</h4>
+                <p className="text-sm text-gray-500">Track your current usage against your plan.</p>
               </div>
-              <div className="ml-3">
-                <h4 className="text-lg font-medium text-blue-800">Billing Information</h4>
-                <div className="mt-2 text-blue-700">
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Monthly subscription: $350/month</li>
-                    <li>Cancel anytime - no long-term contracts</li>
-                    <li>Secure payments processed by Stripe</li>
-                  </ul>
-                </div>
-              </div>
+              {companyData?.tier_name && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                  {companyData.tier_name}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {usageItems.map((item) => {
+                const percent = item.limit ? Math.min(100, Math.round((item.used / item.limit) * 100)) : 0
+                return (
+                  <div key={item.label} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-gray-700">{item.label}</div>
+                      <div className="text-xs text-gray-500">Limit: {formatLimit(item.limit)}</div>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <div className="text-3xl font-semibold text-gray-900">{item.used}</div>
+                      <div className="text-sm text-gray-500">
+                        of {formatLimit(item.limit)}
+                      </div>
+                    </div>
+                    {item.limit ? (
+                      <div className="mt-3">
+                        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-2 bg-blue-600 rounded-full"
+                            style={{ width: `${percent}%` }}
+                            aria-label={`${item.label} usage ${percent}%`}
+                          />
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">{percent}% used</div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-xs text-gray-500">Unlimited</div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
