@@ -6,6 +6,7 @@ import AddCompanyModal from '../components/AddCompanyModal'
 import ViewAccessCodesModal from '../components/ViewAccessCodesModal'
 import RenameCompanyModal from '../components/RenameCompanyModal'
 import DeleteCompanyModal from '../components/DeleteCompanyModal'
+import EditLimitsModal from '../components/EditLimitsModal'
 
 export default function DashboardPage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -16,6 +17,7 @@ export default function DashboardPage() {
   const [codesCompany, setCodesCompany] = useState<{id:string,name:string}|null>(null)
   const [renameCompany, setRenameCompany] = useState<Company|null>(null)
   const [deleteCompany, setDeleteCompany] = useState<Company|null>(null)
+  const [limitsCompany, setLimitsCompany] = useState<Company|null>(null)
 
   useEffect(() => {
     console.log('Dashboard useEffect: fetch companies')
@@ -60,6 +62,11 @@ export default function DashboardPage() {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never'
     return new Date(dateString).toLocaleDateString()
+  }
+
+  const formatLimit = (limit: number | null) => {
+    if (limit === null || limit === undefined) return '∞'
+    return limit.toString()
   }
 
   console.log('DashboardPage rendering, loading:', loading)
@@ -200,6 +207,9 @@ export default function DashboardPage() {
                       Tools
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Mode
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Last Activity
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -226,15 +236,24 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {company.user_count}
+                        {company.user_count} / {formatLimit(company.user_limit)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {company.tool_count}
+                        {company.tool_count} / {formatLimit(company.tool_limit)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {company.enforcement_mode ?? 'off'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(company.last_activity)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => setLimitsCompany(company)}
+                          className="mr-2 px-3 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200"
+                        >
+                          Limits
+                        </button>
                         <button
                           onClick={() => toggleCompanyStatus(company.id, company.is_active)}
                           className={`mr-2 px-3 py-1 rounded text-xs font-medium ${
@@ -298,6 +317,13 @@ export default function DashboardPage() {
         company={deleteCompany}
         isOpen={!!deleteCompany}
         onClose={() => setDeleteCompany(null)}
+        onSuccess={fetchCompanies}
+      />
+
+      <EditLimitsModal
+        company={limitsCompany}
+        isOpen={!!limitsCompany}
+        onClose={() => setLimitsCompany(null)}
         onSuccess={fetchCompanies}
       />
     </div>

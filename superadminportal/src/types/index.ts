@@ -17,6 +17,13 @@ export interface Company {
   user_count: number
   tool_count: number
   last_activity: string | null
+  user_limit: number | null
+  tool_limit: number | null
+  enforcement_mode: 'off' | 'observe' | 'enforce'
+  tier_name: string | null
+  billing_cycle: 'monthly' | 'annual' | null
+  plan_id: string | null
+  trial_expires_at: string | null
 }
 
 export interface CompanyAccessCode {
