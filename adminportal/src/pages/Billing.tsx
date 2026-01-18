@@ -26,6 +26,8 @@ interface CompanyData {
   user_limit: number | null
   tool_limit: number | null
   tier_name: string | null
+  plan_id: string | null
+  billing_cycle: 'monthly' | 'annual' | null
   user_count: number
   tool_count: number
 }
@@ -96,7 +98,7 @@ export default function Billing() {
       ] = await Promise.all([
         supabase
           .from('companies')
-          .select('id, name, stripe_customer_id, stripe_subscription_id, stripe_status, current_period_end, user_limit, tool_limit, tier_name')
+          .select('id, name, stripe_customer_id, stripe_subscription_id, stripe_status, current_period_end, user_limit, tool_limit, tier_name, plan_id, billing_cycle')
           .eq('id', userCompanyId)
           .single(),
         supabase
@@ -114,11 +116,25 @@ export default function Billing() {
       if (toolsError) throw toolsError
       if (!company) throw new Error('Company not found')
 
+      const planIdFromDb =
+        company.plan_id === 'tier2' || company.plan_id === 'tier3' ? company.plan_id : null
+      const billingCycleFromDb =
+        company.billing_cycle === 'monthly' || company.billing_cycle === 'annual'
+          ? company.billing_cycle
+          : null
+
       setCompanyData({
         ...company,
         user_count: usersCount ?? 0,
         tool_count: toolsCount ?? 0,
       })
+
+      if (planIdFromDb) {
+        setSelectedPlanId(planIdFromDb)
+      }
+      if (billingCycleFromDb) {
+        setSelectedBillingCycle(billingCycleFromDb)
+      }
     } catch (error: any) {
       console.error('Error fetching company data:', error)
       setBillingError('Failed to fetch billing information: ' + error.message)
@@ -157,6 +173,44 @@ export default function Billing() {
     } catch (error: any) {
       console.error('Error creating checkout:', error)
       setBillingError('Failed to start checkout: ' + error.message)
+    } finally {
+      setCreatingCheckout(false)
+    }
+  }
+
+  async function handleChangePlan() {
+    try {
+      setCreatingCheckout(true)
+      setBillingError(null)
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('No session found')
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-subscription-plan`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            plan_id: selectedPlanId,
+            billing_cycle: selectedBillingCycle,
+          }),
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update subscription')
+      }
+
+      await fetchCompanyData()
+    } catch (error: any) {
+      console.error('Error changing plan:', error)
+      setBillingError('Failed to change plan: ' + error.message)
     } finally {
       setCreatingCheckout(false)
     }
@@ -221,6 +275,7 @@ export default function Billing() {
 
   const hasActiveSubscription = companyData?.stripe_status === 'active'
   const canManageSubscription = companyData?.stripe_subscription_id && companyData?.stripe_status
+  const canChangePlan = hasActiveSubscription && !!companyData?.stripe_subscription_id
 
   return (
     <div className="bg-white rounded-lg shadow p-8">
@@ -282,8 +337,8 @@ export default function Billing() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">
-            {!hasActiveSubscription && (
-              <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <div className="flex flex-col sm:flex-row gap-4 w-full">
+              {!hasActiveSubscription && (
                 <div className="flex flex-col sm:flex-row gap-3">
                   <select
                     value={selectedPlanId}
@@ -305,6 +360,8 @@ export default function Billing() {
                     <option value="annual">Annual</option>
                   </select>
                 </div>
+              )}
+              {!hasActiveSubscription && (
                 <button
                   onClick={handleCreateCheckout}
                   disabled={creatingCheckout}
@@ -314,8 +371,40 @@ export default function Billing() {
                     ? 'Starting Checkout...'
                     : `Start Subscription - $${selectedPrice}/${selectedBillingCycle === 'annual' ? 'year' : 'month'}`}
                 </button>
-              </div>
-            )}
+              )}
+              {canChangePlan && (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <select
+                    value={selectedPlanId}
+                    onChange={(e) => setSelectedPlanId(e.target.value as PlanId)}
+                    className="border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {PLAN_OPTIONS.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} ({plan.users} users / {plan.tools} tools)
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedBillingCycle}
+                    onChange={(e) => setSelectedBillingCycle(e.target.value as BillingCycle)}
+                    className="border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="annual">Annual</option>
+                  </select>
+                  <button
+                    onClick={handleChangePlan}
+                    disabled={creatingCheckout}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {creatingCheckout
+                      ? 'Updating Plan...'
+                      : `Change Plan - $${selectedPrice}/${selectedBillingCycle === 'annual' ? 'year' : 'month'}`}
+                  </button>
+                </div>
+              )}
+            </div>
             {canManageSubscription && (
               <>
                 <button
