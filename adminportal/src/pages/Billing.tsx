@@ -1,5 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+
+type PlanId = 'tier2' | 'tier3'
+type BillingCycle = 'monthly' | 'annual'
+
+const PLAN_OPTIONS: Array<{
+  id: PlanId
+  name: string
+  monthly: number
+  annual: number
+  users: number
+  tools: number
+}> = [
+  { id: 'tier2', name: 'Tier 2', monthly: 200, annual: 2220, users: 15, tools: 150 },
+  { id: 'tier3', name: 'Tier 3', monthly: 350, annual: 3780, users: 75, tools: 750 },
+]
 
 interface CompanyData {
   id: string
@@ -24,6 +39,15 @@ export default function Billing() {
   const [creatingCheckout, setCreatingCheckout] = useState(false)
   const [openingPortal, setOpeningPortal] = useState(false)
   const [userLoading, setUserLoading] = useState(true)
+  const [selectedPlanId, setSelectedPlanId] = useState<PlanId>('tier3')
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>('monthly')
+
+  const selectedPlan = useMemo(
+    () => PLAN_OPTIONS.find((plan) => plan.id === selectedPlanId) ?? PLAN_OPTIONS[0],
+    [selectedPlanId]
+  )
+  const selectedPrice =
+    selectedBillingCycle === 'annual' ? selectedPlan.annual : selectedPlan.monthly
 
   useEffect(() => {
     fetchUserRole()
@@ -118,8 +142,8 @@ export default function Billing() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          plan_id: 'tier3',
-          billing_cycle: 'monthly',
+          plan_id: selectedPlanId,
+          billing_cycle: selectedBillingCycle,
         }),
       })
 
@@ -195,6 +219,9 @@ export default function Billing() {
     )
   }
 
+  const hasActiveSubscription = companyData?.stripe_status === 'active'
+  const canManageSubscription = companyData?.stripe_subscription_id && companyData?.stripe_status
+
   return (
     <div className="bg-white rounded-lg shadow p-8">
       <div className="flex justify-between items-center mb-6">
@@ -255,15 +282,41 @@ export default function Billing() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">
-            {!companyData?.stripe_subscription_id ? (
-              <button
-                onClick={handleCreateCheckout}
-                disabled={creatingCheckout}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {creatingCheckout ? 'Starting Checkout...' : 'Start Subscription - $350/month'}
-              </button>
-            ) : (
+            {!hasActiveSubscription && (
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <select
+                    value={selectedPlanId}
+                    onChange={(e) => setSelectedPlanId(e.target.value as PlanId)}
+                    className="border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {PLAN_OPTIONS.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} ({plan.users} users / {plan.tools} tools)
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedBillingCycle}
+                    onChange={(e) => setSelectedBillingCycle(e.target.value as BillingCycle)}
+                    className="border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="annual">Annual</option>
+                  </select>
+                </div>
+                <button
+                  onClick={handleCreateCheckout}
+                  disabled={creatingCheckout}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creatingCheckout
+                    ? 'Starting Checkout...'
+                    : `Start Subscription - $${selectedPrice}/${selectedBillingCycle === 'annual' ? 'year' : 'month'}`}
+                </button>
+              </div>
+            )}
+            {canManageSubscription && (
               <>
                 <button
                   onClick={handleOpenBillingPortal}
