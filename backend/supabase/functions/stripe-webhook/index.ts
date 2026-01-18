@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
+import { getBillingCycleForPrice, getPlanByStripePriceId } from '../_shared/plans.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,6 +71,21 @@ serve(async (req) => {
 
     console.log('Processing event:', event.type, 'ID:', event.id)
 
+    const getPlanUpdateForPrice = (priceId: string | null) => {
+      const plan = getPlanByStripePriceId(priceId)
+      if (!plan) return {}
+      const billingCycle = getBillingCycleForPrice(plan, priceId)
+      return {
+        plan_id: plan.id,
+        tier_name: plan.name,
+        user_limit: plan.userLimit,
+        tool_limit: plan.toolLimit,
+        enforcement_mode: plan.enforcementMode,
+        billing_cycle: billingCycle,
+        trial_expires_at: null,
+      }
+    }
+
     // Handle the event
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -94,16 +110,20 @@ serve(async (req) => {
         const periodEndRaw = subscriptionData?.current_period_end ?? subscriptionData?.items?.data?.[0]?.current_period_end ?? null
 
         // Update company with subscription info
+        const priceId = subscriptionData && subscriptionData.items?.data?.length
+          ? (subscriptionData.items.data[0].price as Stripe.Price).id
+          : null
+        const planUpdate = getPlanUpdateForPrice(priceId)
+
         const updateData = {
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: session.subscription as string,
           stripe_status: subscriptionData ? subscriptionData.status : 'active',
-          stripe_price_id: subscriptionData && subscriptionData.items?.data?.length
-            ? (subscriptionData.items.data[0].price as Stripe.Price).id
-            : null,
+          stripe_price_id: priceId,
           current_period_end: periodEndRaw ? new Date(periodEndRaw * 1000).toISOString() : null,
           is_active: true,
-          suspended_at: null
+          suspended_at: null,
+          ...planUpdate,
         }
 
         console.log('Updating company with data:', updateData)
@@ -128,7 +148,10 @@ serve(async (req) => {
         console.log('Customer ID:', subscription.customer)
         console.log('Status:', subscription.status)
 
-        const priceId = subscription.items?.data?.length ? (subscription.items.data[0].price as Stripe.Price).id : null
+        const priceId = subscription.items?.data?.length
+          ? (subscription.items.data[0].price as Stripe.Price).id
+          : null
+        const planUpdate = getPlanUpdateForPrice(priceId)
 
         const subPeriodEndRaw = subscription.current_period_end ?? subscription.items?.data?.[0]?.current_period_end ?? null
 
@@ -140,7 +163,8 @@ serve(async (req) => {
             stripe_status: subscription.status,
             current_period_end: subPeriodEndRaw ? new Date(subPeriodEndRaw * 1000).toISOString() : null,
             is_active: subscription.status === 'active',
-            suspended_at: subscription.status === 'active' ? null : 'now()'
+            suspended_at: subscription.status === 'active' ? null : 'now()',
+            ...planUpdate,
           })
           .eq('stripe_customer_id', subscription.customer as string)
 

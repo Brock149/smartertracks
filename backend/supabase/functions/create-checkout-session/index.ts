@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
+import { getPlanById } from '../_shared/plans.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -118,12 +119,33 @@ serve(async (req) => {
         .eq('id', companyId)
     }
 
-    // Ensure price is configured
-    const priceId = Deno.env.get('STRIPE_PRICE_ID')
+    const requestBody = await req.json().catch(() => ({}))
+    const requestedPlanId = typeof requestBody?.plan_id === 'string' ? requestBody.plan_id : null
+    const requestedBillingCycle =
+      requestBody?.billing_cycle === 'monthly' || requestBody?.billing_cycle === 'annual'
+        ? requestBody.billing_cycle
+        : null
+
+    const selectedPlan = getPlanById(requestedPlanId) ?? getPlanById('tier3')
+    if (!selectedPlan) {
+      return new Response(
+        JSON.stringify({ error: 'Plan is not configured' }),
+        { status: 500, headers: corsHeaders }
+      )
+    }
+
+    const billingCycle =
+      requestedBillingCycle ??
+      selectedPlan.billingCycle ??
+      (selectedPlan.stripePriceMonthly ? 'monthly' : 'annual')
+
+    const priceId =
+      billingCycle === 'annual' ? selectedPlan.stripePriceAnnual : selectedPlan.stripePriceMonthly
+
     if (!priceId) {
       return new Response(
-        JSON.stringify({ error: 'Billing is not configured: missing STRIPE_PRICE_ID' }),
-        { status: 500, headers: corsHeaders }
+        JSON.stringify({ error: 'Billing is not configured for this plan/cycle' }),
+        { status: 400, headers: corsHeaders }
       )
     }
 
@@ -144,6 +166,9 @@ serve(async (req) => {
       client_reference_id: companyId,
       metadata: {
         company_id: companyId,
+        plan_id: selectedPlan.id,
+        billing_cycle: billingCycle,
+        price_id: priceId,
       },
     })
 
