@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
-import { getBillingCycleForPrice, getPlanByStripePriceId } from '../_shared/plans.ts'
+import { getBillingCycleForPrice, getPlanById, getPlanByStripePriceId } from '../_shared/plans.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,6 +86,46 @@ serve(async (req) => {
       }
     }
 
+    const getTrialPlanUpdate = () => {
+      const plan = getPlanById('trial')
+      if (!plan) return {}
+      return {
+        plan_id: plan.id,
+        tier_name: plan.name,
+        user_limit: plan.userLimit,
+        tool_limit: plan.toolLimit,
+        enforcement_mode: plan.enforcementMode,
+        billing_cycle: plan.billingCycle,
+        trial_expires_at: null,
+      }
+    }
+
+    const getCounts = async (companyId: string) => {
+      const [{ count: userCount, error: userErr }, { count: toolCount, error: toolErr }] =
+        await Promise.all([
+          supabase
+            .from('users')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', companyId),
+          supabase
+            .from('tools')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', companyId),
+        ])
+      if (userErr) throw userErr
+      if (toolErr) throw toolErr
+      return { userCount: userCount ?? 0, toolCount: toolCount ?? 0 }
+    }
+
+    const isOverLimit = (
+      counts: { userCount: number; toolCount: number },
+      limits: { user_limit: number | null; tool_limit: number | null }
+    ) => {
+      if (limits.user_limit != null && counts.userCount > limits.user_limit) return true
+      if (limits.tool_limit != null && counts.toolCount > limits.tool_limit) return true
+      return false
+    }
+
     // Handle the event
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -115,14 +155,27 @@ serve(async (req) => {
           : null
         const planUpdate = getPlanUpdateForPrice(priceId)
 
+        const planLimitsFromPrice = {
+          user_limit: (planUpdate as { user_limit?: number | null }).user_limit ?? null,
+          tool_limit: (planUpdate as { tool_limit?: number | null }).tool_limit ?? null,
+        }
+        let shouldSuspend = false
+        if (
+          session.client_reference_id &&
+          (planLimitsFromPrice.user_limit != null || planLimitsFromPrice.tool_limit != null)
+        ) {
+          const counts = await getCounts(session.client_reference_id!)
+          shouldSuspend = isOverLimit(counts, planLimitsFromPrice)
+        }
+
         const updateData = {
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: session.subscription as string,
           stripe_status: subscriptionData ? subscriptionData.status : 'active',
           stripe_price_id: priceId,
           current_period_end: periodEndRaw ? new Date(periodEndRaw * 1000).toISOString() : null,
-          is_active: true,
-          suspended_at: null,
+          is_active: !shouldSuspend,
+          suspended_at: shouldSuspend ? new Date().toISOString() : null,
           ...planUpdate,
         }
 
@@ -154,6 +207,24 @@ serve(async (req) => {
         const planUpdate = getPlanUpdateForPrice(priceId)
 
         const subPeriodEndRaw = subscription.current_period_end ?? subscription.items?.data?.[0]?.current_period_end ?? null
+        const { data: companyRow, error: companyErr } = await supabase
+          .from('companies')
+          .select('id, user_limit, tool_limit')
+          .eq('stripe_customer_id', subscription.customer as string)
+          .single()
+        if (companyErr) {
+          throw companyErr
+        }
+
+        const limits = {
+          user_limit:
+            (planUpdate as { user_limit?: number | null }).user_limit ?? companyRow?.user_limit ?? null,
+          tool_limit:
+            (planUpdate as { tool_limit?: number | null }).tool_limit ?? companyRow?.tool_limit ?? null,
+        }
+        const counts = await getCounts(companyRow.id)
+        const overLimit = isOverLimit(counts, limits)
+        const shouldSuspend = subscription.status !== 'active' || overLimit
 
         const { error } = await supabase
           .from('companies')
@@ -162,8 +233,8 @@ serve(async (req) => {
             stripe_price_id: priceId,
             stripe_status: subscription.status,
             current_period_end: subPeriodEndRaw ? new Date(subPeriodEndRaw * 1000).toISOString() : null,
-            is_active: subscription.status === 'active',
-            suspended_at: subscription.status === 'active' ? null : 'now()',
+            is_active: !shouldSuspend,
+            suspended_at: shouldSuspend ? new Date().toISOString() : null,
             ...planUpdate,
           })
           .eq('stripe_customer_id', subscription.customer as string)
@@ -181,6 +252,7 @@ serve(async (req) => {
         const subscription = event.data.object as Stripe.Subscription
         console.log('Subscription deleted:', subscription.id)
 
+        const trialPlanUpdate = getTrialPlanUpdate()
         // Update company subscription status
         const { error } = await supabase
           .from('companies')
@@ -190,7 +262,8 @@ serve(async (req) => {
               ? new Date(subscription.current_period_end * 1000).toISOString()
               : null,
             is_active: false,
-            suspended_at: 'now()'
+            suspended_at: new Date().toISOString(),
+            ...trialPlanUpdate,
           })
           .eq('stripe_subscription_id', subscription.id)
 
@@ -205,6 +278,7 @@ serve(async (req) => {
         const invoice = event.data.object as Stripe.Invoice
         console.log('Payment failed for invoice:', invoice.id)
 
+        const trialPlanUpdate = getTrialPlanUpdate()
         // Update company subscription status
         if (invoice.subscription) {
           const { error } = await supabase
@@ -212,7 +286,8 @@ serve(async (req) => {
             .update({
               stripe_status: 'past_due',
               is_active: false,
-              suspended_at: 'now()'
+              suspended_at: new Date().toISOString(),
+              ...trialPlanUpdate,
             })
             .eq('stripe_subscription_id', invoice.subscription as string)
 

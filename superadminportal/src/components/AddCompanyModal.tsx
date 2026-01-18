@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getPlanById } from '../config/plans'
 
 interface Props {
   isOpen: boolean
@@ -20,9 +21,21 @@ export default function AddCompanyModal({ isOpen, onClose, onSuccess }: Props) {
     setLoading(true)
     setError('')
     try {
+      const trialPlan = getPlanById('trial')
+      const defaults = trialPlan
+        ? {
+            user_limit: trialPlan.userLimit,
+            tool_limit: trialPlan.toolLimit,
+            enforcement_mode: trialPlan.enforcementMode,
+            tier_name: trialPlan.name,
+            plan_id: trialPlan.id,
+            billing_cycle: trialPlan.billingCycle,
+            trial_expires_at: null,
+          }
+        : {}
       const { error } = await supabase
         .from('companies')
-        .insert({ name: name.trim(), notes })
+        .insert({ name: name.trim(), notes, ...defaults })
       if (error) throw error
       onSuccess()
       setName('')
