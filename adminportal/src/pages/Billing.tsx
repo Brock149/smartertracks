@@ -194,10 +194,6 @@ export default function Billing() {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            plan_id: selectedPlanId,
-            billing_cycle: selectedBillingCycle,
-          }),
         }
       )
 
@@ -378,33 +374,12 @@ export default function Billing() {
               )}
               {canChangePlan && (
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <select
-                    value={selectedPlanId}
-                    onChange={(e) => setSelectedPlanId(e.target.value as PlanId)}
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {PLAN_OPTIONS.map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name} ({plan.users} users / {plan.tools} tools)
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedBillingCycle}
-                    onChange={(e) => setSelectedBillingCycle(e.target.value as BillingCycle)}
-                    className="border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="annual">Annual</option>
-                  </select>
                   <button
                     onClick={handleChangePlan}
                     disabled={creatingCheckout}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {creatingCheckout
-                      ? 'Opening Stripe...'
-                      : `Review in Stripe - $${selectedPrice}/${selectedBillingCycle === 'annual' ? 'year' : 'month'}`}
+                    {creatingCheckout ? 'Opening Stripe...' : 'Review plan change in Stripe'}
                   </button>
                 </div>
               )}
