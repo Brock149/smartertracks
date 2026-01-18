@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Company } from '../types'
+import { PLAN_DEFINITIONS, getPlanById } from '../config/plans'
 
 interface Props {
   company: Company | null
@@ -19,6 +20,7 @@ export default function EditLimitsModal({ company, isOpen, onClose, onSuccess }:
   const [tierName, setTierName] = useState('')
   const [billingCycle, setBillingCycle] = useState<Company['billing_cycle']>(null)
   const [planId, setPlanId] = useState('')
+  const [planPreset, setPlanPreset] = useState('')
   const [trialExpires, setTrialExpires] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -31,9 +33,29 @@ export default function EditLimitsModal({ company, isOpen, onClose, onSuccess }:
     setTierName(company.tier_name ?? '')
     setBillingCycle(company.billing_cycle ?? null)
     setPlanId(company.plan_id ?? '')
+    setPlanPreset(company.plan_id ?? '')
     setTrialExpires(company.trial_expires_at ? company.trial_expires_at.split('T')[0] : '')
     setError('')
   }, [company])
+
+  const selectedPlan = useMemo(() => getPlanById(planPreset), [planPreset])
+
+  const applyPlanDefaults = () => {
+    if (!selectedPlan) return
+    setUserLimit(selectedPlan.userLimit != null ? selectedPlan.userLimit.toString() : '')
+    setToolLimit(selectedPlan.toolLimit != null ? selectedPlan.toolLimit.toString() : '')
+    setEnforcementMode(selectedPlan.enforcementMode)
+    setTierName(selectedPlan.name)
+    setBillingCycle(selectedPlan.billingCycle)
+    setPlanId(selectedPlan.id)
+    if (selectedPlan.trialLengthDays != null) {
+      const expires = new Date()
+      expires.setDate(expires.getDate() + selectedPlan.trialLengthDays)
+      setTrialExpires(expires.toISOString().split('T')[0])
+    } else {
+      setTrialExpires('')
+    }
+  }
 
   if (!isOpen || !company) return null
 
@@ -88,6 +110,34 @@ export default function EditLimitsModal({ company, isOpen, onClose, onSuccess }:
         <h2 className="text-xl font-semibold mb-4">Edit Limits & Billing</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Plan Preset</label>
+              <div className="flex gap-2">
+                <select
+                  value={planPreset}
+                  onChange={(e) => setPlanPreset(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select a plan</option>
+                  {PLAN_DEFINITIONS.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={applyPlanDefaults}
+                  disabled={!selectedPlan || loading}
+                  className="px-3 py-2 rounded-md border text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Apply fills defaults; you can still edit fields before saving.
+              </p>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">User Limit</label>
               <input

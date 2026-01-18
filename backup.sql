@@ -35,6 +35,13 @@ CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
 
 
 
+CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA "public";
+
+
+
+
+
+
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
 
 
@@ -54,6 +61,50 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+
+
+CREATE OR REPLACE FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") RETURNS TABLE("ok" boolean, "message" "text")
+    LANGUAGE "plpgsql"
+    AS $$
+declare
+  v_mode text;
+  v_limit int;
+  v_count int;
+begin
+  select enforcement_mode into v_mode
+  from companies where id = p_company_id;
+
+  if v_mode is null then
+    return query select true, 'No company found';
+    return;
+  end if;
+
+  if p_kind = 'user' then
+    select user_limit into v_limit from companies where id = p_company_id;
+    select count(*)::int into v_count from users where company_id = p_company_id;
+  elsif p_kind = 'tool' then
+    select tool_limit into v_limit from companies where id = p_company_id;
+    select count(*)::int into v_count from tools where company_id = p_company_id;
+  else
+    return query select true, 'Unknown kind';
+    return;
+  end if;
+
+  if v_limit is null then
+    return query select true, 'Unlimited';
+    return;
+  end if;
+
+  if v_count < v_limit then
+    return query select true, format('%s count %s/%s', p_kind, v_count, v_limit);
+  else
+    return query select false, format('%s limit reached %s/%s. Please contact billing.', p_kind, v_count, v_limit);
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") RETURNS "uuid"
@@ -287,33 +338,148 @@ $$;
 ALTER FUNCTION "public"."enforce_company_active"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_companies_overview"() RETURNS TABLE("id" "uuid", "name" "text", "is_active" boolean, "created_at" timestamp with time zone, "suspended_at" timestamp with time zone, "notes" "text", "user_count" bigint, "tool_count" bigint, "last_activity" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."enforce_tool_limit"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
+declare
+  v_ok boolean;
+  v_msg text;
+  v_mode text;
+begin
+  select enforcement_mode into v_mode from companies where id = NEW.company_id;
+  if v_mode is null or v_mode = 'off' then
+    return NEW;
+  end if;
+
+  select ok, message into v_ok, v_msg from check_company_limits(NEW.company_id, 'tool');
+
+  if v_mode = 'observe' then
+    if not v_ok then
+      raise notice 'Tool limit notice: %', v_msg;
+    end if;
+    return NEW;
+  end if;
+
+  if v_mode = 'enforce' and not v_ok then
+    raise exception using message = v_msg;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."enforce_tool_limit"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."enforce_user_limit"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_ok boolean;
+  v_msg text;
+  v_mode text;
+begin
+  select enforcement_mode into v_mode from companies where id = NEW.company_id;
+  if v_mode is null or v_mode = 'off' then
+    return NEW;
+  end if;
+
+  select ok, message into v_ok, v_msg from check_company_limits(NEW.company_id, 'user');
+
+  if v_mode = 'observe' then
+    if not v_ok then
+      raise notice 'User limit notice: %', v_msg;
+    end if;
+    return NEW;
+  end if;
+
+  if v_mode = 'enforce' and not v_ok then
+    raise exception using message = v_msg;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."enforce_user_limit"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."ensure_single_primary"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
 BEGIN
-  -- Only superadmins can call this function
-  IF NOT is_superadmin(auth.uid()) THEN
-    RAISE EXCEPTION 'Access denied. Superadmin required.';
+  -- Case A: this row is being marked primary  demote the rest
+  IF NEW.is_primary THEN
+    UPDATE public.tool_images
+    SET    is_primary = false
+    WHERE  tool_id = NEW.tool_id
+      AND  id <> NEW.id;
+  -- Case B: not primary, but none exist yet  promote this one
+  ELSE
+    IF NOT EXISTS (
+         SELECT 1
+         FROM   public.tool_images
+         WHERE  tool_id = NEW.tool_id
+           AND  is_primary
+           AND  id <> NEW.id
+       ) THEN
+      NEW.is_primary := true;
+    END IF;
   END IF;
 
-  RETURN QUERY
-  SELECT 
-    c.id,
-    c.name,
-    c.is_active,
-    c.created_at,
-    c.suspended_at,
-    c.notes,
-    COUNT(DISTINCT u.id) as user_count,
-    COUNT(DISTINCT t.id) as tool_count,
-    MAX(tt.created_at) as last_activity
-  FROM companies c
-  LEFT JOIN users u ON c.id = u.company_id
-  LEFT JOIN tools t ON c.id = t.company_id  
-  LEFT JOIN tool_transactions tt ON c.id = tt.company_id
-  GROUP BY c.id, c.name, c.is_active, c.created_at, c.suspended_at, c.notes
-  ORDER BY c.created_at DESC;
+  RETURN NEW;
 END;
+$$;
+
+
+ALTER FUNCTION "public"."ensure_single_primary"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_companies_overview"() RETURNS TABLE("id" "uuid", "name" "text", "is_active" boolean, "created_at" timestamp with time zone, "suspended_at" timestamp with time zone, "notes" "text", "user_count" bigint, "tool_count" bigint, "last_activity" timestamp with time zone, "user_limit" integer, "tool_limit" integer, "enforcement_mode" "text", "tier_name" "text", "billing_cycle" "text", "plan_id" "text", "trial_expires_at" timestamp with time zone)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  -- return nothing if not superadmin
+  select * from (
+    select
+      c.id,
+      c.name,
+      c.is_active,
+      c.created_at,
+      c.suspended_at,
+      c.notes,
+      coalesce(u.user_count, 0) as user_count,
+      coalesce(t.tool_count, 0) as tool_count,
+      la.last_activity,
+      c.user_limit,
+      c.tool_limit,
+      c.enforcement_mode,
+      c.tier_name,
+      c.billing_cycle,
+      c.plan_id,
+      c.trial_expires_at
+    from companies c
+    left join (
+      select company_id, count(*)::bigint as user_count
+      from users
+      group by company_id
+    ) u on u.company_id = c.id
+    left join (
+      select company_id, count(*)::bigint as tool_count
+      from tools
+      group by company_id
+    ) t on t.company_id = c.id
+    left join (
+      select company_id, max(created_at) as last_activity
+      from tool_transactions
+      group by company_id
+    ) la on la.company_id = c.id
+    order by c.created_at desc
+  ) sub
+  where is_superadmin(auth.uid());
 $$;
 
 
@@ -497,6 +663,87 @@ $$;
 
 
 ALTER FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text")
+    LANGUAGE "sql"
+    AS $$
+  with latest_tx as (
+    select distinct on (tool_id) tool_id, location
+    from tool_transactions
+    where company_id = p_company_id
+    order by tool_id, timestamp desc
+  )
+  select
+    t.id,
+    t.number,
+    t.name,
+    t.description,
+    t.photo_url,
+    u.name as owner_name,
+    coalesce(l.location, '') as location
+  from tools t
+  left join users u on u.id = t.current_owner
+  left join latest_tx l on l.tool_id = t.id
+  where t.company_id = p_company_id
+    and (
+      lower(t.number) like '%' || lower(p_term) || '%'
+      or lower(t.name) like '%' || lower(p_term) || '%'
+      or lower(coalesce(t.description, '')) like '%' || lower(p_term) || '%'
+      or lower(coalesce(l.location, '')) like '%' || lower(p_term) || '%'
+      or lower(coalesce(u.name, '')) like '%' || lower(p_term) || '%'
+    )
+  order by t.number
+  limit least(p_limit, 100);
+$$;
+
+
+ALTER FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text", "primary_thumb_url" "text", "primary_image_url" "text")
+    LANGUAGE "sql"
+    AS $$
+  with latest_tx as (
+    select distinct on (tool_id) tool_id, location
+    from tool_transactions
+    where company_id = p_company_id
+    order by tool_id, timestamp desc
+  ),
+  primary_img as (
+    select ti.tool_id, ti.thumb_url, ti.image_url
+    from tool_images ti
+    where ti.is_primary = true
+  )
+  select
+    t.id,
+    t.number,
+    t.name,
+    t.description,
+    t.photo_url,
+    u.name as owner_name,
+    coalesce(l.location, '') as location,
+    pi.thumb_url as primary_thumb_url,
+    pi.image_url as primary_image_url
+  from tools t
+  left join users u on u.id = t.current_owner
+  left join latest_tx l on l.tool_id = t.id
+  left join primary_img pi on pi.tool_id = t.id
+  where t.company_id = p_company_id
+    and (
+      lower(t.number) like '%' || lower(p_term) || '%'
+      or lower(t.name) like '%' || lower(p_term) || '%'
+      or lower(coalesce(t.description, '')) like '%' || lower(p_term) || '%'
+      or lower(coalesce(l.location, '')) like '%' || lower(p_term) || '%'
+      or lower(coalesce(u.name, '')) like '%' || lower(p_term) || '%'
+    )
+  order by t.number
+  limit least(p_limit, 100)
+  offset greatest(p_offset, 0);
+$$;
+
+
+ALTER FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_checklist_items"("items" "jsonb") RETURNS "void"
@@ -770,7 +1017,16 @@ CREATE TABLE IF NOT EXISTS "public"."companies" (
     "stripe_subscription_id" "text",
     "stripe_price_id" "text",
     "stripe_status" "text",
-    "current_period_end" timestamp with time zone
+    "current_period_end" timestamp with time zone,
+    "enforcement_mode" "text" DEFAULT 'off'::"text" NOT NULL,
+    "user_limit" integer,
+    "tool_limit" integer,
+    "tier_name" "text",
+    "billing_cycle" "text",
+    "plan_id" "text",
+    "trial_expires_at" timestamp with time zone,
+    CONSTRAINT "companies_billing_cycle_chk" CHECK (("billing_cycle" = ANY (ARRAY['monthly'::"text", 'annual'::"text"]))),
+    CONSTRAINT "companies_enforcement_mode_chk" CHECK (("enforcement_mode" = ANY (ARRAY['off'::"text", 'observe'::"text", 'enforce'::"text"])))
 );
 
 
@@ -861,6 +1117,8 @@ CREATE TABLE IF NOT EXISTS "public"."tool_images" (
     "image_url" "text" NOT NULL,
     "uploaded_at" timestamp with time zone DEFAULT "now"(),
     "company_id" "uuid" NOT NULL,
+    "is_primary" boolean DEFAULT false NOT NULL,
+    "thumb_url" "text",
     CONSTRAINT "ck_img_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
@@ -1047,7 +1305,39 @@ CREATE INDEX "idx_tool_transactions_tool_id" ON "public"."tool_transactions" USI
 
 
 
+CREATE INDEX "idx_tool_tx_location_trgm" ON "public"."tool_transactions" USING "gin" ("lower"("location") "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_tool_tx_tool_time" ON "public"."tool_transactions" USING "btree" ("tool_id", "timestamp" DESC);
+
+
+
+CREATE INDEX "idx_tools_company_id" ON "public"."tools" USING "btree" ("company_id");
+
+
+
+CREATE INDEX "idx_tools_description_trgm" ON "public"."tools" USING "gin" ("lower"("description") "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_tools_name_trgm" ON "public"."tools" USING "gin" ("lower"("name") "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_tools_number_trgm" ON "public"."tools" USING "gin" ("lower"("number") "public"."gin_trgm_ops");
+
+
+
 CREATE INDEX "idx_users_company_id" ON "public"."users" USING "btree" ("company_id");
+
+
+
+CREATE INDEX "idx_users_name_trgm" ON "public"."users" USING "gin" ("lower"("name") "public"."gin_trgm_ops");
+
+
+
+CREATE UNIQUE INDEX "tool_images_one_primary_per_tool" ON "public"."tool_images" USING "btree" ("tool_id") WHERE ("is_primary" = true);
 
 
 
@@ -1075,6 +1365,14 @@ CREATE OR REPLACE TRIGGER "trg_codes_active" BEFORE INSERT OR UPDATE ON "public"
 
 
 
+CREATE OR REPLACE TRIGGER "trg_enforce_tool_limit" BEFORE INSERT ON "public"."tools" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_tool_limit"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_enforce_user_limit" BEFORE INSERT ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_user_limit"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_images_active" BEFORE INSERT OR UPDATE ON "public"."tool_images" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
@@ -1084,6 +1382,10 @@ CREATE OR REPLACE TRIGGER "trg_reports_active" BEFORE INSERT OR UPDATE ON "publi
 
 
 CREATE OR REPLACE TRIGGER "trg_settings_active" BEFORE INSERT OR UPDATE ON "public"."company_settings" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_single_primary" BEFORE INSERT OR UPDATE ON "public"."tool_images" FOR EACH ROW EXECUTE FUNCTION "public"."ensure_single_primary"();
 
 
 
@@ -1579,6 +1881,12 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") TO "service_role";
@@ -1606,6 +1914,24 @@ GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "service_role"
 GRANT ALL ON FUNCTION "public"."enforce_company_active"() TO "anon";
 GRANT ALL ON FUNCTION "public"."enforce_company_active"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."enforce_company_active"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."enforce_tool_limit"() TO "anon";
+GRANT ALL ON FUNCTION "public"."enforce_tool_limit"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."enforce_tool_limit"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."enforce_user_limit"() TO "anon";
+GRANT ALL ON FUNCTION "public"."enforce_user_limit"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."enforce_user_limit"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."ensure_single_primary"() TO "anon";
+GRANT ALL ON FUNCTION "public"."ensure_single_primary"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."ensure_single_primary"() TO "service_role";
 
 
 
@@ -1666,6 +1992,18 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) TO "service_role";
 
 
 
@@ -1825,4 +2163,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
-RESET ALL;
