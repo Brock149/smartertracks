@@ -207,7 +207,11 @@ export default function Billing() {
         throw new Error(result.error || 'Failed to update subscription')
       }
 
-      await fetchCompanyData()
+      if (!result.url) {
+        throw new Error('Missing Stripe portal URL')
+      }
+
+      window.location.href = result.url
     } catch (error: any) {
       console.error('Error changing plan:', error)
       setBillingError('Failed to change plan: ' + error.message)
@@ -399,8 +403,8 @@ export default function Billing() {
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {creatingCheckout
-                      ? 'Updating Plan...'
-                      : `Change Plan - $${selectedPrice}/${selectedBillingCycle === 'annual' ? 'year' : 'month'}`}
+                      ? 'Opening Stripe...'
+                      : `Review in Stripe - $${selectedPrice}/${selectedBillingCycle === 'annual' ? 'year' : 'month'}`}
                   </button>
                 </div>
               )}
