@@ -16,6 +16,13 @@ export default function Layout() {
   const navigate = useNavigate()
   const [user, setUser] = useState<any>(null)
   const [companyName, setCompanyName] = useState<string | null>(null)
+  const [companyStatus, setCompanyStatus] = useState<{
+    isActive: boolean
+    userLimit: number | null
+    toolLimit: number | null
+    userCount: number
+    toolCount: number
+  } | null>(null)
   const [companyLoading, setCompanyLoading] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
@@ -38,20 +45,41 @@ export default function Layout() {
         return
       }
 
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .select('name')
-        .eq('id', userRecord.company_id)
-        .single()
+      const [{ data: company, error: companyError }, { count: userCount, error: userCountError }, { count: toolCount, error: toolCountError }] =
+        await Promise.all([
+          supabase
+            .from('companies')
+            .select('name, is_active, user_limit, tool_limit')
+            .eq('id', userRecord.company_id)
+            .single(),
+          supabase
+            .from('users')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', userRecord.company_id),
+          supabase
+            .from('tools')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', userRecord.company_id),
+        ])
 
       if (companyError) throw companyError
+      if (userCountError) throw userCountError
+      if (toolCountError) throw toolCountError
 
       if (!isActive()) return
       setCompanyName(company?.name || null)
+      setCompanyStatus({
+        isActive: company?.is_active ?? true,
+        userLimit: company?.user_limit ?? null,
+        toolLimit: company?.tool_limit ?? null,
+        userCount: userCount ?? 0,
+        toolCount: toolCount ?? 0,
+      })
     } catch (error) {
       console.error('Error fetching company name:', error)
       if (isActive()) {
         setCompanyName(null)
+        setCompanyStatus(null)
       }
     } finally {
       if (isActive()) {
@@ -70,6 +98,7 @@ export default function Layout() {
         fetchCompanyName(user.id, () => isMounted)
       } else {
         setCompanyName(null)
+        setCompanyStatus(null)
       }
     })
 
@@ -79,7 +108,8 @@ export default function Layout() {
       if (session?.user) {
         fetchCompanyName(session.user.id, () => isMounted)
       } else {
-        setCompanyName(null)
+      setCompanyName(null)
+      setCompanyStatus(null)
       }
     })
 
@@ -221,6 +251,17 @@ export default function Layout() {
 
         {/* Main Content */}
         <main className="flex-1 p-4 md:p-8">
+          {companyStatus && !companyStatus.isActive && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+              <div className="font-semibold">Account suspended</div>
+              <div className="text-sm">
+                {((companyStatus.userLimit !== null && companyStatus.userCount > companyStatus.userLimit) ||
+                  (companyStatus.toolLimit !== null && companyStatus.toolCount > companyStatus.toolLimit))
+                  ? `Over limit: ${companyStatus.userCount}/${companyStatus.userLimit ?? '∞'} users, ${companyStatus.toolCount}/${companyStatus.toolLimit ?? '∞'} tools. Delete users/tools or upgrade your plan to restore access.`
+                  : 'Please delete users/tools or upgrade your plan to restore access.'}
+              </div>
+            </div>
+          )}
           <div className="bg-white rounded-lg shadow p-4 md:p-8 min-h-[60vh]">
             <Outlet />
           </div>
