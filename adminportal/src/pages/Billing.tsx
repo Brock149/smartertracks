@@ -117,6 +117,10 @@ export default function Billing() {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          plan_id: 'tier3',
+          billing_cycle: 'monthly',
+        }),
       })
 
       const result = await response.json()
