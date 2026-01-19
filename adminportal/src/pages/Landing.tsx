@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 export default function Landing() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
-  const priceLabel = billingCycle === 'annual' ? 'per year' : 'per month'
+  const priceLabel = 'per month'
   const starterAnnualMonthly = 185
   const proAnnualMonthly = 315
   const starterSavings = 'save 7.5%'
@@ -152,14 +152,18 @@ export default function Landing() {
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
                 <li>✓ 15 users</li>
                 <li>✓ 150 tools</li>
-                <li>✓ Full tool tracking</li>
-                <li>✓ Transfers & history</li>
+                <li>✓ Tool transfer history</li>
+                <li>✓ Photos on tools</li>
+                <li>✓ Damaged tool reporting</li>
               </ul>
             </div>
 
             <div className="rounded-2xl border-2 border-blue-600 bg-white p-8 shadow-lg">
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
                 Pro
+                <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">
+                  Best value
+                </span>
                 <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">
                   Most popular
                 </span>
@@ -187,8 +191,9 @@ export default function Landing() {
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
                 <li>✓ 75 users</li>
                 <li>✓ 750 tools</li>
-                <li>✓ Full tool tracking</li>
-                <li>✓ Transfers & history</li>
+                <li>✓ Tool transfer history</li>
+                <li>✓ Photos on tools</li>
+                <li>✓ Damaged tool reporting</li>
               </ul>
             </div>
 
