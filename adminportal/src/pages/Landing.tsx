@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom'
 
 export default function Landing() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
-  const annualSavingsText = 'save 10%'
   const priceLabel = billingCycle === 'annual' ? 'per year' : 'per month'
+  const starterAnnualMonthly = 185
+  const proAnnualMonthly = 315
+  const starterSavings = 'save 7.5%'
+  const proSavings = 'save 10%'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -98,7 +101,7 @@ export default function Landing() {
                 Annual
               </button>
               <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                {annualSavingsText}
+                Save with annual
               </span>
             </div>
           </div>
@@ -119,8 +122,8 @@ export default function Landing() {
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
                 <li>✓ 3 users</li>
                 <li>✓ 5 tools</li>
-                <li>✓ Tool transfers & history</li>
-                <li>✓ Basic reporting</li>
+                <li>✓ Full tool tracking</li>
+                <li>✓ Transfers & history</li>
               </ul>
             </div>
 
@@ -129,10 +132,17 @@ export default function Landing() {
               <h4 className="mt-2 text-2xl font-semibold text-gray-900">Starter</h4>
               <p className="mt-2 text-gray-600">For small teams getting organized</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">
-                ${billingCycle === 'annual' ? '2,220' : '200'}
+                ${billingCycle === 'annual' ? starterAnnualMonthly : '200'}
                 <span className="text-base font-semibold text-gray-500">/{priceLabel}</span>
               </div>
-              <p className="text-gray-500">15 users • 150 tools</p>
+              <p className="text-gray-500">
+                {billingCycle === 'annual'
+                  ? '$2,220 billed yearly'
+                  : '15 users • 150 tools'}
+              </p>
+              {billingCycle === 'annual' && (
+                <p className="text-sm text-green-700 font-semibold">{starterSavings}</p>
+              )}
               <Link
                 to={`/get-started?plan=tier2&billing=${billingCycle}`}
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
@@ -140,24 +150,34 @@ export default function Landing() {
                 Buy now
               </Link>
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                <li>✓ All trial features</li>
-                <li>✓ Unlimited tool photos</li>
-                <li>✓ Checklist templates</li>
-                <li>✓ Activity reports</li>
+                <li>✓ 15 users</li>
+                <li>✓ 150 tools</li>
+                <li>✓ Full tool tracking</li>
+                <li>✓ Transfers & history</li>
               </ul>
             </div>
 
             <div className="rounded-2xl border-2 border-blue-600 bg-white p-8 shadow-lg">
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
-                Pro <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">Best value</span>
+                Pro
+                <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">
+                  Most popular
+                </span>
               </div>
               <h4 className="mt-2 text-2xl font-semibold text-gray-900">Pro</h4>
               <p className="mt-2 text-gray-600">For growing teams with more tools</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">
-                ${billingCycle === 'annual' ? '3,780' : '350'}
+                ${billingCycle === 'annual' ? proAnnualMonthly : '350'}
                 <span className="text-base font-semibold text-gray-500">/{priceLabel}</span>
               </div>
-              <p className="text-gray-500">75 users • 750 tools</p>
+              <p className="text-gray-500">
+                {billingCycle === 'annual'
+                  ? '$3,780 billed yearly'
+                  : '75 users • 750 tools'}
+              </p>
+              {billingCycle === 'annual' && (
+                <p className="text-sm text-green-700 font-semibold">{proSavings}</p>
+              )}
               <Link
                 to={`/get-started?plan=tier3&billing=${billingCycle}`}
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
@@ -165,10 +185,10 @@ export default function Landing() {
                 Buy now
               </Link>
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                <li>✓ Everything in Starter</li>
-                <li>✓ Priority support</li>
-                <li>✓ Advanced usage analytics</li>
-                <li>✓ Team permissions</li>
+                <li>✓ 75 users</li>
+                <li>✓ 750 tools</li>
+                <li>✓ Full tool tracking</li>
+                <li>✓ Transfers & history</li>
               </ul>
             </div>
 
