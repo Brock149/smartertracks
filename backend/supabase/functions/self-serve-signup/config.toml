@@ -1,0 +1,2 @@
+[functions.self-serve-signup]
+verify_jwt = false

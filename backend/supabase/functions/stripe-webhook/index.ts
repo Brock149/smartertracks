@@ -155,43 +155,123 @@ serve(async (req) => {
           : null
         const planUpdate = getPlanUpdateForPrice(priceId)
 
-        const planLimitsFromPrice = {
-          user_limit: (planUpdate as { user_limit?: number | null }).user_limit ?? null,
-          tool_limit: (planUpdate as { tool_limit?: number | null }).tool_limit ?? null,
-        }
-        let shouldSuspend = false
-        if (
-          session.client_reference_id &&
-          (planLimitsFromPrice.user_limit != null || planLimitsFromPrice.tool_limit != null)
-        ) {
-          const counts = await getCounts(session.client_reference_id!)
-          shouldSuspend = isOverLimit(counts, planLimitsFromPrice)
+        if (session.client_reference_id) {
+          const planLimitsFromPrice = {
+            user_limit: (planUpdate as { user_limit?: number | null }).user_limit ?? null,
+            tool_limit: (planUpdate as { tool_limit?: number | null }).tool_limit ?? null,
+          }
+          let shouldSuspend = false
+          if (
+            planLimitsFromPrice.user_limit != null ||
+            planLimitsFromPrice.tool_limit != null
+          ) {
+            const counts = await getCounts(session.client_reference_id!)
+            shouldSuspend = isOverLimit(counts, planLimitsFromPrice)
+          }
+
+          const updateData = {
+            stripe_customer_id: session.customer as string,
+            stripe_subscription_id: session.subscription as string,
+            stripe_status: subscriptionData ? subscriptionData.status : 'active',
+            stripe_price_id: priceId,
+            current_period_end: periodEndRaw ? new Date(periodEndRaw * 1000).toISOString() : null,
+            is_active: !shouldSuspend,
+            suspended_at: shouldSuspend ? new Date().toISOString() : null,
+            ...planUpdate,
+          }
+
+          console.log('Updating company with data:', updateData)
+
+          const { error } = await supabase
+            .from('companies')
+            .update(updateData)
+            .eq('id', session.client_reference_id!)
+
+          if (error) {
+            console.error('Error updating company after checkout:', error)
+            throw error // This will cause the webhook to fail and retry
+          }
+
+          console.log('Successfully updated company:', session.client_reference_id)
+          break
         }
 
-        const updateData = {
-          stripe_customer_id: session.customer as string,
-          stripe_subscription_id: session.subscription as string,
-          stripe_status: subscriptionData ? subscriptionData.status : 'active',
-          stripe_price_id: priceId,
-          current_period_end: periodEndRaw ? new Date(periodEndRaw * 1000).toISOString() : null,
-          is_active: !shouldSuspend,
-          suspended_at: shouldSuspend ? new Date().toISOString() : null,
-          ...planUpdate,
+        const metadata = session.metadata || {}
+        const companyName = metadata.company_name?.trim()
+        const adminName = metadata.admin_name?.trim()
+        const adminEmail = metadata.admin_email?.trim()?.toLowerCase()
+
+        if (!companyName || !adminName || !adminEmail) {
+          console.warn('Checkout session missing self-serve metadata; skipping company creation')
+          break
         }
 
-        console.log('Updating company with data:', updateData)
-
-        const { error } = await supabase
+        const { data: existingCompany, error: existingError } = await supabase
           .from('companies')
-          .update(updateData)
-          .eq('id', session.client_reference_id!)
+          .select('id')
+          .eq('stripe_customer_id', session.customer as string)
+          .maybeSingle()
 
-        if (error) {
-          console.error('Error updating company after checkout:', error)
-          throw error // This will cause the webhook to fail and retry
+        if (existingError) {
+          throw existingError
         }
 
-        console.log('Successfully updated company:', session.client_reference_id)
+        let companyId = existingCompany?.id ?? null
+        if (!companyId) {
+          const { data: newCompany, error: createCompanyError } = await supabase
+            .from('companies')
+            .insert({
+              name: companyName,
+              stripe_customer_id: session.customer as string,
+              stripe_subscription_id: session.subscription as string,
+              stripe_status: subscriptionData ? subscriptionData.status : 'active',
+              stripe_price_id: priceId,
+              current_period_end: periodEndRaw ? new Date(periodEndRaw * 1000).toISOString() : null,
+              is_active: true,
+              suspended_at: null,
+              ...planUpdate,
+            })
+            .select('id')
+            .single()
+
+          if (createCompanyError || !newCompany?.id) {
+            throw createCompanyError || new Error('Failed to create company')
+          }
+
+          companyId = newCompany.id
+        }
+
+        const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+          adminEmail,
+          { data: { name: adminName } }
+        )
+
+        if (inviteError || !invited?.user?.id) {
+          throw inviteError || new Error('Failed to invite admin user')
+        }
+
+        const adminId = invited.user.id
+        const { error: adminInsertError } = await supabase
+          .from('users')
+          .insert({
+            id: adminId,
+            name: adminName,
+            email: adminEmail,
+            role: 'admin',
+            company_id: companyId,
+          })
+
+        if (adminInsertError) {
+          await supabase.auth.admin.deleteUser(adminId)
+          throw adminInsertError
+        }
+
+        await supabase
+          .from('companies')
+          .update({ created_by: adminId })
+          .eq('id', companyId)
+
+        console.log('Self-serve company created:', companyId)
         break
       }
 
