@@ -108,7 +108,6 @@ export default function Landing() {
 
           <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-4">
             <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-              <div className="text-sm font-semibold text-gray-500">Starter</div>
               <h4 className="mt-2 text-2xl font-semibold text-gray-900">Free Trial</h4>
               <p className="mt-2 text-gray-600">For teams who want to try it out</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">$0</div>
@@ -128,7 +127,6 @@ export default function Landing() {
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-              <div className="text-sm font-semibold text-gray-500">Starter</div>
               <h4 className="mt-2 text-2xl font-semibold text-gray-900">Starter</h4>
               <p className="mt-2 text-gray-600">For small teams getting organized</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">
@@ -198,7 +196,6 @@ export default function Landing() {
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-              <div className="text-sm font-semibold text-gray-500">Enterprise</div>
               <h4 className="mt-2 text-2xl font-semibold text-gray-900">Custom</h4>
               <p className="mt-2 text-gray-600">For large teams and custom needs</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">Let’s talk</div>
