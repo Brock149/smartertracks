@@ -102,7 +102,7 @@ export default function Signup() {
         
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
+            Create your account with an access code
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

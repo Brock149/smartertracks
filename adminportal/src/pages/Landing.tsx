@@ -44,10 +44,10 @@ export default function Landing() {
             </p>
             <div className="mt-10 flex justify-center space-x-6">
               <a
-                href="#contact"
+                href="#pricing"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
               >
-                Email for Demo / Company Setup
+                View Plans
               </a>
               <Link
                 to="/login"
@@ -63,6 +63,58 @@ export default function Landing() {
               </Link>
               .
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">Plans that scale with you</h3>
+            <p className="mt-4 text-xl text-gray-600">Start free, then upgrade when your team grows.</p>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <div className="bg-gray-50 rounded-2xl p-8 shadow-sm border border-gray-200">
+              <h4 className="text-xl font-semibold text-gray-900">Free Trial</h4>
+              <p className="mt-2 text-gray-600">3 users • 5 tools</p>
+              <div className="mt-6 text-4xl font-extrabold text-gray-900">$0</div>
+              <p className="text-gray-500">Get started instantly</p>
+              <Link
+                to="/get-started?plan=trial"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
+              >
+                Start free trial
+              </Link>
+            </div>
+
+            <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-blue-600">
+              <div className="text-sm text-blue-600 font-semibold">Most popular</div>
+              <h4 className="mt-2 text-xl font-semibold text-gray-900">Tier 2</h4>
+              <p className="mt-2 text-gray-600">15 users • 150 tools</p>
+              <div className="mt-6 text-4xl font-extrabold text-gray-900">$200</div>
+              <p className="text-gray-500">per month or $2,220/year</p>
+              <Link
+                to="/get-started?plan=tier2&billing=monthly"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
+              >
+                Start Tier 2
+              </Link>
+            </div>
+
+            <div className="bg-gray-50 rounded-2xl p-8 shadow-sm border border-gray-200">
+              <h4 className="text-xl font-semibold text-gray-900">Tier 3</h4>
+              <p className="mt-2 text-gray-600">75 users • 750 tools</p>
+              <div className="mt-6 text-4xl font-extrabold text-gray-900">$350</div>
+              <p className="text-gray-500">per month or $3,780/year</p>
+              <Link
+                to="/get-started?plan=tier3&billing=monthly"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
+              >
+                Start Tier 3
+              </Link>
+            </div>
           </div>
         </div>
       </section>
