@@ -1,6 +1,11 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 export default function Landing() {
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
+  const annualSavingsText = 'save 10%'
+  const priceLabel = billingCycle === 'annual' ? 'per year' : 'per month'
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -68,52 +73,123 @@ export default function Landing() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-16 bg-white">
+      <section id="pricing" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">Plans that scale with you</h3>
-            <p className="mt-4 text-xl text-gray-600">Start free, then upgrade when your team grows.</p>
+            <h3 className="text-4xl font-extrabold text-gray-900">Choose the plan that's right for you</h3>
+            <p className="mt-4 text-lg text-gray-600">Start free, then upgrade when your team grows.</p>
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setBillingCycle('monthly')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  billingCycle === 'monthly' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingCycle('annual')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  billingCycle === 'annual' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                }`}
+              >
+                Annual
+              </button>
+              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                {annualSavingsText}
+              </span>
+            </div>
           </div>
 
-          <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-3">
-            <div className="bg-gray-50 rounded-2xl p-8 shadow-sm border border-gray-200">
-              <h4 className="text-xl font-semibold text-gray-900">Free Trial</h4>
-              <p className="mt-2 text-gray-600">3 users • 5 tools</p>
+          <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <div className="text-sm font-semibold text-gray-500">Starter</div>
+              <h4 className="mt-2 text-2xl font-semibold text-gray-900">Free Trial</h4>
+              <p className="mt-2 text-gray-600">For teams who want to try it out</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">$0</div>
               <p className="text-gray-500">Get started instantly</p>
               <Link
                 to="/get-started?plan=trial"
-                className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
               >
-                Start free trial
+                Get started
               </Link>
+              <ul className="mt-6 space-y-2 text-sm text-gray-600">
+                <li>✓ 3 users</li>
+                <li>✓ 5 tools</li>
+                <li>✓ Tool transfers & history</li>
+                <li>✓ Basic reporting</li>
+              </ul>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-blue-600">
-              <div className="text-sm text-blue-600 font-semibold">Most popular</div>
-              <h4 className="mt-2 text-xl font-semibold text-gray-900">Tier 2</h4>
-              <p className="mt-2 text-gray-600">15 users • 150 tools</p>
-              <div className="mt-6 text-4xl font-extrabold text-gray-900">$200</div>
-              <p className="text-gray-500">per month or $2,220/year</p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <div className="text-sm font-semibold text-gray-500">Starter</div>
+              <h4 className="mt-2 text-2xl font-semibold text-gray-900">Starter</h4>
+              <p className="mt-2 text-gray-600">For small teams getting organized</p>
+              <div className="mt-6 text-4xl font-extrabold text-gray-900">
+                ${billingCycle === 'annual' ? '2,220' : '200'}
+                <span className="text-base font-semibold text-gray-500">/{priceLabel}</span>
+              </div>
+              <p className="text-gray-500">15 users • 150 tools</p>
               <Link
-                to="/get-started?plan=tier2&billing=monthly"
-                className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
+                to={`/get-started?plan=tier2&billing=${billingCycle}`}
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
               >
-                Start Tier 2
+                Buy now
               </Link>
+              <ul className="mt-6 space-y-2 text-sm text-gray-600">
+                <li>✓ All trial features</li>
+                <li>✓ Unlimited tool photos</li>
+                <li>✓ Checklist templates</li>
+                <li>✓ Activity reports</li>
+              </ul>
             </div>
 
-            <div className="bg-gray-50 rounded-2xl p-8 shadow-sm border border-gray-200">
-              <h4 className="text-xl font-semibold text-gray-900">Tier 3</h4>
-              <p className="mt-2 text-gray-600">75 users • 750 tools</p>
-              <div className="mt-6 text-4xl font-extrabold text-gray-900">$350</div>
-              <p className="text-gray-500">per month or $3,780/year</p>
+            <div className="rounded-2xl border-2 border-blue-600 bg-white p-8 shadow-lg">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
+                Pro <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">Best value</span>
+              </div>
+              <h4 className="mt-2 text-2xl font-semibold text-gray-900">Pro</h4>
+              <p className="mt-2 text-gray-600">For growing teams with more tools</p>
+              <div className="mt-6 text-4xl font-extrabold text-gray-900">
+                ${billingCycle === 'annual' ? '3,780' : '350'}
+                <span className="text-base font-semibold text-gray-500">/{priceLabel}</span>
+              </div>
+              <p className="text-gray-500">75 users • 750 tools</p>
               <Link
-                to="/get-started?plan=tier3&billing=monthly"
+                to={`/get-started?plan=tier3&billing=${billingCycle}`}
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
               >
-                Start Tier 3
+                Buy now
               </Link>
+              <ul className="mt-6 space-y-2 text-sm text-gray-600">
+                <li>✓ Everything in Starter</li>
+                <li>✓ Priority support</li>
+                <li>✓ Advanced usage analytics</li>
+                <li>✓ Team permissions</li>
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <div className="text-sm font-semibold text-gray-500">Enterprise</div>
+              <h4 className="mt-2 text-2xl font-semibold text-gray-900">Custom</h4>
+              <p className="mt-2 text-gray-600">For large teams and custom needs</p>
+              <div className="mt-6 text-4xl font-extrabold text-gray-900">Let’s talk</div>
+              <p className="text-gray-500">Custom limits and billing</p>
+              <a
+                href="mailto:brockcoburn@smartertracks.com"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Schedule a demo
+              </a>
+              <ul className="mt-6 space-y-2 text-sm text-gray-600">
+                <li>✓ Custom limits & onboarding</li>
+                <li>✓ Dedicated support</li>
+                <li>✓ Custom integrations</li>
+                <li>✓ Annual invoicing</li>
+              </ul>
             </div>
           </div>
         </div>

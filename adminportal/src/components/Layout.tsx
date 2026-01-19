@@ -48,9 +48,9 @@ export default function Layout() {
       const [{ data: company, error: companyError }, { count: userCount, error: userCountError }, { count: toolCount, error: toolCountError }] =
         await Promise.all([
           supabase
-            .from('companies')
+        .from('companies')
             .select('name, is_active, user_limit, tool_limit')
-            .eq('id', userRecord.company_id)
+        .eq('id', userRecord.company_id)
             .single(),
           supabase
             .from('users')
@@ -108,7 +108,7 @@ export default function Layout() {
       if (session?.user) {
         fetchCompanyName(session.user.id, () => isMounted)
       } else {
-      setCompanyName(null)
+        setCompanyName(null)
       setCompanyStatus(null)
       }
     })
