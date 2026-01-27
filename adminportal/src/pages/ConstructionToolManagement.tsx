@@ -5,9 +5,9 @@ import { setPageMeta } from '../lib/seo'
 export default function ConstructionToolManagement() {
   useEffect(() => {
     setPageMeta({
-      title: 'Construction Tool Management Software | Smarter Tracks',
+      title: 'Construction Tool Tracking Software | Smarter Tracks',
       description:
-        'Construction tool management software for contractors and field crews. Track tools across jobsites, reduce loss, and keep maintenance organized.',
+        'Construction tool tracking software for contractors. Track tools across jobsites, assign custody, run audits, and reduce tool loss.',
       canonicalPath: '/construction-tool-management',
     })
   }, [])
@@ -40,14 +40,18 @@ export default function ConstructionToolManagement() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
-              Construction tool management
+              Construction tool tracking software
             </p>
             <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
-              Keep tools in the right place on every jobsite.
+              Keep construction tools accountable on every jobsite.
             </h2>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
-              Smarter Tracks helps construction teams manage tools across jobsites, trucks, and
-              warehouses. Stay accountable, reduce loss, and keep projects on schedule.
+              Smarter Tracks is construction tool tracking software built for contractors and field
+              crews. Track tools across jobsites, assign custody, and run fast audits without the
+              spreadsheets.
+            </p>
+            <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-600">
+              Less time searching. Fewer missing tools. More jobs completed on schedule.
             </p>
             <div className="mt-10 flex justify-center space-x-6">
               <Link
@@ -69,27 +73,30 @@ export default function ConstructionToolManagement() {
 
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Jobsite visibility</h3>
-              <p className="mt-3 text-gray-600">
-                See which tools are assigned to each crew, jobsite, or truck. Know what is on hand
-                before the day starts.
-              </p>
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">
+              Why construction teams lose tools
+            </h3>
+            <p className="mt-4 text-lg text-gray-600">
+              Shared tools move between crews, trucks, and jobsites without clear ownership.
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <h4 className="text-xl font-semibold text-gray-900">Common jobsite problems</h4>
+              <ul className="mt-4 space-y-2 text-gray-600">
+                <li>✓ No clear assignment or custody</li>
+                <li>✓ Tools left behind at multi-day sites</li>
+                <li>✓ Duplicate purchases to replace missing gear</li>
+              </ul>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Accountability built-in</h3>
-              <p className="mt-3 text-gray-600">
-                Assign custody to a person or crew, create transfer records, and reduce the time
-                spent tracking down missing tools.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Maintenance ready</h3>
-              <p className="mt-3 text-gray-600">
-                Create inspection checklists and log damaged tools so maintenance gets handled before
-                it slows down the job.
-              </p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <h4 className="text-xl font-semibold text-gray-900">What fixes it</h4>
+              <ul className="mt-4 space-y-2 text-gray-600">
+                <li>✓ Assign tools to crews, vehicles, or jobsites</li>
+                <li>✓ Scan tools in and out with phones</li>
+                <li>✓ Run audits before tools disappear</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -97,12 +104,40 @@ export default function ConstructionToolManagement() {
 
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">
+              Construction tool tracking built for the field
+            </h3>
+            <p className="mt-4 text-lg text-gray-600">
+              Smarter Tracks keeps every tool accountable without slowing crews down.
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-gray-900">Jobsite visibility</h4>
+              <p className="mt-3 text-gray-600">
+                Know what tools are on each site before crews roll out.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-gray-900">Accountability</h4>
+              <p className="mt-3 text-gray-600">
+                See who last had each tool and when it moved.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-gray-900">Maintenance tracking</h4>
+              <p className="mt-3 text-gray-600">
+                Log damage, schedule inspections, and keep tools in service.
+              </p>
+            </div>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-2xl bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">Made for contractors</h4>
+              <h4 className="text-xl font-semibold text-gray-900">Built for contractors</h4>
               <ul className="mt-4 space-y-3 text-gray-600">
                 <li>✓ Track tools across multiple job sites</li>
-                <li>✓ Support for photos, serials, and asset tags</li>
+                <li>✓ Photos, serials, and asset tags</li>
                 <li>✓ Fast audits and exportable reports</li>
                 <li>✓ Mobile-friendly for field teams</li>
               </ul>
@@ -120,21 +155,52 @@ export default function ConstructionToolManagement() {
         </div>
       </section>
 
+      <section className="py-12 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+            <h3 className="text-2xl font-bold text-gray-900">Related tool tracking pages</h3>
+            <p className="mt-3 text-gray-600">
+              Explore pages tailored to your trade.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-4">
+              <Link
+                to="/tool-tracking-software"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Tool Tracking Software
+              </Link>
+              <Link
+                to="/hvac-tool-tracking"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                HVAC Tool Tracking
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h3 className="text-3xl font-extrabold text-white">
-            Construction tool management that keeps crews productive.
+            Construction tool tracking that keeps crews productive.
           </h3>
           <p className="mt-4 text-xl text-blue-100">
             Track tools, reduce losses, and keep projects moving with Smarter Tracks.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
-              to="/signup"
+              to="/get-started?plan=trial"
               className="bg-white hover:bg-gray-100 text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
             >
-              Get started
+              Start a free trial
             </Link>
+            <a
+              href="mailto:brockcoburn@smartertracks.com"
+              className="bg-blue-500 hover:bg-blue-400 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
+            >
+              Schedule a demo
+            </a>
           </div>
         </div>
       </section>
