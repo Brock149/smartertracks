@@ -27,7 +27,7 @@ export default function Landing() {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-gray-900">Smarter Tracks - Tool Tracking System</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Smarter Tracks Tool Tracking Software</h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -53,12 +53,12 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
-              Smarter Tracks - Tool Tracking System
-              <span className="block text-blue-600">Track Your Tools Like Never Before</span>
+              Smarter Tracks Tool Tracking Software
+              <span className="block text-blue-600">Track Tools Across Jobsites and Crews</span>
             </h2>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
-              Professional tool tracking system designed for teams of any size. Keep track of equipment,
-              manage inventory, and streamline your operations with our comprehensive platform.
+              Tool tracking software built for HVAC, construction, and trades teams. Track equipment,
+              manage inventory, and keep crews accountable with fast audits and clear history.
             </p>
             <div className="mt-10 flex justify-center space-x-6">
               <a
@@ -451,6 +451,9 @@ export default function Landing() {
               </Link>
               <Link to="/construction-tool-management" className="text-gray-400 hover:text-white transition-colors">
                 Construction Tool Management
+              </Link>
+              <Link to="/hvac-tool-tracking" className="text-gray-400 hover:text-white transition-colors">
+                HVAC Tool Tracking
               </Link>
               <a href="mailto:brockcoburn@smartertracks.com" className="text-gray-400 hover:text-white transition-colors">
                 Contact
