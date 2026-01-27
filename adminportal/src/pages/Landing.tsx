@@ -32,6 +32,12 @@ export default function Landing() {
             </div>
             <div className="flex items-center space-x-4">
               <Link
+                to="/tool-tracking-software"
+                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Tool Tracking
+              </Link>
+              <Link
                 to="/login"
                 className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
               >
