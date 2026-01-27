@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { setPageMeta } from '../lib/seo'
 
 export default function Landing() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
@@ -8,6 +9,15 @@ export default function Landing() {
   const proAnnualMonthly = 315
   const starterSavings = 'save 7.5%'
   const proSavings = 'save 10%'
+
+  useEffect(() => {
+    setPageMeta({
+      title: 'Smarter Tracks | Tool Tracking Software',
+      description:
+        'Smarter Tracks is tool tracking software for trades teams. Track tools, prevent losses, run audits, and keep crews accountable.',
+      canonicalPath: '/',
+    })
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
