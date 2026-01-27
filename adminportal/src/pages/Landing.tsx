@@ -436,6 +436,12 @@ export default function Landing() {
               <Link to="/signup" className="text-gray-400 hover:text-white transition-colors">
                 Sign Up
               </Link>
+              <Link to="/tool-tracking-software" className="text-gray-400 hover:text-white transition-colors">
+                Tool Tracking Software
+              </Link>
+              <Link to="/construction-tool-management" className="text-gray-400 hover:text-white transition-colors">
+                Construction Tool Management
+              </Link>
               <a href="mailto:brockcoburn@smartertracks.com" className="text-gray-400 hover:text-white transition-colors">
                 Contact
               </a>

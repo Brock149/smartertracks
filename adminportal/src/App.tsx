@@ -18,6 +18,8 @@ import Billing from './pages/Billing'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsAndConditions from './pages/TermsAndConditions'
 import AccountDeletion from './pages/AccountDeletion'
+import ToolTrackingSoftware from './pages/ToolTrackingSoftware'
+import ConstructionToolManagement from './pages/ConstructionToolManagement'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -59,6 +61,8 @@ export default function App() {
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
         <Route path="/account-deletion" element={<AccountDeletion />} />
+        <Route path="/tool-tracking-software" element={<ToolTrackingSoftware />} />
+        <Route path="/construction-tool-management" element={<ConstructionToolManagement />} />
         <Route
           path="/admin"
           element={
