@@ -5,9 +5,9 @@ import { setPageMeta } from '../lib/seo'
 export default function ToolTrackingSoftware() {
   useEffect(() => {
     setPageMeta({
-      title: 'Tool Tracking Software for Field Teams | Smarter Tracks',
+      title: 'Tool Tracking Software for HVAC & Contractors | Smarter Tracks',
       description:
-        'Smarter Tracks is tool tracking software built for field teams. Track tool locations, transfers, maintenance, and usage history in one place.',
+        'Simple mobile tool tracking app for HVAC, construction, and trades. Assign tools, prevent losses, run audits, and keep teams accountable.',
       canonicalPath: '/tool-tracking-software',
     })
   }, [])
@@ -40,14 +40,18 @@ export default function ToolTrackingSoftware() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
-              Tool tracking software
+              Tool tracking software for HVAC, construction, and trades
             </p>
             <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
-              Keep every tool accountable, everywhere.
+              Tool Tracking Software That Stops Lost Tools.
             </h2>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
-              Smarter Tracks gives field teams a simple way to track tool locations, transfers, and
-              maintenance history. Stop searching, reduce loss, and keep crews moving.
+              Trades teams lose real money to misplaced tools and verbal checkouts. Smarter Tracks is a
+              simple, mobile-first tool tracking app that shows who has what, where it is, and when it
+              is due back.
+            </p>
+            <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-600">
+              No more lost tools. No more finger-pointing. Just real accountability.
             </p>
             <div className="mt-10 flex justify-center space-x-6">
               <Link
@@ -69,27 +73,104 @@ export default function ToolTrackingSoftware() {
 
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Real-time tool locations</h3>
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">
+              Why tool tracking matters
+            </h3>
+            <p className="mt-4 text-lg text-gray-600">
+              Lost tools add up quickly when crews move between jobsites and trucks.
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <h4 className="text-xl font-semibold text-gray-900">For HVAC teams</h4>
+              <ul className="mt-4 space-y-2 text-gray-600">
+                <li>✓ Gauges, drills, vac pumps, and meters left behind</li>
+                <li>✓ Tools lost between jobsites and trucks</li>
+                <li>✓ Replacements purchased 3 to 5 times too often</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <h4 className="text-xl font-semibold text-gray-900">For construction crews</h4>
+              <ul className="mt-4 space-y-2 text-gray-600">
+                <li>✓ Shared tools move job to job with no owner</li>
+                <li>✓ High-value items vanish without notice</li>
+                <li>✓ Foremen lose time tracking down missing gear</li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-8 rounded-2xl bg-blue-50 p-8 text-center">
+            <p className="text-lg font-semibold text-blue-700">
+              A tool tracking system fixes this in one workflow: assign, track, audit, and hold teams
+              accountable.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">What is a tool tracking app?</h3>
+            <p className="mt-4 text-lg text-gray-600">
+              A tool tracking app helps you assign tools, scan them in and out, and see tool
+              locations across jobsites in real time.
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-gray-900">Assign and scan tools</h4>
               <p className="mt-3 text-gray-600">
-                Track where tools are stored, who has them, and when they moved. Every transfer
-                creates a clean history for fast audits.
+                Check tools out to techs, crews, vehicles, or jobsites with barcodes or QR codes.
               </p>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Prevent loss and downtime</h3>
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-gray-900">Track history</h4>
               <p className="mt-3 text-gray-600">
-                Reduce tool loss by assigning responsibility and making check-in/out quick and
-                consistent across the entire team.
+                See who had each tool, when it moved, and its last known jobsite or condition.
               </p>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Maintenance tracking</h3>
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-gray-900">Audit fast</h4>
               <p className="mt-3 text-gray-600">
-                Create maintenance checklists, document issues, and keep a record of service history
-                so tools stay in the field longer.
+                Run quick audits from a phone and flag missing items before they disappear.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">
+              Smarter Tracks is built for trades teams
+            </h3>
+            <p className="mt-4 text-lg text-gray-600">
+              It is not a bloated enterprise asset manager. It is the clean, fast workflow crews
+              actually use.
+            </p>
+          </div>
+          <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <h4 className="text-xl font-semibold text-gray-900">Key features</h4>
+              <ul className="mt-4 space-y-3 text-gray-600">
+                <li>✓ Instant tool assignments to techs, crews, vans, or jobsites</li>
+                <li>✓ Barcode and QR code scanning with any phone</li>
+                <li>✓ Tool history with notes, conditions, and photos</li>
+                <li>✓ Overdue and missing tool alerts</li>
+                <li>✓ Inventory by job, technician, or vehicle</li>
+                <li>✓ Simple, mobile-friendly design</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <h4 className="text-xl font-semibold text-gray-900">Who uses Smarter Tracks</h4>
+              <ul className="mt-4 space-y-3 text-gray-600">
+                <li>✓ Commercial and residential HVAC companies</li>
+                <li>✓ General contractors and construction teams</li>
+                <li>✓ Electrical, plumbing, and mechanical crews</li>
+                <li>✓ Warehouse and operations managers</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -97,25 +178,37 @@ export default function ToolTrackingSoftware() {
 
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
-            <div className="rounded-2xl bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">Built for field teams</h4>
-              <ul className="mt-4 space-y-3 text-gray-600">
-                <li>✓ Track tool custody across trucks, shops, and job sites</li>
-                <li>✓ Add photos, descriptions, and serial numbers</li>
-                <li>✓ Run audits quickly with searchable histories</li>
-                <li>✓ Share access with technicians and managers</li>
-              </ul>
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">Real ROI from tool tracking</h3>
+            <p className="mt-4 text-lg text-gray-600">
+              Most teams break even quickly by reducing tool loss and duplicate purchases.
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl bg-white p-6 shadow-sm text-center">
+              <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">
+                Small shops
+              </p>
+              <p className="mt-3 text-3xl font-extrabold text-gray-900">$5,000–$20,000</p>
+              <p className="mt-2 text-gray-600">Typical annual savings</p>
             </div>
-            <div className="rounded-2xl bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">Fast onboarding</h4>
-              <ul className="mt-4 space-y-3 text-gray-600">
-                <li>✓ Start with a free trial</li>
-                <li>✓ Import tools in minutes</li>
-                <li>✓ Create access codes for teams</li>
-                <li>✓ Upgrade plans as you grow</li>
-              </ul>
+            <div className="rounded-2xl bg-white p-6 shadow-sm text-center">
+              <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">
+                Medium shops
+              </p>
+              <p className="mt-3 text-3xl font-extrabold text-gray-900">$20,000–$75,000</p>
+              <p className="mt-2 text-gray-600">Typical annual savings</p>
             </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm text-center">
+              <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">
+                Large teams
+              </p>
+              <p className="mt-3 text-3xl font-extrabold text-gray-900">$100,000+</p>
+              <p className="mt-2 text-gray-600">Typical annual savings</p>
+            </div>
+          </div>
+          <div className="mt-8 text-center text-gray-600">
+            Fewer lost tools, fewer duplicate purchases, and fewer delays add up fast.
           </div>
         </div>
       </section>
@@ -123,18 +216,24 @@ export default function ToolTrackingSoftware() {
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h3 className="text-3xl font-extrabold text-white">
-            Tool tracking software that your crews will actually use.
+            Ready to stop losing tools?
           </h3>
           <p className="mt-4 text-xl text-blue-100">
-            Run audits faster, prevent tool loss, and keep your team accountable.
+            Track tools in under an hour and keep every crew accountable.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
-              to="/signup"
+              to="/get-started?plan=trial"
               className="bg-white hover:bg-gray-100 text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
             >
-              Create your account
+              Start your free trial
             </Link>
+            <a
+              href="mailto:brockcoburn@smartertracks.com"
+              className="bg-blue-500 hover:bg-blue-400 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
+            >
+              Schedule a demo
+            </a>
           </div>
         </div>
       </section>
