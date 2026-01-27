@@ -396,3 +396,85 @@ serve(async (req) => {
     )
   }
 }) 
+
+
+        const invoice = event.data.object as Stripe.Invoice
+
+        console.log('Payment failed for invoice:', invoice.id)
+
+
+
+        const trialPlanUpdate = getTrialPlanUpdate()
+        // Update company subscription status
+
+        if (invoice.subscription) {
+
+          const { error } = await supabase
+
+            .from('companies')
+
+            .update({
+
+              stripe_status: 'past_due',
+
+              is_active: false,
+
+              suspended_at: new Date().toISOString(),
+              ...trialPlanUpdate,
+            })
+
+            .eq('stripe_subscription_id', invoice.subscription as string)
+
+
+
+          if (error) {
+
+            console.error('Error updating subscription status after payment failure:', error)
+
+            throw error
+
+          }
+
+        }
+
+        break
+
+      }
+
+
+
+      default:
+
+        console.log(`Unhandled event type: ${event.type}`)
+
+    }
+
+
+
+    console.log('Webhook processed successfully')
+
+    return new Response(
+
+      JSON.stringify({ received: true }),
+
+      { status: 200, headers: corsHeaders }
+
+    )
+
+  } catch (err: any) {
+
+    console.error('Webhook error:', err)
+
+    return new Response(
+
+      JSON.stringify({ error: err.message || 'Webhook processing failed' }),
+
+      { status: 500, headers: corsHeaders }
+
+    )
+
+  }
+
+}) 
+
+

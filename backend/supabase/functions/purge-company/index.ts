@@ -47,11 +47,31 @@ serve(async (req) => {
 
     // 2. Delete Auth users
     let deletedAuth = 0;
+    const authDeleteErrors: Array<{ id: string; error: string }> = [];
     if (userRows?.length) {
       for (const u of userRows) {
-        await supabase.auth.admin.deleteUser(u.id);
+        const { error } = await supabase.auth.admin.deleteUser(u.id);
+        if (error) {
+          const msg = String(error.message || error);
+          const isNotFound = msg.toLowerCase().includes('not found');
+          if (!isNotFound) {
+            authDeleteErrors.push({ id: u.id, error: msg });
+            continue;
+          }
+        }
         deletedAuth++;
       }
+    }
+
+    if (authDeleteErrors.length > 0) {
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to delete one or more auth users. Company not deleted.',
+          auth_errors: authDeleteErrors,
+          deleted_auth_users: deletedAuth,
+        }),
+        { status: 500, headers: corsHeaders },
+      );
     }
 
     // 3. Delete storage files
