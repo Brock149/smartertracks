@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { setPageMeta } from '../lib/seo'
+import MarketingHeader from '../components/MarketingHeader'
+import MarketingFooter from '../components/MarketingFooter'
 
 const faqItems = [
   {
@@ -56,35 +58,7 @@ export default function ToolTrackingSoftware() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <Link to="/" className="text-2xl font-bold text-gray-900 hover:text-blue-700 transition-colors">
-              Smarter Tracks
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link
-                to="/"
-                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Home
-              </Link>
-              <Link
-                to="/login"
-                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Login
-              </Link>
-              <Link
-                to="/signup"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-              >
-                Sign Up
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+      <MarketingHeader />
 
       <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -105,17 +79,17 @@ export default function ToolTrackingSoftware() {
             </p>
             <div className="mt-10 flex justify-center space-x-6">
               <Link
-                to="/get-started?plan=trial"
+                to="/#pricing"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
               >
                 Start a free trial
               </Link>
-              <a
-                href="mailto:brockcoburn@smartertracks.com"
+              <Link
+                to="/#contact"
                 className="bg-white hover:bg-gray-50 text-gray-900 px-8 py-3 rounded-lg text-lg font-semibold border border-gray-300 transition-colors shadow-lg"
               >
                 Book a demo
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -326,20 +300,21 @@ export default function ToolTrackingSoftware() {
           </p>
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
-              to="/get-started?plan=trial"
+              to="/#pricing"
               className="bg-white hover:bg-gray-100 text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
             >
               Start your free trial
             </Link>
-            <a
-              href="mailto:brockcoburn@smartertracks.com"
+            <Link
+              to="/#contact"
               className="bg-blue-500 hover:bg-blue-400 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-flex items-center justify-center"
             >
               Schedule a demo
-            </a>
+            </Link>
           </div>
         </div>
       </section>
+      <MarketingFooter />
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { setPageMeta } from '../lib/seo'
+import MarketingHeader from '../components/MarketingHeader'
+import MarketingFooter from '../components/MarketingFooter'
 
 export default function Landing() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
@@ -21,38 +23,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-gray-900">Smarter Tracks Tool Tracking Software</h1>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link
-                to="/tool-tracking-software"
-                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Tool Tracking
-              </Link>
-              <Link
-                to="/login"
-                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Login
-              </Link>
-              <Link
-                to="/signup"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-              >
-                Sign Up
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+      <MarketingHeader />
 
       {/* Hero Section */}
       <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28">
@@ -437,55 +408,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h4 className="text-2xl font-bold mb-4">Smarter Tracks</h4>
-            <p className="text-gray-400 mb-8">
-              Professional tool management for modern teams.
-            </p>
-            <div className="flex justify-center space-x-6">
-              <Link to="/login" className="text-gray-400 hover:text-white transition-colors">
-                Login
-              </Link>
-              <Link to="/signup" className="text-gray-400 hover:text-white transition-colors">
-                Sign Up
-              </Link>
-              <Link to="/tool-tracking-software" className="text-gray-400 hover:text-white transition-colors">
-                Tool Tracking Software
-              </Link>
-              <Link to="/construction-tool-management" className="text-gray-400 hover:text-white transition-colors">
-                Construction Tool Management
-              </Link>
-              <Link to="/hvac-tool-tracking" className="text-gray-400 hover:text-white transition-colors">
-                HVAC Tool Tracking
-              </Link>
-              <Link to="/tool-inventory-software" className="text-gray-400 hover:text-white transition-colors">
-                Tool Inventory Software
-              </Link>
-              <Link to="/tool-checkout-system" className="text-gray-400 hover:text-white transition-colors">
-                Tool Checkout System
-              </Link>
-              <a href="mailto:brockcoburn@smartertracks.com" className="text-gray-400 hover:text-white transition-colors">
-                Contact
-              </a>
-              <Link to="/privacy-policy" className="text-gray-400 hover:text-white transition-colors">
-                Privacy Policy
-              </Link>
-              <Link to="/terms-and-conditions" className="text-gray-400 hover:text-white transition-colors">
-                Terms & Conditions
-              </Link>
-              <Link to="/account-deletion" className="text-gray-400 hover:text-white transition-colors">
-                Account Deletion
-              </Link>
-            </div>
-            <div className="mt-8 pt-8 border-t border-gray-800 text-gray-400">
-              <p>&copy; 2024 Smarter Tracks. All rights reserved.</p>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   )
 } 
