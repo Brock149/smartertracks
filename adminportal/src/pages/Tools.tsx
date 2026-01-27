@@ -109,8 +109,18 @@ export default function Tools() {
       )
       .subscribe()
 
+    const handleReconnectRefresh = () => {
+      fetchTools()
+    }
+
+    // Refresh data when the browser regains connectivity or focus
+    window.addEventListener('online', handleReconnectRefresh)
+    window.addEventListener('focus', handleReconnectRefresh)
+
     // Cleanup subscription on unmount
     return () => {
+      window.removeEventListener('online', handleReconnectRefresh)
+      window.removeEventListener('focus', handleReconnectRefresh)
       subscription.unsubscribe()
     }
   }, [])
