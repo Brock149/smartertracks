@@ -455,6 +455,12 @@ export default function Landing() {
               <Link to="/hvac-tool-tracking" className="text-gray-400 hover:text-white transition-colors">
                 HVAC Tool Tracking
               </Link>
+              <Link to="/tool-inventory-software" className="text-gray-400 hover:text-white transition-colors">
+                Tool Inventory Software
+              </Link>
+              <Link to="/tool-checkout-system" className="text-gray-400 hover:text-white transition-colors">
+                Tool Checkout System
+              </Link>
               <a href="mailto:brockcoburn@smartertracks.com" className="text-gray-400 hover:text-white transition-colors">
                 Contact
               </a>

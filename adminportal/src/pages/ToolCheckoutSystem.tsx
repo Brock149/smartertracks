@@ -4,24 +4,24 @@ import { setPageMeta } from '../lib/seo'
 
 const faqItems = [
   {
-    question: 'What is construction tool tracking software?',
+    question: 'What is a tool checkout system?',
     answer:
-      'Construction tool tracking software assigns tools to crews, jobsites, or vehicles and records transfers so tools stay accountable.',
+      'A tool checkout system assigns tools to a person, crew, or vehicle and records checkouts and returns so nothing goes missing.',
   },
   {
-    question: 'How does it help with jobsite loss?',
+    question: 'Can techs check tools in and out from a phone?',
     answer:
-      'It records custody and makes audits fast, so missing tools are found before they disappear.',
+      'Yes. Smarter Tracks lets crews scan barcodes or QR codes to check tools in and out from any phone.',
   },
   {
-    question: 'Can foremen use it in the field?',
+    question: 'How does it help with accountability?',
     answer:
-      'Yes. Crews can scan tools with a phone to check them in and out.',
+      'Every checkout creates a record of who had the tool and when, so teams can resolve issues quickly.',
   },
   {
-    question: 'Does it work for multiple jobsites?',
+    question: 'Does it work across multiple jobsites?',
     answer:
-      'Yes. You can assign tools to jobsites and track inventory by location.',
+      'Yes. You can assign tools to jobsites, vehicles, and crews, then audit inventory by location.',
   },
 ]
 
@@ -38,13 +38,13 @@ const faqJsonLd = {
   })),
 }
 
-export default function ConstructionToolManagement() {
+export default function ToolCheckoutSystem() {
   useEffect(() => {
     setPageMeta({
-      title: 'Construction Tool Tracking Software | Smarter Tracks',
+      title: 'Tool Checkout System for Field Teams | Smarter Tracks',
       description:
-        'Construction tool tracking software for contractors. Track tools across jobsites, assign custody, run audits, and reduce tool loss.',
-      canonicalPath: '/construction-tool-management',
+        'Tool checkout system for contractors and field crews. Assign tools, scan checkouts, and track returns across jobsites.',
+      canonicalPath: '/tool-checkout-system',
     })
   }, [])
 
@@ -77,31 +77,27 @@ export default function ConstructionToolManagement() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
-              Construction tool tracking software
+              Tool checkout system
             </p>
             <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
-              Keep construction tools accountable on every jobsite.
+              Check tools out with accountability built in.
             </h2>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
-              Smarter Tracks is construction tool tracking software built for contractors and field
-              crews. Track tools across jobsites, assign custody, and run fast audits without the
-              spreadsheets.
-            </p>
-            <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-600">
-              Less time searching. Fewer missing tools. More jobs completed on schedule.
+              Smarter Tracks is a tool checkout system that records every handoff. Assign tools to
+              techs, scan checkouts, and track returns so tools stop disappearing.
             </p>
             <div className="mt-10 flex justify-center space-x-6">
               <Link
                 to="/get-started?plan=trial"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
               >
-                Try it for free
+                Start a free trial
               </Link>
               <a
                 href="mailto:brockcoburn@smartertracks.com"
                 className="bg-white hover:bg-gray-50 text-gray-900 px-8 py-3 rounded-lg text-lg font-semibold border border-gray-300 transition-colors shadow-lg"
               >
-                Talk to sales
+                Book a demo
               </a>
             </div>
           </div>
@@ -110,89 +106,30 @@ export default function ConstructionToolManagement() {
 
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
-              Why construction teams lose tools
-            </h3>
-            <p className="mt-4 text-lg text-gray-600">
-              Shared tools move between crews, trucks, and jobsites without clear ownership.
-            </p>
-          </div>
-          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">Common jobsite problems</h4>
-              <ul className="mt-4 space-y-2 text-gray-600">
-                <li>✓ No clear assignment or custody</li>
-                <li>✓ Tools left behind at multi-day sites</li>
-                <li>✓ Duplicate purchases to replace missing gear</li>
-              </ul>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900">Assign custody</h3>
+              <p className="mt-3 text-gray-600">
+                Check tools out to a tech, crew, or vehicle so ownership is always clear.
+              </p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">What fixes it</h4>
-              <ul className="mt-4 space-y-2 text-gray-600">
-                <li>✓ Assign tools to crews, vehicles, or jobsites</li>
-                <li>✓ Scan tools in and out with phones</li>
-                <li>✓ Run audits before tools disappear</li>
-              </ul>
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900">Scan in seconds</h3>
+              <p className="mt-3 text-gray-600">
+                Use barcodes or QR codes to record checkouts and returns instantly.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900">Audit returns</h3>
+              <p className="mt-3 text-gray-600">
+                See overdue items and resolve missing tools before they turn into losses.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
       <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
-              Construction tool tracking built for the field
-            </h3>
-            <p className="mt-4 text-lg text-gray-600">
-              Smarter Tracks keeps every tool accountable without slowing crews down.
-            </p>
-          </div>
-          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <h4 className="text-lg font-semibold text-gray-900">Jobsite visibility</h4>
-              <p className="mt-3 text-gray-600">
-                Know what tools are on each site before crews roll out.
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <h4 className="text-lg font-semibold text-gray-900">Accountability</h4>
-              <p className="mt-3 text-gray-600">
-                See who last had each tool and when it moved.
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <h4 className="text-lg font-semibold text-gray-900">Maintenance tracking</h4>
-              <p className="mt-3 text-gray-600">
-                Log damage, schedule inspections, and keep tools in service.
-              </p>
-            </div>
-          </div>
-          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">Built for contractors</h4>
-              <ul className="mt-4 space-y-3 text-gray-600">
-                <li>✓ Track tools across multiple job sites</li>
-                <li>✓ Photos, serials, and asset tags</li>
-                <li>✓ Fast audits and exportable reports</li>
-                <li>✓ Mobile-friendly for field teams</li>
-              </ul>
-            </div>
-            <div className="rounded-2xl bg-white p-8 shadow-sm">
-              <h4 className="text-xl font-semibold text-gray-900">Simple for crews</h4>
-              <ul className="mt-4 space-y-3 text-gray-600">
-                <li>✓ Clear tool ownership and transfers</li>
-                <li>✓ Instant access with company codes</li>
-                <li>✓ Streamlined onboarding and permissions</li>
-                <li>✓ Scales with any company size</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
@@ -213,7 +150,7 @@ export default function ConstructionToolManagement() {
           <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <h3 className="text-2xl font-bold text-gray-900">Related tool tracking pages</h3>
             <p className="mt-3 text-gray-600">
-              Explore pages tailored to your trade.
+              Explore other pages in the tool tracking cluster.
             </p>
             <div className="mt-6 flex flex-wrap gap-4">
               <Link
@@ -223,22 +160,16 @@ export default function ConstructionToolManagement() {
                 Tool Tracking Software
               </Link>
               <Link
-                to="/hvac-tool-tracking"
-                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
-              >
-                HVAC Tool Tracking
-              </Link>
-              <Link
                 to="/tool-inventory-software"
                 className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
               >
                 Tool Inventory Software
               </Link>
               <Link
-                to="/tool-checkout-system"
+                to="/hvac-tool-tracking"
                 className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
               >
-                Tool Checkout System
+                HVAC Tool Tracking
               </Link>
             </div>
           </div>
@@ -248,10 +179,10 @@ export default function ConstructionToolManagement() {
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h3 className="text-3xl font-extrabold text-white">
-            Construction tool tracking that keeps crews productive.
+            A tool checkout system that crews will actually use.
           </h3>
           <p className="mt-4 text-xl text-blue-100">
-            Track tools, reduce losses, and keep projects moving with Smarter Tracks.
+            Track checkouts, keep tools accountable, and reduce loss fast.
           </p>
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link

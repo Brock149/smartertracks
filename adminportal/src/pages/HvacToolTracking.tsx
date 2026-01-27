@@ -2,6 +2,42 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { setPageMeta } from '../lib/seo'
 
+const faqItems = [
+  {
+    question: 'What is an HVAC tool tracking app?',
+    answer:
+      'An HVAC tool tracking app assigns tools to techs, trucks, or jobsites and records transfers so tools do not go missing.',
+  },
+  {
+    question: 'Can we track shared shop tools?',
+    answer:
+      'Yes. Smarter Tracks is built for shared shop tools like recovery machines, vac pumps, and gauges.',
+  },
+  {
+    question: 'How do HVAC techs use it in the field?',
+    answer:
+      'Techs scan barcodes or QR codes from a phone to check tools in and out.',
+  },
+  {
+    question: 'How fast can we set it up?',
+    answer:
+      'Most HVAC teams label tools and start tracking in an afternoon.',
+  },
+]
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer,
+    },
+  })),
+}
+
 export default function HvacToolTracking() {
   useEffect(() => {
     setPageMeta({
@@ -14,6 +50,7 @@ export default function HvacToolTracking() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
@@ -223,6 +260,22 @@ export default function HvacToolTracking() {
         </div>
       </section>
 
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {faqItems.map((item) => (
+              <div key={item.question} className="rounded-2xl bg-white p-6 shadow-sm">
+                <h4 className="text-lg font-semibold text-gray-900">{item.question}</h4>
+                <p className="mt-3 text-gray-600">{item.answer}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="py-12 bg-gray-50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -242,6 +295,18 @@ export default function HvacToolTracking() {
                 className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
               >
                 Construction Tool Management
+              </Link>
+              <Link
+                to="/tool-inventory-software"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Tool Inventory Software
+              </Link>
+              <Link
+                to="/tool-checkout-system"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Tool Checkout System
               </Link>
             </div>
           </div>

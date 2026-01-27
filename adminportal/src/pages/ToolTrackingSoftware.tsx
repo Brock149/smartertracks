@@ -2,6 +2,47 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { setPageMeta } from '../lib/seo'
 
+const faqItems = [
+  {
+    question: 'What is tool tracking software?',
+    answer:
+      'Tool tracking software assigns tools to people or locations and records transfers so you always know who has what.',
+  },
+  {
+    question: 'Does tool tracking work without GPS?',
+    answer:
+      'Yes. Smarter Tracks uses assignments and scans to show custody and location without GPS hardware.',
+  },
+  {
+    question: 'Can crews check tools in and out from a phone?',
+    answer:
+      'Yes. Techs can scan barcodes or QR codes to record checkouts and returns from any phone.',
+  },
+  {
+    question: 'How fast can we get started?',
+    answer:
+      'Most teams can label tools and start tracking the same day.',
+  },
+  {
+    question: 'Is there a built-in tool checkout system?',
+    answer:
+      'Yes. Every checkout is logged with a time and user so accountability is clear.',
+  },
+]
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer,
+    },
+  })),
+}
+
 export default function ToolTrackingSoftware() {
   useEffect(() => {
     setPageMeta({
@@ -14,6 +55,7 @@ export default function ToolTrackingSoftware() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
@@ -213,6 +255,22 @@ export default function ToolTrackingSoftware() {
         </div>
       </section>
 
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {faqItems.map((item) => (
+              <div key={item.question} className="rounded-2xl bg-white p-6 shadow-sm">
+                <h4 className="text-lg font-semibold text-gray-900">{item.question}</h4>
+                <p className="mt-3 text-gray-600">{item.answer}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="py-12 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -232,6 +290,18 @@ export default function ToolTrackingSoftware() {
                 className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
               >
                 Construction Tool Management
+              </Link>
+              <Link
+                to="/tool-inventory-software"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Tool Inventory Software
+              </Link>
+              <Link
+                to="/tool-checkout-system"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Tool Checkout System
               </Link>
             </div>
           </div>

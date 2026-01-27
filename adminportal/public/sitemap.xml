@@ -21,6 +21,16 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://www.smartertracks.com/tool-inventory-software</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://www.smartertracks.com/tool-checkout-system</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://www.smartertracks.com/privacy-policy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>

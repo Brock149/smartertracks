@@ -21,6 +21,8 @@ import AccountDeletion from './pages/AccountDeletion'
 import ToolTrackingSoftware from './pages/ToolTrackingSoftware'
 import ConstructionToolManagement from './pages/ConstructionToolManagement'
 import HvacToolTracking from './pages/HvacToolTracking'
+import ToolInventorySoftware from './pages/ToolInventorySoftware'
+import ToolCheckoutSystem from './pages/ToolCheckoutSystem'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -65,6 +67,8 @@ export default function App() {
         <Route path="/tool-tracking-software" element={<ToolTrackingSoftware />} />
         <Route path="/construction-tool-management" element={<ConstructionToolManagement />} />
         <Route path="/hvac-tool-tracking" element={<HvacToolTracking />} />
+        <Route path="/tool-inventory-software" element={<ToolInventorySoftware />} />
+        <Route path="/tool-checkout-system" element={<ToolCheckoutSystem />} />
         <Route
           path="/admin"
           element={
