@@ -184,6 +184,31 @@ export default function ConstructionToolManagement() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">Construction ROI</h3>
+            <p className="mt-4 text-lg text-gray-600">
+              Most construction teams see fewer losses, faster audits, and less downtime.
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl bg-white p-6 shadow-sm text-center">
+              <p className="text-3xl font-extrabold text-gray-900">70–90%</p>
+              <p className="mt-2 text-gray-600">Fewer missing tools</p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm text-center">
+              <p className="text-3xl font-extrabold text-gray-900">$5,000–$20,000</p>
+              <p className="mt-2 text-gray-600">Saved in the first year</p>
+            </div>
+            <div className="rounded-2xl bg-white p-6 shadow-sm text-center">
+              <p className="text-3xl font-extrabold text-gray-900">Less downtime</p>
+              <p className="mt-2 text-gray-600">Fewer emergency tool runs</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
             <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
