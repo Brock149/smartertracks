@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { setPageMeta } from '../lib/seo'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
+import DemoVideoSection from '../components/DemoVideoSection'
+import PricingSection from '../components/PricingSection'
 
 const faqItems = [
   {
@@ -41,6 +43,8 @@ const faqJsonLd = {
 }
 
 export default function ToolCheckoutSystem() {
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
+
   useEffect(() => {
     setPageMeta({
       title: 'Tool Checkout System for Field Teams | Smarter Tracks',
@@ -85,6 +89,9 @@ export default function ToolCheckoutSystem() {
           </div>
         </div>
       </section>
+
+      <DemoVideoSection />
+      <PricingSection billingCycle={billingCycle} onBillingCycleChange={setBillingCycle} />
 
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
