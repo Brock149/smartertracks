@@ -418,13 +418,26 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     fetchNotifications();
   };
 
+  const handleAccountPress = () => {
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('Account');
+    } else {
+      navigation.navigate('Account');
+    }
+  };
+
   const handleToolPress = (tool: Tool) => {
     navigation.navigate('ToolDetail', { tool });
   };
 
   const renderToolItem = ({ item }: { item: Tool }) => {
     // Check if this tool has a notification and hasn't been dismissed
-    const notification = notifications.find(n => n.tool_id === item.id && !dismissedNotifications.has(n.id));
+    const notification = notifications.find(n => {
+      if (n.tool_id !== item.id) return false;
+      if (n.hasIssues) return true;
+      return !dismissedNotifications.has(n.id);
+    });
     const isExpanded = expandedNotifications.has(item.id);
 
     return (
@@ -434,10 +447,10 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
       ]}>
         {/* Notification Banner - if this tool was recently received */}
         {notification && (
-          <View style={[
-            styles.toolNotificationBanner,
-            notification.hasIssues && styles.toolNotificationBannerWithIssues
-          ]}>
+            <View style={[
+              styles.toolNotificationBanner,
+              notification.hasIssues && styles.toolNotificationBannerWithIssues
+            ]}>
             <View style={styles.notificationHeader}>
               <Ionicons 
                 name={notification.hasIssues ? "warning" : "gift"} 
@@ -452,36 +465,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
                   </Text>
                 )}
               </Text>
-            </View>
-
-            {/* Only show expanded section for notifications with issues */}
-            {isExpanded && notification.hasIssues && notification.reports.length > 0 && (
-              <View style={styles.notificationExpanded}>
-                <Text style={styles.notificationIssueHeader}>
-                  🔍 Reported Issues:
-                </Text>
-                {notification.reports.map((report, index) => (
-                  <View key={report.id} style={styles.reportItem}>
-                                            <View style={styles.reportHeader}>
-                          <Text style={styles.reportStatus}>
-                            {report.status === 'Damaged/Needs Repair' ? '🔧' : '📦'} {report.item_name} - {report.status}
-                          </Text>
-                          <Text style={styles.reportDate}>
-                            {new Date(report.created_at).toLocaleDateString()}
-                          </Text>
-                        </View>
-                                            {report.comments && (
-                          <Text style={styles.reportDetails}>"{report.comments}"</Text>
-                        )}
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <View style={styles.notificationActions}>
-              {/* Only show expand/collapse for notifications with issues */}
               {notification.hasIssues && notification.reports.length > 0 && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.notificationActionButton}
                   onPress={() => {
                     setExpandedNotifications(prev => {
@@ -502,37 +487,64 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
                   />
                 </TouchableOpacity>
               )}
+            </View>
 
-              <TouchableOpacity 
-                style={[styles.notificationActionButton, styles.acceptButton]}
-                onPress={async () => {
-                  // Accept notification - dismiss ALL notifications for this tool
-                  await dismissNotificationsByTool(notification.tool_id);
-                  setExpandedNotifications(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(item.id);
-                    return newSet;
-                  });
-                }}
-              >
-                <Ionicons name="checkmark" size={16} color="#059669" />
-                <Text style={styles.acceptButtonText}>Accept</Text>
-              </TouchableOpacity>
+            {/* Only show expanded section for notifications with issues */}
+            {isExpanded && notification.hasIssues && notification.reports.length > 0 && (
+              <View style={styles.notificationExpanded}>
+                {notification.reports.map((report, index) => (
+                  <View key={report.id} style={styles.reportItem}>
+                    <View style={styles.reportHeader}>
+                      <Text style={styles.reportStatus}>
+                        {report.status === 'Damaged/Needs Repair' ? '🔧' : '📦'} {report.item_name} - {report.status}
+                      </Text>
+                      <Text style={styles.reportDate}>
+                        {new Date(report.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    {report.comments && (
+                      <Text style={styles.reportDetails}>"{report.comments}"</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
 
-              <TouchableOpacity 
-                style={styles.notificationActionButton}
-                onPress={async () => {
-                  // Dismiss notification - remove ALL notifications for this tool
-                  await dismissNotificationsByTool(notification.tool_id);
-                  setExpandedNotifications(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(item.id);
-                    return newSet;
-                  });
-                }}
-              >
-                <Ionicons name="close" size={16} color="#9ca3af" />
-              </TouchableOpacity>
+            <View style={styles.notificationActions}>
+              {!notification.hasIssues && (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.notificationActionButton, styles.acceptButton]}
+                    onPress={async () => {
+                      // Accept notification - dismiss ALL notifications for this tool
+                      await dismissNotificationsByTool(notification.tool_id);
+                      setExpandedNotifications(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(item.id);
+                        return newSet;
+                      });
+                    }}
+                  >
+                    <Ionicons name="checkmark" size={16} color="#059669" />
+                    <Text style={styles.acceptButtonText}>Accept</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.notificationActionButton}
+                    onPress={async () => {
+                      // Dismiss notification - remove ALL notifications for this tool
+                      await dismissNotificationsByTool(notification.tool_id);
+                      setExpandedNotifications(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(item.id);
+                        return newSet;
+                      });
+                    }}
+                  >
+                    <Ionicons name="close" size={16} color="#9ca3af" />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         )}
@@ -631,10 +643,15 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Tools</Text>
-        <Text style={styles.subtitle}>
-          {filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''} assigned to you
-        </Text>
+        <View>
+          <Text style={styles.title}>My Tools</Text>
+          <Text style={styles.subtitle}>
+            {filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''} assigned to you
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>
+          <Ionicons name="person-circle-outline" size={28} color="#1f2937" />
+        </TouchableOpacity>
       </View>
 
 
@@ -707,6 +724,9 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24,
     paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
@@ -720,6 +740,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
+  },
+  accountButton: {
+    padding: 4,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -908,17 +931,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#10b981',
-    marginBottom: 8,
-    padding: 12,
+    marginBottom: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
   toolNotificationBannerWithIssues: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#f59e0b',
+    backgroundColor: '#fef2f2',
+    borderColor: '#dc2626',
   },
   notificationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
   notificationHeaderText: {
     fontSize: 14,
@@ -928,12 +951,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   notificationIssues: {
-    color: '#dc2626',
+    color: '#b91c1c',
     fontWeight: '600',
   },
   notificationExpanded: {
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
   },
@@ -948,34 +971,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '500',
   },
-  notificationIssueHeader: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginBottom: 8,
-  },
   reportItem: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#fee2e2',
     borderRadius: 6,
     padding: 8,
-    marginBottom: 6,
+    marginBottom: 4,
     borderLeftWidth: 3,
-    borderLeftColor: '#dc2626',
+    borderLeftColor: '#b91c1c',
   },
   reportHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
   },
   reportStatus: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#dc2626',
+    color: '#b91c1c',
   },
   reportDate: {
     fontSize: 12,
     color: '#6b7280',
+    alignSelf: 'flex-end',
   },
   reportDetails: {
     fontSize: 12,

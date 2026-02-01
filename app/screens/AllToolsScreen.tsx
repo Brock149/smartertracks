@@ -401,6 +401,15 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
     fetchTools();
   };
 
+  const handleAccountPress = () => {
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('Account');
+    } else {
+      navigation.navigate('Account');
+    }
+  };
+
   const handleToolPress = (tool: Tool) => {
     navigation.navigate('ToolDetail', { tool });
   };
@@ -564,10 +573,15 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Text style={styles.title}>All Tools</Text>
-        <Text style={styles.subtitle}>
-          {(totalToolsCount ?? filteredTools.length)} tool{(totalToolsCount ?? filteredTools.length) !== 1 ? 's' : ''} in company
-        </Text>
+        <View>
+          <Text style={styles.title}>All Tools</Text>
+          <Text style={styles.subtitle}>
+            {(totalToolsCount ?? filteredTools.length)} tool{(totalToolsCount ?? filteredTools.length) !== 1 ? 's' : ''} in company
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>
+          <Ionicons name="person-circle-outline" size={28} color="#1f2937" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
@@ -667,6 +681,9 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24,
     paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
@@ -680,6 +697,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
+  },
+  accountButton: {
+    padding: 4,
   },
   searchContainer: {
     flexDirection: 'row',
