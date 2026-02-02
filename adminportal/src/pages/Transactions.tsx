@@ -868,15 +868,15 @@ export default function Transactions() {
                                 {items.map((item) => (
                                   <div
                                     key={item.id}
-                                    className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border"
+                                    className="flex flex-col gap-3 bg-gray-50 p-3 rounded-lg border"
                                   >
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-lg">{item.item_name}</span>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <span className="text-lg break-words">{item.item_name}</span>
                                       {item.required && (
                                         <span className="text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-6">
+                                    <div className="flex flex-wrap items-center gap-6">
                                       <label className="flex items-center gap-2 text-lg text-gray-700">
                                         <input
                                           type="checkbox"
@@ -892,7 +892,7 @@ export default function Transactions() {
                                           }}
                                           className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
                                         />
-                                        <span>Damaged/Needs Repair</span>
+                                        <span className="whitespace-normal">Damaged/Needs Repair</span>
                                       </label>
                                       <label className="flex items-center gap-2 text-lg text-gray-700">
                                         <input
@@ -909,7 +909,7 @@ export default function Transactions() {
                                           }}
                                           className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
                                         />
-                                        <span>Needs Replacement/Resupply</span>
+                                        <span className="whitespace-normal">Needs Replacement/Resupply</span>
                                       </label>
                                     </div>
                                   </div>
