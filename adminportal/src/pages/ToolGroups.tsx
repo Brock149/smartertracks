@@ -12,6 +12,8 @@ type ToolSummary = {
   id: string
   number: string
   name: string
+  owner_name?: string | null
+  location?: string | null
 }
 
 type GroupMember = {
@@ -24,6 +26,7 @@ export default function ToolGroups() {
   const [selectedGroup, setSelectedGroup] = useState<ToolGroup | null>(null)
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([])
   const [tools, setTools] = useState<ToolSummary[]>([])
+  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -33,10 +36,19 @@ export default function ToolGroups() {
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([])
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [isTransferOpen, setIsTransferOpen] = useState(false)
+  const [transferLoading, setTransferLoading] = useState(false)
+  const [transferForm, setTransferForm] = useState({
+    to_user_id: '',
+    location: '',
+    stored_at: '',
+    notes: '',
+  })
 
   useEffect(() => {
     fetchGroups()
     fetchTools()
+    fetchUsers()
   }, [])
 
   async function fetchGroups() {
@@ -82,7 +94,49 @@ export default function ToolGroups() {
         tool_id: row.tool_id,
         tools: Array.isArray(row.tools) ? row.tools[0] ?? null : row.tools ?? null,
       }))
-      setGroupMembers(normalized)
+
+      const toolIds = normalized.map((row: GroupMember) => row.tool_id)
+      const [toolsData, txData] = await Promise.all([
+        supabase
+          .from('tools')
+          .select('id, number, name, owner:users!tools_current_owner_fkey(name)')
+          .in('id', toolIds),
+        supabase
+          .from('tool_transactions')
+          .select('tool_id, location, timestamp')
+          .in('tool_id', toolIds)
+          .order('timestamp', { ascending: false }),
+      ])
+
+      if (toolsData.error) throw toolsData.error
+      if (txData.error) throw txData.error
+
+      const latestLocation = new Map<string, string | null>()
+      ;(txData.data || []).forEach((tx: any) => {
+        if (!latestLocation.has(tx.tool_id)) {
+          latestLocation.set(tx.tool_id, tx.location ?? null)
+        }
+      })
+
+      const toolMap = new Map(
+        (toolsData.data || []).map((tool: any) => [
+          tool.id,
+          {
+            id: tool.id,
+            number: tool.number,
+            name: tool.name,
+            owner_name: tool.owner?.name ?? null,
+            location: latestLocation.get(tool.id) ?? null,
+          } as ToolSummary,
+        ])
+      )
+
+      setGroupMembers(
+        normalized.map((row: GroupMember) => ({
+          tool_id: row.tool_id,
+          tools: toolMap.get(row.tool_id) ?? row.tools ?? null,
+        }))
+      )
     } catch (err: any) {
       setError(err.message || 'Failed to load group members')
     }
@@ -100,6 +154,20 @@ export default function ToolGroups() {
       setTools(data || [])
     } catch (err: any) {
       setError(err.message || 'Failed to load tools')
+    }
+  }
+
+  async function fetchUsers() {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name')
+        .order('name')
+
+      if (error) throw error
+      setUsers(data || [])
+    } catch (err: any) {
+      setError(err.message || 'Failed to load users')
     }
   }
 
@@ -202,6 +270,61 @@ export default function ToolGroups() {
     }
   }
 
+  async function handleTransferGroup() {
+    if (!selectedGroup) return
+    if (!transferForm.to_user_id || !transferForm.location.trim() || !transferForm.stored_at.trim()) {
+      setError('Please fill in recipient, location, and stored at')
+      return
+    }
+
+    const toolIds = groupMembers.map((member) => member.tool_id).filter(Boolean)
+    if (toolIds.length === 0) {
+      setError('No tools in this group to transfer')
+      return
+    }
+
+    try {
+      setTransferLoading(true)
+      setError(null)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setError('You must be logged in to transfer tools')
+        return
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transactions-batch`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            tool_ids: toolIds,
+            to_user_id: transferForm.to_user_id,
+            location: transferForm.location.trim(),
+            stored_at: transferForm.stored_at.trim(),
+            notes: transferForm.notes.trim() || `Group transfer: ${selectedGroup.name}`,
+          }),
+        }
+      )
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to transfer tools')
+      }
+
+      setIsTransferOpen(false)
+      setTransferForm({ to_user_id: '', location: '', stored_at: '', notes: '' })
+      await fetchGroupMembers(selectedGroup.id)
+    } catch (err: any) {
+      setError(err.message || 'Failed to transfer tools')
+    } finally {
+      setTransferLoading(false)
+    }
+  }
+
   const membersByToolId = useMemo(() => {
     return new Set(groupMembers.map((member) => member.tool_id))
   }, [groupMembers])
@@ -291,6 +414,12 @@ export default function ToolGroups() {
                       Add Tools
                     </button>
                     <button
+                      onClick={() => setIsTransferOpen(true)}
+                      className="px-3 py-2 rounded-md border border-blue-200 text-blue-700 hover:bg-blue-50"
+                    >
+                      Transfer Group
+                    </button>
+                    <button
                       onClick={() => setDeleteGroupId(selectedGroup.id)}
                       className="px-3 py-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
                     >
@@ -317,6 +446,12 @@ export default function ToolGroups() {
                             </div>
                             <div className="text-sm text-gray-500">
                               #{member.tools?.number || 'N/A'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Owner: {member.tools?.owner_name || 'Unassigned'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Location: {member.tools?.location || 'Unknown'}
                             </div>
                           </div>
                           <button
@@ -500,6 +635,81 @@ export default function ToolGroups() {
                 disabled={actionLoading}
               >
                 Delete Group
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isTransferOpen && selectedGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => setIsTransferOpen(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="p-6 border-b">
+              <h3 className="text-xl font-semibold">Transfer Group</h3>
+              <p className="text-sm text-gray-500 mt-1">{selectedGroup.name}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
+                <select
+                  value={transferForm.to_user_id}
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, to_user_id: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select recipient</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={transferForm.location}
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, location: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stored At</label>
+                <input
+                  type="text"
+                  value={transferForm.stored_at}
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, stored_at: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={transferForm.notes}
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsTransferOpen(false)}
+                className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTransferGroup}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={transferLoading}
+              >
+                {transferLoading ? 'Transferring...' : 'Transfer Group'}
               </button>
             </div>
           </div>
