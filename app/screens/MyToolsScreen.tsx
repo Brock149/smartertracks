@@ -631,7 +631,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
           <Text style={styles.loadingText}>Loading your tools...</Text>
@@ -641,7 +641,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>My Tools</Text>

@@ -253,7 +253,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const displayName = userName || 'Account';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View style={styles.headerSpacer} />
         <View style={styles.headerTitleContainer}>
