@@ -52,11 +52,14 @@ export default function ToolGroups() {
     notes: '',
   })
   const [reportIssue, setReportIssue] = useState(false)
-  const [reportToolId, setReportToolId] = useState('')
-  const [reportChecklistItems, setReportChecklistItems] = useState<ChecklistItem[]>([])
-  const [reportChecklistItemId, setReportChecklistItemId] = useState('')
-  const [reportStatus, setReportStatus] = useState<'damaged' | 'replace' | ''>('')
-  const [reportComments, setReportComments] = useState('')
+  const [reportChecklistItemsByTool, setReportChecklistItemsByTool] = useState<Record<string, ChecklistItem[]>>({})
+  const [reportRows, setReportRows] = useState<Array<{
+    id: string
+    tool_id: string
+    checklist_item_id: string
+    status: 'damaged' | 'replace' | ''
+    comments: string
+  }>>([])
 
   useEffect(() => {
     fetchGroups()
@@ -65,13 +68,11 @@ export default function ToolGroups() {
   }, [])
 
   useEffect(() => {
-    if (!reportIssue || !reportToolId) {
-      setReportChecklistItems([])
-      setReportChecklistItemId('')
-      return
+    if (!reportIssue) {
+      setReportChecklistItemsByTool({})
+      setReportRows([])
     }
-    fetchChecklistForTool(reportToolId)
-  }, [reportIssue, reportToolId])
+  }, [reportIssue])
 
   async function fetchGroups() {
     try {
@@ -202,7 +203,10 @@ export default function ToolGroups() {
         .order('item_name')
 
       if (error) throw error
-      setReportChecklistItems(data || [])
+      setReportChecklistItemsByTool(prev => ({
+        ...prev,
+        [toolId]: data || [],
+      }))
     } catch (err: any) {
       setError(err.message || 'Failed to load checklist items')
     }
@@ -321,8 +325,13 @@ export default function ToolGroups() {
     }
 
     if (reportIssue) {
-      if (!reportToolId || !reportChecklistItemId || !reportStatus) {
-        setError('Please choose the tool, checklist item, and status for the report')
+      if (reportRows.length === 0) {
+        setError('Please add at least one report')
+        return
+      }
+      const invalid = reportRows.some((row) => !row.tool_id || !row.checklist_item_id || !row.status)
+      if (invalid) {
+        setError('Please complete all report rows')
         return
       }
     }
@@ -351,14 +360,14 @@ export default function ToolGroups() {
             stored_at: transferForm.stored_at.trim(),
             notes: transferForm.notes.trim() || `Group transfer: ${selectedGroup.name}`,
             checklist_reports: reportIssue
-              ? [{
-                  tool_id: reportToolId,
-                  checklist_item_id: reportChecklistItemId,
-                  status: reportStatus === 'damaged'
+              ? reportRows.map((row) => ({
+                  tool_id: row.tool_id,
+                  checklist_item_id: row.checklist_item_id,
+                  status: row.status === 'damaged'
                     ? 'Damaged/Needs Repair'
                     : 'Needs Replacement/Resupply',
-                  comments: reportComments.trim() || null,
-                }]
+                  comments: row.comments.trim() || null,
+                }))
               : [],
           }),
         }
@@ -372,11 +381,8 @@ export default function ToolGroups() {
       setIsTransferOpen(false)
       setTransferForm({ to_user_id: '', location: '', stored_at: '', notes: '' })
       setReportIssue(false)
-      setReportToolId('')
-      setReportChecklistItems([])
-      setReportChecklistItemId('')
-      setReportStatus('')
-      setReportComments('')
+      setReportChecklistItemsByTool({})
+      setReportRows([])
       await fetchGroupMembers(selectedGroup.id)
     } catch (err: any) {
       setError(err.message || 'Failed to transfer tools')
@@ -770,11 +776,8 @@ export default function ToolGroups() {
                       const next = e.target.checked
                       setReportIssue(next)
                       if (!next) {
-                        setReportToolId('')
-                        setReportChecklistItems([])
-                        setReportChecklistItemId('')
-                        setReportStatus('')
-                        setReportComments('')
+                        setReportChecklistItemsByTool({})
+                        setReportRows([])
                       }
                     }}
                   />
@@ -783,58 +786,113 @@ export default function ToolGroups() {
 
                 {reportIssue && (
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tool</label>
-                      <select
-                        value={reportToolId}
-                        onChange={(e) => setReportToolId(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select tool</option>
-                        {groupMembers.map((member) => (
-                          <option key={member.tool_id} value={member.tool_id}>
-                            {member.tools?.name || 'Unknown'} #{member.tools?.number || 'N/A'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Checklist Item</label>
-                      <select
-                        value={reportChecklistItemId}
-                        onChange={(e) => setReportChecklistItemId(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={!reportToolId}
-                      >
-                        <option value="">Select item</option>
-                        {reportChecklistItems.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.item_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                      <select
-                        value={reportStatus}
-                        onChange={(e) => setReportStatus(e.target.value as 'damaged' | 'replace' | '')}
-                        className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select status</option>
-                        <option value="damaged">Damaged / Needs Repair</option>
-                        <option value="replace">Needs Replacement / Resupply</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Comments</label>
-                      <textarea
-                        value={reportComments}
-                        onChange={(e) => setReportComments(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows={2}
-                      />
-                    </div>
+                    {reportRows.length === 0 && (
+                      <div className="text-sm text-gray-500">Add a report to get started.</div>
+                    )}
+                    {reportRows.map((row, idx) => {
+                      const items = reportChecklistItemsByTool[row.tool_id] || []
+                      return (
+                        <div key={row.id} className="rounded-md border border-gray-200 bg-white p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-medium text-gray-700">Report {idx + 1}</div>
+                            <button
+                              type="button"
+                              onClick={() => setReportRows(prev => prev.filter(r => r.id !== row.id))}
+                              className="text-sm text-red-600 hover:text-red-800"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Tool</label>
+                            <select
+                              value={row.tool_id}
+                              onChange={async (e) => {
+                                const toolId = e.target.value
+                                setReportRows(prev => prev.map(r => r.id === row.id ? {
+                                  ...r,
+                                  tool_id: toolId,
+                                  checklist_item_id: '',
+                                } : r))
+                                if (toolId && !reportChecklistItemsByTool[toolId]) {
+                                  await fetchChecklistForTool(toolId)
+                                }
+                              }}
+                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Select tool</option>
+                              {groupMembers.map((member) => (
+                                <option key={member.tool_id} value={member.tool_id}>
+                                  {member.tools?.name || 'Unknown'} #{member.tools?.number || 'N/A'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Checklist Item</label>
+                            <select
+                              value={row.checklist_item_id}
+                              onChange={(e) => setReportRows(prev => prev.map(r => r.id === row.id ? {
+                                ...r,
+                                checklist_item_id: e.target.value,
+                              } : r))}
+                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled={!row.tool_id}
+                            >
+                              <option value="">Select item</option>
+                              {items.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.item_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select
+                              value={row.status}
+                              onChange={(e) => setReportRows(prev => prev.map(r => r.id === row.id ? {
+                                ...r,
+                                status: e.target.value as 'damaged' | 'replace' | '',
+                              } : r))}
+                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Select status</option>
+                              <option value="damaged">Damaged / Needs Repair</option>
+                              <option value="replace">Needs Replacement / Resupply</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                            <textarea
+                              value={row.comments}
+                              onChange={(e) => setReportRows(prev => prev.map(r => r.id === row.id ? {
+                                ...r,
+                                comments: e.target.value,
+                              } : r))}
+                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setReportRows(prev => ([
+                        ...prev,
+                        {
+                          id: `${Date.now()}-${Math.random()}`,
+                          tool_id: '',
+                          checklist_item_id: '',
+                          status: '',
+                          comments: '',
+                        },
+                      ]))}
+                      className="text-sm text-blue-700 hover:text-blue-900"
+                    >
+                      + Report another tool
+                    </button>
                   </div>
                 )}
               </div>

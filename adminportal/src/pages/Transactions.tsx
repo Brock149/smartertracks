@@ -55,8 +55,9 @@ export default function Transactions() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [tools, setTools] = useState<Tool[]>([])
   const [users, setUsers] = useState<User[]>([])
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
-  const [loadingChecklist, setLoadingChecklist] = useState(false)
+  const [checklistItemsByTool, setChecklistItemsByTool] = useState<Record<string, ChecklistItem[]>>({})
+  const [checklistStatusByTool, setChecklistStatusByTool] = useState<Record<string, Record<string, null | 'damaged' | 'replace'>>>({})
+  const [checklistLoadingByTool, setChecklistLoadingByTool] = useState<Record<string, boolean>>({})
   const [newTransaction, setNewTransaction] = useState<{
     tool_id: string
     from_user_id: string | null
@@ -73,7 +74,7 @@ export default function Transactions() {
     notes: ''
   })
   const [currentToolHolder, setCurrentToolHolder] = useState<{ id: string; name: string } | null>(null)
-  const [checklistStatus, setChecklistStatus] = useState<{ [itemId: string]: null | 'damaged' | 'replace' }>({})
+  const [selectedTools, setSelectedTools] = useState<Tool[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   // Searchable selects state
@@ -153,16 +154,6 @@ export default function Transactions() {
     }
   }
 
-  // Keep search inputs in sync when selection changes
-  useEffect(() => {
-    if (newTransaction.tool_id) {
-      const t = tools.find(t => t.id === newTransaction.tool_id)
-      if (t) setToolSearchTerm(`#${t.number} - ${t.name}`)
-    } else {
-      setToolSearchTerm('')
-    }
-  }, [newTransaction.tool_id, tools])
-
   useEffect(() => {
     if (newTransaction.to_user_id) {
       const u = users.find(u => u.id === newTransaction.to_user_id)
@@ -200,17 +191,33 @@ export default function Transactions() {
         return
       }
 
-      // Build checklist_reports array from checklistStatus
-      const checklist_reports = Object.entries(checklistStatus)
-        .filter(([_, status]) => status)
-        .map(([itemId, status]) => ({
-          checklist_item_id: itemId,
-          status: status === 'damaged' ? 'Damaged/Needs Repair' : status === 'replace' ? 'Needs Replacement/Resupply' : undefined
-        }))
-        .filter(r => r.status)
+      if (!newTransaction.to_user_id || !newTransaction.location.trim() || !newTransaction.stored_at.trim()) {
+        setError('Please fill in tool, recipient, location, and stored at')
+        return
+      }
+
+      if (selectedTools.length === 0) {
+        setError('Please select at least one tool')
+        return
+      }
+
+      const checklist_reports = Object.entries(checklistStatusByTool).flatMap(([toolId, statuses]) =>
+        Object.entries(statuses)
+          .filter(([_, status]) => status)
+          .map(([itemId, status]) => ({
+            tool_id: toolId,
+            checklist_item_id: itemId,
+            status: status === 'damaged'
+              ? 'Damaged/Needs Repair'
+              : status === 'replace'
+              ? 'Needs Replacement/Resupply'
+              : undefined
+          }))
+          .filter(r => r.status)
+      )
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transaction`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transactions-batch`,
         {
           method: 'POST',
           headers: {
@@ -218,8 +225,12 @@ export default function Transactions() {
             'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
-            ...newTransaction,
-            checklist_reports
+            tool_ids: selectedTools.map(tool => tool.id),
+            to_user_id: newTransaction.to_user_id,
+            location: newTransaction.location,
+            stored_at: newTransaction.stored_at,
+            notes: newTransaction.notes,
+            checklist_reports,
           })
         }
       )
@@ -239,7 +250,11 @@ export default function Transactions() {
         stored_at: '',
         notes: ''
       })
-      setChecklistStatus({})
+      setSelectedTools([])
+      setToolSearchTerm('')
+      setChecklistItemsByTool({})
+      setChecklistStatusByTool({})
+      setChecklistLoadingByTool({})
       setIsCreateModalOpen(false)
       fetchTransactions() // Refresh the transactions list
     } catch (error: any) {
@@ -285,7 +300,7 @@ export default function Transactions() {
   // Add function to fetch checklist items
   async function fetchChecklist(toolId: string) {
     try {
-      setLoadingChecklist(true)
+      setChecklistLoadingByTool(prev => ({ ...prev, [toolId]: true }))
       const { data, error } = await supabase
         .from('tool_checklists')
         .select('*')
@@ -293,11 +308,14 @@ export default function Transactions() {
         .order('item_name', { ascending: true })
 
       if (error) throw error
-      setChecklistItems(data || [])
+      setChecklistItemsByTool(prev => ({
+        ...prev,
+        [toolId]: data || [],
+      }))
     } catch (error: any) {
       console.error('Error fetching checklist:', error)
     } finally {
-      setLoadingChecklist(false)
+      setChecklistLoadingByTool(prev => ({ ...prev, [toolId]: false }))
     }
   }
 
@@ -646,16 +664,10 @@ export default function Transactions() {
                     value={toolSearchTerm}
                     onChange={(e) => {
                       setToolSearchTerm(e.target.value)
-                      if (newTransaction.tool_id) {
-                        setNewTransaction(prev => ({ ...prev, tool_id: '' }))
-                        setCurrentToolHolder(null)
-                        setChecklistItems([])
-                      }
                     }}
                     onFocus={() => setShowToolResults(true)}
                     onBlur={() => setTimeout(() => setShowToolResults(false), 150)}
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
                   />
                   {showToolResults && (
                     <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-72 overflow-y-auto">
@@ -669,10 +681,18 @@ export default function Transactions() {
                             className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
-                              setNewTransaction(prev => ({ ...prev, tool_id: tool.id }))
-                              setToolSearchTerm(`#${tool.number} - ${tool.name}`)
+                              setSelectedTools(prev => {
+                                if (prev.find(t => t.id === tool.id)) return prev
+                                const next = [...prev, tool]
+                                if (next.length === 1) {
+                                  fetchCurrentToolHolder(tool.id)
+                                } else {
+                                  setCurrentToolHolder({ id: '', name: 'Multiple tools selected' })
+                                }
+                                return next
+                              })
+                              setToolSearchTerm('')
                               setShowToolResults(false)
-                              fetchCurrentToolHolder(tool.id)
                               fetchChecklist(tool.id)
                             }}
                           >
@@ -684,6 +704,67 @@ export default function Transactions() {
                     </div>
                   )}
                 </div>
+
+                {selectedTools.length > 0 && (
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-base font-medium text-gray-700">Selected Tools ({selectedTools.length})</div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolSearchTerm('')
+                          setShowToolResults(true)
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        + Add another tool
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {selectedTools.map(tool => (
+                        <div key={tool.id} className="flex items-center justify-between bg-white px-3 py-2 rounded border">
+                          <div className="text-sm text-gray-800">
+                            <span className="font-medium">#{tool.number}</span> {tool.name}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTools(prev => {
+                                const next = prev.filter(t => t.id !== tool.id)
+                                if (next.length === 1) {
+                                  fetchCurrentToolHolder(next[0].id)
+                                } else if (next.length === 0) {
+                                  setCurrentToolHolder(null)
+                                } else {
+                                  setCurrentToolHolder({ id: '', name: 'Multiple tools selected' })
+                                }
+                                return next
+                              })
+                              setChecklistItemsByTool(prev => {
+                                const next = { ...prev }
+                                delete next[tool.id]
+                                return next
+                              })
+                              setChecklistStatusByTool(prev => {
+                                const next = { ...prev }
+                                delete next[tool.id]
+                                return next
+                              })
+                              setChecklistLoadingByTool(prev => {
+                                const next = { ...prev }
+                                delete next[tool.id]
+                                return next
+                              })
+                            }}
+                            className="text-sm text-red-600 hover:text-red-800"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block font-medium mb-2 text-lg">From User</label>
@@ -768,62 +849,81 @@ export default function Transactions() {
                 </div>
 
                 {/* Add Checklist Display */}
-                {newTransaction.tool_id && (
+                {selectedTools.length > 0 && (
                   <div>
                     <label className="block font-medium mb-2 text-lg">Tool Checklist</label>
-                    {loadingChecklist ? (
-                      <div className="text-gray-500 text-lg">Loading checklist...</div>
-                    ) : checklistItems.length > 0 ? (
-                      <div className="space-y-3 max-h-[600px] overflow-y-auto bg-gray-50 p-4 rounded-lg">
-                        {checklistItems.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between bg-white p-4 rounded-lg border"
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-lg">{item.item_name}</span>
-                              {item.required && (
-                                <span className="text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
-                              )}
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto bg-gray-50 p-4 rounded-lg">
+                      {selectedTools.map(tool => {
+                        const items = checklistItemsByTool[tool.id] || []
+                        const isLoading = checklistLoadingByTool[tool.id]
+                        return (
+                          <div key={tool.id} className="bg-white p-4 rounded-lg border space-y-3">
+                            <div className="text-base font-semibold text-gray-900">
+                              #{tool.number} - {tool.name}
                             </div>
-                            <div className="flex items-center gap-6">
-                              <label className="flex items-center gap-2 text-lg text-gray-700">
-                                <input
-                                  type="checkbox"
-                                  checked={checklistStatus[item.id] === 'damaged'}
-                                  onChange={() => {
-                                    setChecklistStatus(prev => ({
-                                      ...prev,
-                                      [item.id]: prev[item.id] === 'damaged' ? null : 'damaged'
-                                    }))
-                                  }}
-                                  className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
-                                />
-                                <span>Damaged/Needs Repair</span>
-                              </label>
-                              <label className="flex items-center gap-2 text-lg text-gray-700">
-                                <input
-                                  type="checkbox"
-                                  checked={checklistStatus[item.id] === 'replace'}
-                                  onChange={() => {
-                                    setChecklistStatus(prev => ({
-                                      ...prev,
-                                      [item.id]: prev[item.id] === 'replace' ? null : 'replace'
-                                    }))
-                                  }}
-                                  className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
-                                />
-                                <span>Needs Replacement/Resupply</span>
-                              </label>
-                            </div>
+                            {isLoading ? (
+                              <div className="text-gray-500 text-lg">Loading checklist...</div>
+                            ) : items.length > 0 ? (
+                              <div className="space-y-3">
+                                {items.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-lg">{item.item_name}</span>
+                                      {item.required && (
+                                        <span className="text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                      <label className="flex items-center gap-2 text-lg text-gray-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={checklistStatusByTool[tool.id]?.[item.id] === 'damaged'}
+                                          onChange={() => {
+                                            setChecklistStatusByTool(prev => ({
+                                              ...prev,
+                                              [tool.id]: {
+                                                ...prev[tool.id],
+                                                [item.id]: prev[tool.id]?.[item.id] === 'damaged' ? null : 'damaged'
+                                              }
+                                            }))
+                                          }}
+                                          className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
+                                        />
+                                        <span>Damaged/Needs Repair</span>
+                                      </label>
+                                      <label className="flex items-center gap-2 text-lg text-gray-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={checklistStatusByTool[tool.id]?.[item.id] === 'replace'}
+                                          onChange={() => {
+                                            setChecklistStatusByTool(prev => ({
+                                              ...prev,
+                                              [tool.id]: {
+                                                ...prev[tool.id],
+                                                [item.id]: prev[tool.id]?.[item.id] === 'replace' ? null : 'replace'
+                                              }
+                                            }))
+                                          }}
+                                          className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-5 h-5"
+                                        />
+                                        <span>Needs Replacement/Resupply</span>
+                                      </label>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-gray-500 bg-gray-50 p-4 rounded-lg text-lg">
+                                No checklist items found for this tool.
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-gray-500 bg-gray-50 p-4 rounded-lg text-lg">
-                        No checklist items found for this tool.
-                      </div>
-                    )}
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
 
