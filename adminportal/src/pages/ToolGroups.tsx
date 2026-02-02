@@ -415,7 +415,7 @@ export default function ToolGroups() {
           onClick={() => setIsCreateOpen(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
         >
-          Create Group
+          Create New Group
         </button>
       </div>
 
@@ -481,7 +481,7 @@ export default function ToolGroups() {
                         onClick={() => setIsAddToolsOpen(true)}
                         className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                       >
-                        Add Tools
+                        Add Tools to Selected Group
                       </button>
                       <button
                         onClick={() => setIsTransferOpen(true)}
@@ -493,7 +493,7 @@ export default function ToolGroups() {
                         onClick={() => setDeleteGroupId(selectedGroup.id)}
                         className="px-3 py-2 text-sm font-medium text-red-600 border-l border-gray-200 hover:bg-red-50"
                       >
-                        Delete Group
+                        Delete Selected Group
                       </button>
                     </div>
                   </div>
