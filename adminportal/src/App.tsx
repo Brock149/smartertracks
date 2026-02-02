@@ -10,6 +10,7 @@ import GetStartedSuccess from './pages/GetStartedSuccess'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Tools from './pages/Tools'
+import ToolGroups from './pages/ToolGroups'
 import Users from './pages/Users'
 import Transactions from './pages/Transactions'
 import Reports from './pages/Reports'
@@ -79,6 +80,7 @@ export default function App() {
         >
           <Route index element={<div>Welcome to Smarter Tracks - Tool Tracking System</div>} />
           <Route path="tools" element={<Tools />} />
+          <Route path="groups" element={<ToolGroups />} />
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />

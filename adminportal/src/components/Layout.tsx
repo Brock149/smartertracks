@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 
 const navLinks = [
   { to: '/admin/tools', label: 'Tools', icon: '🧰' },
+  { to: '/admin/groups', label: 'Groups', icon: '🧩' },
   { to: '/admin/users', label: 'Users', icon: '👥' },
   { to: '/admin/transactions', label: 'Transactions', icon: '🔄' },
   { to: '/admin/reports', label: 'Reports', icon: '📊' },
