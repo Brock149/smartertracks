@@ -78,7 +78,11 @@ export default function ToolGroups() {
         .order('created_at', { ascending: true })
 
       if (error) throw error
-      setGroupMembers(data || [])
+      const normalized = (data || []).map((row: any) => ({
+        tool_id: row.tool_id,
+        tools: Array.isArray(row.tools) ? row.tools[0] ?? null : row.tools ?? null,
+      }))
+      setGroupMembers(normalized)
     } catch (err: any) {
       setError(err.message || 'Failed to load group members')
     }
