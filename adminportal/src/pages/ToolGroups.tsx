@@ -107,11 +107,28 @@ export default function ToolGroups() {
     if (!newGroup.name.trim()) return
     try {
       setActionLoading(true)
+      const { data: authData, error: authError } = await supabase.auth.getUser()
+      if (authError || !authData?.user) {
+        throw new Error('You must be logged in to create a group')
+      }
+
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (userError || !userData?.company_id) {
+        throw new Error('Unable to determine your company')
+      }
+
       const { error } = await supabase
         .from('tool_groups')
         .insert([{
           name: newGroup.name.trim(),
           description: newGroup.description.trim() || null,
+          company_id: userData.company_id,
+          created_by: authData.user.id,
         }])
 
       if (error) throw error
