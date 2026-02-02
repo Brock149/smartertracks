@@ -444,12 +444,15 @@ export default function ToolGroups() {
                       setSelectedGroup(group)
                       fetchGroupMembers(group.id)
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-md border transition ${
+                    className={`w-full text-left px-3 py-2 rounded-md border transition relative ${
                       selectedGroup?.id === group.id
-                        ? 'bg-white border-blue-400 shadow-sm'
+                        ? 'bg-blue-50 border-blue-500 shadow-sm ring-1 ring-blue-200'
                         : 'bg-white border-gray-200 hover:border-blue-300'
                     }`}
                   >
+                    {selectedGroup?.id === group.id && (
+                      <span className="absolute left-0 top-0 h-full w-1 rounded-l-md bg-blue-600" />
+                    )}
                     <div className="font-medium text-gray-900">{group.name}</div>
                     {group.description && (
                       <div className="text-sm text-gray-500 line-clamp-2">
@@ -465,32 +468,34 @@ export default function ToolGroups() {
           <div className="space-y-4">
             {selectedGroup ? (
               <>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">{selectedGroup.name}</h2>
                     {selectedGroup.description && (
                       <p className="text-sm text-gray-500">{selectedGroup.description}</p>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setIsAddToolsOpen(true)}
-                      className="px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                      Add Tools
-                    </button>
-                    <button
-                      onClick={() => setIsTransferOpen(true)}
-                      className="px-3 py-2 rounded-md border border-blue-200 text-blue-700 hover:bg-blue-50"
-                    >
-                      Transfer Group
-                    </button>
-                    <button
-                      onClick={() => setDeleteGroupId(selectedGroup.id)}
-                      className="px-3 py-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
-                    >
-                      Delete Group
-                    </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+                      <button
+                        onClick={() => setIsAddToolsOpen(true)}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Add Tools
+                      </button>
+                      <button
+                        onClick={() => setIsTransferOpen(true)}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 border-l border-gray-200 hover:bg-gray-50"
+                      >
+                        Transfer Group
+                      </button>
+                      <button
+                        onClick={() => setDeleteGroupId(selectedGroup.id)}
+                        className="px-3 py-2 text-sm font-medium text-red-600 border-l border-gray-200 hover:bg-red-50"
+                      >
+                        Delete Group
+                      </button>
+                    </div>
                   </div>
                 </div>
 
