@@ -439,20 +439,20 @@ export default function ToolGroups() {
                   ) : (
                     <div className="divide-y">
                       {groupMembers.map((member) => (
-                        <div key={member.tool_id} className="px-4 py-3 flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-gray-900">
+                        <div key={member.tool_id} className="px-4 py-3 flex items-center justify-between gap-4">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                            <span className="font-medium text-gray-900">
                               {member.tools?.name || 'Unknown tool'}
-                            </div>
-                            <div className="text-sm text-gray-500">
+                            </span>
+                            <span className="text-gray-500">
                               #{member.tools?.number || 'N/A'}
-                            </div>
-                            <div className="text-sm text-gray-500">
+                            </span>
+                            <span className="text-gray-500">
                               Owner: {member.tools?.owner_name || 'Unassigned'}
-                            </div>
-                            <div className="text-sm text-gray-500">
+                            </span>
+                            <span className="text-gray-500">
                               Location: {member.tools?.location || 'Unknown'}
-                            </div>
+                            </span>
                           </div>
                           <button
                             onClick={() => handleRemoveTool(member.tool_id)}
@@ -680,12 +680,16 @@ export default function ToolGroups() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stored At</label>
-                <input
-                  type="text"
+                <select
                   value={transferForm.stored_at}
                   onChange={(e) => setTransferForm((prev) => ({ ...prev, stored_at: e.target.value }))}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Select storage location</option>
+                  <option value="on job site">On Job Site</option>
+                  <option value="on truck">On Truck</option>
+                  <option value="N/A">N/A</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
