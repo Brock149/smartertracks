@@ -59,12 +59,17 @@ interface ToolTransaction {
 
 interface AllToolsScreenProps {
   navigation: any;
+  route?: {
+    params?: {
+      selectMultiple?: boolean;
+    };
+  };
 }
 
 // Helper to convert Supabase storage image URL to a low-res thumbnail using Supabase CDN transforms
 const getThumbnailUrl = (url: string) => resize(url, 96, 55);
 
-export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
+export default function AllToolsScreen({ navigation, route }: AllToolsScreenProps) {
   const [tools, setTools] = useState<Tool[]>([]);
   const [filteredTools, setFilteredTools] = useState<Tool[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,6 +77,8 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
   const { user } = useAuth();
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(new Set());
 
   // Pagination
   const PAGE_SIZE = 40;
@@ -144,6 +151,14 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
       fetchTools(true);
     }, [])
   );
+
+  useEffect(() => {
+    if (route?.params?.selectMultiple) {
+      setIsSelecting(true);
+      setSelectedToolIds(new Set());
+      navigation.setParams({ selectMultiple: false });
+    }
+  }, [route?.params?.selectMultiple, navigation]);
 
   useEffect(() => {
     filterTools();
@@ -411,7 +426,29 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
   };
 
   const handleToolPress = (tool: Tool) => {
+    if (isSelecting) {
+      toggleToolSelected(tool.id);
+      return;
+    }
     navigation.navigate('ToolDetail', { tool });
+  };
+
+  const toggleToolSelected = (toolId: string) => {
+    setSelectedToolIds(prev => {
+      const next = new Set(prev);
+      if (next.has(toolId)) {
+        next.delete(toolId);
+      } else {
+        next.add(toolId);
+      }
+      return next;
+    });
+  };
+
+  const handleClaimSelected = () => {
+    const ids = Array.from(selectedToolIds);
+    if (ids.length === 0) return;
+    navigation.navigate('TransferMultiple', { toolIds: ids });
   };
 
   const fetchChecklistForTool = async (toolId: string) => {
@@ -522,7 +559,17 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
           <Text style={styles.toolNumber}>#{item.number}</Text>
           <Text style={styles.toolName}>{item.name}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        {isSelecting ? (
+          <View style={[styles.selectBadge, selectedToolIds.has(item.id) && styles.selectBadgeActive]}>
+            <Ionicons
+              name={selectedToolIds.has(item.id) ? 'checkmark' : 'add'}
+              size={16}
+              color={selectedToolIds.has(item.id) ? '#ffffff' : '#2563eb'}
+            />
+          </View>
+        ) : (
+          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        )}
       </View>
       
       {item.description && (
@@ -579,9 +626,26 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
             {(totalToolsCount ?? filteredTools.length)} tool{(totalToolsCount ?? filteredTools.length) !== 1 ? 's' : ''} in company
           </Text>
         </View>
-        <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>
-          <Ionicons name="person-circle-outline" size={28} color="#1f2937" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.selectButton, isSelecting && styles.selectButtonActive]}
+            onPress={() => {
+              if (isSelecting) {
+                setIsSelecting(false);
+                setSelectedToolIds(new Set());
+              } else {
+                setIsSelecting(true);
+              }
+            }}
+          >
+            <Text style={[styles.selectButtonText, isSelecting && styles.selectButtonTextActive]}>
+              {isSelecting ? 'Cancel' : 'Select multiple tools'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>
+            <Ionicons name="person-circle-outline" size={28} color="#1f2937" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -607,6 +671,19 @@ export default function AllToolsScreen({ navigation }: AllToolsScreenProps) {
         )}
       </View>
       {searchError ? <Text style={styles.searchError}>{searchError}</Text> : null}
+
+      {isSelecting && (
+        <View style={styles.selectBar}>
+          <Text style={styles.selectBarText}>{selectedToolIds.size} selected</Text>
+          <TouchableOpacity
+            style={[styles.claimButton, selectedToolIds.size === 0 && styles.claimButtonDisabled]}
+            onPress={handleClaimSelected}
+            disabled={selectedToolIds.size === 0}
+          >
+            <Text style={styles.claimButtonText}>Claim Selected</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <FlatList
         data={filteredTools}
@@ -688,6 +765,31 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  selectButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+  },
+  selectButtonActive: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fecaca',
+  },
+  selectButtonText: {
+    color: '#2563eb',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  selectButtonTextActive: {
+    color: '#b91c1c',
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -712,6 +814,35 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  selectBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  selectBarText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  claimButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+  },
+  claimButtonDisabled: {
+    backgroundColor: '#cbd5f5',
+  },
+  claimButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 12,
   },
   searchIcon: {
     marginRight: 12,
@@ -779,6 +910,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 8,
+  },
+  selectBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectBadgeActive: {
+    backgroundColor: '#2563eb',
   },
   toolTitleContainer: {
     flex: 1,

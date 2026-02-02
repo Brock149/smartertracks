@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import MyToolsStack from './MyToolsStack';
 import AllToolsStack from './AllToolsStack';
 import AccountScreen from '../screens/AccountScreen';
-import HomeScreen from '../screens/HomeScreen';
+import HomeStack from './HomeStack';
+import GroupsStack from './GroupsStack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const Tab = createBottomTabNavigator();
@@ -25,6 +26,8 @@ function MainTabs() {
             iconName = focused ? 'person' : 'person-outline';
           } else if (route.name === 'AllTools') {
             iconName = focused ? 'construct' : 'construct-outline';
+          } else if (route.name === 'Groups') {
+            iconName = focused ? 'albums' : 'albums-outline';
           } else if (route.name === 'Account') {
             iconName = focused ? 'settings' : 'settings-outline';
           } else {
@@ -52,7 +55,7 @@ function MainTabs() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeStack}
         options={{
           tabBarLabel: 'Home',
         }}
@@ -69,6 +72,13 @@ function MainTabs() {
         component={AllToolsStack} 
         options={{
           tabBarLabel: 'All Tools',
+        }}
+      />
+      <Tab.Screen 
+        name="Groups" 
+        component={GroupsStack} 
+        options={{
+          tabBarLabel: 'Groups',
         }}
       />
       

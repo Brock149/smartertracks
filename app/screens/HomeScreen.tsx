@@ -39,6 +39,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [myToolsCount, setMyToolsCount] = useState(0);
   const [myToolsWithIssuesCount, setMyToolsWithIssuesCount] = useState(0);
   const [companyToolsCount, setCompanyToolsCount] = useState(0);
+  const [groupsCount, setGroupsCount] = useState(0);
   const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
   const [recentTransfers, setRecentTransfers] = useState<RecentTransfer[]>([]);
@@ -85,6 +86,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         .from('tools')
         .select('id', { count: 'exact', head: true });
       setCompanyToolsCount(companyCount ?? 0);
+
+      const { count: groupCount } = await supabase
+        .from('tool_groups')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_deleted', false);
+      setGroupsCount(groupCount ?? 0);
 
       let toolsWithIssues = 0;
       if (myToolIds.length > 0) {
@@ -236,6 +243,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     navigation.navigate('MainTabs', { screen: tabName });
   };
 
+  const navigateToAllToolsSelect = () => {
+    navigation.navigate('MainTabs', {
+      screen: 'AllTools',
+      params: { selectMultiple: true },
+    });
+  };
+
   const displayName = userName || 'Account';
 
   return (
@@ -283,7 +297,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.statCard, styles.statCardFull]}
+                style={styles.statCard}
                 activeOpacity={0.8}
                 onPress={() => navigateToTab('AllTools')}
               >
@@ -291,6 +305,40 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <Text style={[styles.statValue, styles.statBlue]}>{companyToolsCount}</Text>
                 <Text style={styles.statFootnote}>Total in company</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.statCard}
+                activeOpacity={0.8}
+                onPress={() => navigateToTab('Groups')}
+              >
+                <Text style={styles.statLabel}>Groups</Text>
+                <Text style={[styles.statValue, styles.statBlue]}>{groupsCount}</Text>
+                <Text style={styles.statFootnote}>Total groups</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.actionsSection}>
+              <Text style={styles.sectionHeader}>Transfers</Text>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={styles.actionCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigateToTab('AllTools')}
+                >
+                  <Ionicons name="swap-horizontal" size={22} color="#2563eb" />
+                  <Text style={styles.actionTitle}>Claim Tool</Text>
+                  <Text style={styles.actionSubtitle}>Single checkout</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionCard}
+                  activeOpacity={0.85}
+                  onPress={navigateToAllToolsSelect}
+                >
+                  <Ionicons name="layers-outline" size={22} color="#2563eb" />
+                  <Text style={styles.actionTitle}>Claim Multiple Tools</Text>
+                  <Text style={styles.actionSubtitle}>Batch checkout</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.recentSection}>
@@ -405,7 +453,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   content: {
-    padding: 16,
+    padding: 10,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -425,17 +473,52 @@ const styles = StyleSheet.create({
   statCard: {
     width: '48%',
     borderRadius: 16,
-    padding: 16,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    minHeight: 140,
-    marginBottom: 16,
+    minHeight: 104,
+    marginBottom: 10,
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   statCardFull: {
     width: '100%',
+  },
+  actionsSection: {
+    marginBottom: 8,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    minHeight: 86,
+  },
+  sectionHeader: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 6,
+  },
+  actionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginTop: 4,
+  },
+  actionSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
   },
   statLabel: {
     fontSize: 14,
