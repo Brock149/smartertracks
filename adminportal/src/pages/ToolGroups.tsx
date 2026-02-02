@@ -256,7 +256,7 @@ export default function ToolGroups() {
       setActionLoading(true)
       const { error } = await supabase
         .from('tool_groups')
-        .update({ is_deleted: true })
+        .delete()
         .eq('id', groupId)
 
       if (error) throw error
