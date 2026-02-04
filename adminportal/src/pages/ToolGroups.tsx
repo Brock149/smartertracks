@@ -667,33 +667,6 @@ export default function ToolGroups() {
                     </div>
                   )}
                 </div>
-                <div className="bg-white border rounded-lg">
-                  <div className="border-b px-4 py-3 text-sm font-medium text-gray-700">
-                    Recent Group Activity
-                  </div>
-                  {groupActivity.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-gray-500">
-                      No activity yet.
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {groupActivity.map((entry) => (
-                        <div key={entry.id} className="px-4 py-3 text-sm text-gray-600">
-                          <span className="font-medium text-gray-900">
-                            {entry.action === 'created' ? 'Created' : 'Deleted'}
-                          </span>{' '}
-                          {entry.group_name ? `"${entry.group_name}"` : 'group'} by{' '}
-                          <span className="font-medium text-gray-900">
-                            {entry.actor_name || 'Unknown'}
-                          </span>{' '}
-                          <span className="text-gray-400">
-                            ({new Date(entry.created_at).toLocaleString()})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </>
             ) : (
               <div className="bg-white border rounded-lg p-6 text-gray-500">
