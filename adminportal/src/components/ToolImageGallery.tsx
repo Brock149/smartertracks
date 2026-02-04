@@ -26,10 +26,14 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
     return `${base}${joiner}width=64&quality=50&format=webp`;
   };
 
+  const MAX_THUMBS = 3;
+  const visibleImages = images.slice(0, MAX_THUMBS);
+  const remainingCount = images.length - visibleImages.length;
+
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {images.map((img, idx) => (
+        {visibleImages.map((img, idx) => (
           <img
             key={img.id}
             src={getThumbSrc(img)}
@@ -39,6 +43,15 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
             onError={() => setImgError(true)}
           />
         ))}
+        {remainingCount > 0 && (
+          <button
+            type="button"
+            onClick={() => { setSelectedIdx(0); setImgError(false); }}
+            className="text-xs text-gray-600 border rounded px-2 py-1 hover:bg-gray-50"
+          >
+            +{remainingCount} more
+          </button>
+        )}
       </div>
 
       {selectedIdx !== null && (

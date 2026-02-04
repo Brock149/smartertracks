@@ -64,6 +64,7 @@ export default function ToolGroups() {
     notes: '',
   })
   const [groupActivity, setGroupActivity] = useState<GroupActivity[]>([])
+  const [activeView, setActiveView] = useState<'groups' | 'activity'>('groups')
   const [reportIssue, setReportIssue] = useState(false)
   const [reportChecklistItemsByTool, setReportChecklistItemsByTool] = useState<Record<string, ChecklistItem[]>>({})
   const [reportRows, setReportRows] = useState<Array<{
@@ -459,12 +460,30 @@ export default function ToolGroups() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-xl md:text-2xl font-bold text-gray-900">Tool Groups</h1>
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          Create New Group
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <button
+              onClick={() => setActiveView('groups')}
+              className={`px-3 py-2 text-sm font-medium ${activeView === 'groups' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              Groups
+            </button>
+            <button
+              onClick={() => setActiveView('activity')}
+              className={`px-3 py-2 text-sm font-medium border-l border-gray-200 ${activeView === 'activity' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              Activity
+            </button>
+          </div>
+          {activeView === 'groups' && (
+            <button
+              onClick={() => setIsCreateOpen(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Create New Group
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -476,6 +495,34 @@ export default function ToolGroups() {
       {loading ? (
         <div className="flex justify-center items-center h-48">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+        </div>
+      ) : activeView === 'activity' ? (
+        <div className="bg-white border rounded-lg">
+          <div className="border-b px-4 py-3 text-sm font-medium text-gray-700">
+            Recent Group Activity
+          </div>
+          {groupActivity.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-gray-500">
+              No activity yet.
+            </div>
+          ) : (
+            <div className="divide-y">
+              {groupActivity.map((entry) => (
+                <div key={entry.id} className="px-4 py-3 text-sm text-gray-600">
+                  <span className="font-medium text-gray-900">
+                    {entry.action === 'created' ? 'Created' : 'Deleted'}
+                  </span>{' '}
+                  {entry.group_name ? `"${entry.group_name}"` : 'group'} by{' '}
+                  <span className="font-medium text-gray-900">
+                    {entry.actor_name || 'Unknown'}
+                  </span>{' '}
+                  <span className="text-gray-400">
+                    ({new Date(entry.created_at).toLocaleString()})
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
@@ -539,33 +586,6 @@ export default function ToolGroups() {
                 </button>
               </div>
             )}
-            <div className="bg-white border rounded-lg mt-4">
-              <div className="border-b px-4 py-3 text-sm font-medium text-gray-700">
-                Recent Group Activity
-              </div>
-              {groupActivity.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-gray-500">
-                  No activity yet.
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {groupActivity.map((entry) => (
-                    <div key={entry.id} className="px-4 py-3 text-sm text-gray-600">
-                      <span className="font-medium text-gray-900">
-                        {entry.action === 'created' ? 'Created' : 'Deleted'}
-                      </span>{' '}
-                      {entry.group_name ? `"${entry.group_name}"` : 'group'} by{' '}
-                      <span className="font-medium text-gray-900">
-                        {entry.actor_name || 'Unknown'}
-                      </span>{' '}
-                      <span className="text-gray-400">
-                        ({new Date(entry.created_at).toLocaleString()})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           <div className="space-y-4">
