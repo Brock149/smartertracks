@@ -32,6 +32,8 @@ interface Tool {
   number: string
   name: string
   company_id: string
+  owner_name?: string | null
+  location?: string | null
 }
 
 interface User {
@@ -119,14 +121,44 @@ export default function Transactions() {
 
   async function fetchTools() {
     try {
-      const { data, error } = await supabase
+      const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
-        .select('id, number, name, company_id')
+        .select('id, number, name, company_id, current_owner')
         .order('number', { ascending: true })
 
-      if (error) throw error
-      const list = data || []
-      list.sort((a, b) => {
+      if (toolsError) throw toolsError
+      const list = toolsData || []
+      const toolIds = list.map(tool => tool.id)
+
+      const [usersData, txData] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, name'),
+        supabase
+          .from('tool_transactions')
+          .select('tool_id, location, timestamp')
+          .in('tool_id', toolIds)
+          .order('timestamp', { ascending: false })
+      ])
+
+      if (usersData.error) throw usersData.error
+      if (txData.error) throw txData.error
+
+      const userMap = new Map((usersData.data || []).map(user => [user.id, user.name]))
+      const latestLocation = new Map<string, string | null>()
+      ;(txData.data || []).forEach((tx: any) => {
+        if (!latestLocation.has(tx.tool_id)) {
+          latestLocation.set(tx.tool_id, tx.location ?? null)
+        }
+      })
+
+      const enriched = list.map(tool => ({
+        ...tool,
+        owner_name: tool.current_owner ? userMap.get(tool.current_owner) || null : null,
+        location: latestLocation.get(tool.id) ?? null
+      }))
+
+      enriched.sort((a, b) => {
         const an = parseInt(String(a.number), 10)
         const bn = parseInt(String(b.number), 10)
         if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number))
@@ -134,7 +166,7 @@ export default function Transactions() {
         if (Number.isNaN(bn)) return -1
         return an - bn
       })
-      setTools(list)
+      setTools(enriched)
     } catch (error: any) {
       console.error('Error fetching tools:', error)
     }
@@ -170,7 +202,9 @@ export default function Transactions() {
     return tools
       .filter(t =>
         t.number.toLowerCase().includes(term) ||
-        (t.name || '').toLowerCase().includes(term)
+        (t.name || '').toLowerCase().includes(term) ||
+        (t.owner_name || '').toLowerCase().includes(term) ||
+        (t.location || '').toLowerCase().includes(term)
       )
       .slice(0, 50)
   }, [toolSearchTerm, tools])
@@ -696,8 +730,12 @@ export default function Transactions() {
                               fetchChecklist(tool.id)
                             }}
                           >
-                            <span className="text-gray-900 font-medium">#{tool.number}</span>
-                            <span className="text-gray-600">- {tool.name}</span>
+                            <div className="flex flex-col">
+                              <div className="text-gray-900 font-medium">#{tool.number} - {tool.name}</div>
+                              <div className="text-xs text-gray-500">
+                                Owner: {tool.owner_name || 'Unassigned'} • Location: {tool.location || 'Unknown'}
+                              </div>
+                            </div>
                           </button>
                         ))
                       )}
