@@ -699,6 +699,9 @@ export default function Transactions() {
                     value={toolSearchTerm}
                     onChange={(e) => {
                       setToolSearchTerm(e.target.value)
+                      if (!showToolResults) {
+                        setShowToolResults(true)
+                      }
                     }}
                     onFocus={() => setShowToolResults(true)}
                     onBlur={() => setTimeout(() => setShowToolResults(false), 150)}
@@ -728,7 +731,7 @@ export default function Transactions() {
                                 return next
                               })
                               setToolSearchTerm('')
-                              setShowToolResults(true)
+                              setShowToolResults(false)
                               fetchChecklist(tool.id)
                               setTimeout(() => toolSearchRef.current?.focus(), 0)
                             }}
