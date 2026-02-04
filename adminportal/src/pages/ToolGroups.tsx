@@ -78,6 +78,7 @@ export default function ToolGroups() {
     fetchGroups()
     fetchTools()
     fetchUsers()
+    fetchGroupActivity()
   }, [])
 
   useEffect(() => {
@@ -108,12 +109,10 @@ export default function ToolGroups() {
         if (!selectedGroup || !data.find((g) => g.id === selectedGroup.id)) {
           setSelectedGroup(data[0])
           fetchGroupMembers(data[0].id)
-          fetchGroupActivity(data[0].id)
         }
       } else {
         setSelectedGroup(null)
         setGroupMembers([])
-        setGroupActivity([])
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load groups')
@@ -199,14 +198,13 @@ export default function ToolGroups() {
     }
   }
 
-  async function fetchGroupActivity(groupId: string) {
+  async function fetchGroupActivity() {
     try {
       const { data, error } = await supabase
         .from('group_activity_log')
         .select('id, action, group_name, actor_name, created_at')
-        .eq('group_id', groupId)
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(25)
 
       if (error) throw error
       setGroupActivity(data || [])
@@ -502,7 +500,6 @@ export default function ToolGroups() {
                     onClick={() => {
                       setSelectedGroup(group)
                       fetchGroupMembers(group.id)
-                      fetchGroupActivity(group.id)
                     }}
                     className={`w-full text-left px-3 py-2 rounded-md border transition relative ${
                       selectedGroup?.id === group.id
@@ -542,6 +539,33 @@ export default function ToolGroups() {
                 </button>
               </div>
             )}
+            <div className="bg-white border rounded-lg mt-4">
+              <div className="border-b px-4 py-3 text-sm font-medium text-gray-700">
+                Recent Group Activity
+              </div>
+              {groupActivity.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-gray-500">
+                  No activity yet.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {groupActivity.map((entry) => (
+                    <div key={entry.id} className="px-4 py-3 text-sm text-gray-600">
+                      <span className="font-medium text-gray-900">
+                        {entry.action === 'created' ? 'Created' : 'Deleted'}
+                      </span>{' '}
+                      {entry.group_name ? `"${entry.group_name}"` : 'group'} by{' '}
+                      <span className="font-medium text-gray-900">
+                        {entry.actor_name || 'Unknown'}
+                      </span>{' '}
+                      <span className="text-gray-400">
+                        ({new Date(entry.created_at).toLocaleString()})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-4">
