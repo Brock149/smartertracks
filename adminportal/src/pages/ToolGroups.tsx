@@ -45,6 +45,9 @@ export default function ToolGroups() {
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [groupSearch, setGroupSearch] = useState('')
+  const [groupsPage, setGroupsPage] = useState(1)
+  const groupsPerPage = 15
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isAddToolsOpen, setIsAddToolsOpen] = useState(false)
   const [newGroup, setNewGroup] = useState({ name: '', description: '' })
@@ -84,6 +87,10 @@ export default function ToolGroups() {
     }
   }, [reportIssue])
 
+  useEffect(() => {
+    setGroupsPage(1)
+  }, [groupSearch])
+
   async function fetchGroups() {
     try {
       setLoading(true)
@@ -114,6 +121,21 @@ export default function ToolGroups() {
       setLoading(false)
     }
   }
+
+  const filteredGroups = useMemo(() => {
+    const term = groupSearch.trim().toLowerCase()
+    if (!term) return groups
+    return groups.filter(group =>
+      group.name.toLowerCase().includes(term) ||
+      (group.description || '').toLowerCase().includes(term)
+    )
+  }, [groups, groupSearch])
+
+  const totalGroupPages = Math.max(Math.ceil(filteredGroups.length / groupsPerPage), 1)
+  const pagedGroups = useMemo(() => {
+    const start = (groupsPage - 1) * groupsPerPage
+    return filteredGroups.slice(start, start + groupsPerPage)
+  }, [filteredGroups, groupsPage])
 
   async function fetchGroupMembers(groupId: string) {
     try {
@@ -461,11 +483,20 @@ export default function ToolGroups() {
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
           <div className="bg-gray-50 border rounded-lg p-4 space-y-3">
             <h2 className="font-semibold text-gray-800">Groups</h2>
-            {groups.length === 0 ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={groupSearch}
+                onChange={(e) => setGroupSearch(e.target.value)}
+                placeholder="Search groups..."
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {pagedGroups.length === 0 ? (
               <div className="text-sm text-gray-500">No groups yet.</div>
             ) : (
               <div className="space-y-2">
-                {groups.map((group) => (
+                {pagedGroups.map((group) => (
                   <button
                     key={group.id}
                     onClick={() => {
@@ -490,6 +521,25 @@ export default function ToolGroups() {
                     )}
                   </button>
                 ))}
+              </div>
+            )}
+            {totalGroupPages > 1 && (
+              <div className="flex items-center justify-between pt-2 text-xs text-gray-500">
+                <button
+                  onClick={() => setGroupsPage(prev => Math.max(prev - 1, 1))}
+                  disabled={groupsPage === 1}
+                  className="px-2 py-1 border rounded disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span>Page {groupsPage} of {totalGroupPages}</span>
+                <button
+                  onClick={() => setGroupsPage(prev => Math.min(prev + 1, totalGroupPages))}
+                  disabled={groupsPage === totalGroupPages}
+                  className="px-2 py-1 border rounded disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
             )}
           </div>
