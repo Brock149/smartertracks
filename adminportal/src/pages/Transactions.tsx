@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 interface Transaction {
@@ -84,6 +84,7 @@ export default function Transactions() {
   const [userSearchTerm, setUserSearchTerm] = useState('')
   const [showToolResults, setShowToolResults] = useState(false)
   const [showUserResults, setShowUserResults] = useState(false)
+  const toolSearchRef = useRef<HTMLInputElement | null>(null)
 
   // Fetch transactions
   useEffect(() => {
@@ -702,6 +703,7 @@ export default function Transactions() {
                     onFocus={() => setShowToolResults(true)}
                     onBlur={() => setTimeout(() => setShowToolResults(false), 150)}
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    ref={toolSearchRef}
                   />
                   {showToolResults && (
                     <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-72 overflow-y-auto">
@@ -726,8 +728,9 @@ export default function Transactions() {
                                 return next
                               })
                               setToolSearchTerm('')
-                              setShowToolResults(false)
+                              setShowToolResults(true)
                               fetchChecklist(tool.id)
+                              setTimeout(() => toolSearchRef.current?.focus(), 0)
                             }}
                           >
                             <div className="flex flex-col">
