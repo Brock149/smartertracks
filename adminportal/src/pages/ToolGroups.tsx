@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { ToolImageGallery } from '../components/ToolImageGallery'
 
 type ToolGroup = {
   id: string
@@ -28,6 +29,14 @@ type GroupMember = {
   tools: ToolSummary | null
 }
 
+type GroupActivity = {
+  id: string
+  action: string
+  group_name: string | null
+  actor_name: string | null
+  created_at: string
+}
+
 export default function ToolGroups() {
   const [groups, setGroups] = useState<ToolGroup[]>([])
   const [selectedGroup, setSelectedGroup] = useState<ToolGroup | null>(null)
@@ -51,6 +60,7 @@ export default function ToolGroups() {
     stored_at: '',
     notes: '',
   })
+  const [groupActivity, setGroupActivity] = useState<GroupActivity[]>([])
   const [reportIssue, setReportIssue] = useState(false)
   const [reportChecklistItemsByTool, setReportChecklistItemsByTool] = useState<Record<string, ChecklistItem[]>>({})
   const [reportRows, setReportRows] = useState<Array<{
@@ -91,10 +101,12 @@ export default function ToolGroups() {
         if (!selectedGroup || !data.find((g) => g.id === selectedGroup.id)) {
           setSelectedGroup(data[0])
           fetchGroupMembers(data[0].id)
+          fetchGroupActivity(data[0].id)
         }
       } else {
         setSelectedGroup(null)
         setGroupMembers([])
+        setGroupActivity([])
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load groups')
@@ -162,6 +174,22 @@ export default function ToolGroups() {
       )
     } catch (err: any) {
       setError(err.message || 'Failed to load group members')
+    }
+  }
+
+  async function fetchGroupActivity(groupId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('group_activity_log')
+        .select('id, action, group_name, actor_name, created_at')
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (error) throw error
+      setGroupActivity(data || [])
+    } catch (err: any) {
+      setGroupActivity([])
     }
   }
 
@@ -443,6 +471,7 @@ export default function ToolGroups() {
                     onClick={() => {
                       setSelectedGroup(group)
                       fetchGroupMembers(group.id)
+                      fetchGroupActivity(group.id)
                     }}
                     className={`w-full text-left px-3 py-2 rounded-md border transition relative ${
                       selectedGroup?.id === group.id
@@ -511,19 +540,26 @@ export default function ToolGroups() {
                     <div className="divide-y">
                       {groupMembers.map((member) => (
                         <div key={member.tool_id} className="px-4 py-3 flex items-center justify-between gap-4">
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                            <span className="font-medium text-gray-900">
-                              {member.tools?.name || 'Unknown tool'}
-                            </span>
-                            <span className="text-gray-500">
-                              #{member.tools?.number || 'N/A'}
-                            </span>
-                            <span className="text-gray-500">
-                              Owner: {member.tools?.owner_name || 'Unassigned'}
-                            </span>
-                            <span className="text-gray-500">
-                              Location: {member.tools?.location || 'Unknown'}
-                            </span>
+                          <div className="flex items-center gap-3">
+                            {member.tools?.id ? (
+                              <ToolImageGallery toolId={member.tools.id} />
+                            ) : (
+                              <span className="text-gray-400 text-sm">No image</span>
+                            )}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                              <span className="font-medium text-gray-900">
+                                {member.tools?.name || 'Unknown tool'}
+                              </span>
+                              <span className="text-gray-500">
+                                #{member.tools?.number || 'N/A'}
+                              </span>
+                              <span className="text-gray-500">
+                                Owner: {member.tools?.owner_name || 'Unassigned'}
+                              </span>
+                              <span className="text-gray-500">
+                                Location: {member.tools?.location || 'Unknown'}
+                              </span>
+                            </div>
                           </div>
                           <button
                             onClick={() => handleRemoveTool(member.tool_id)}
@@ -532,6 +568,33 @@ export default function ToolGroups() {
                           >
                             Remove
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="bg-white border rounded-lg">
+                  <div className="border-b px-4 py-3 text-sm font-medium text-gray-700">
+                    Recent Group Activity
+                  </div>
+                  {groupActivity.length === 0 ? (
+                    <div className="px-4 py-6 text-sm text-gray-500">
+                      No activity yet.
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {groupActivity.map((entry) => (
+                        <div key={entry.id} className="px-4 py-3 text-sm text-gray-600">
+                          <span className="font-medium text-gray-900">
+                            {entry.action === 'created' ? 'Created' : 'Deleted'}
+                          </span>{' '}
+                          {entry.group_name ? `"${entry.group_name}"` : 'group'} by{' '}
+                          <span className="font-medium text-gray-900">
+                            {entry.actor_name || 'Unknown'}
+                          </span>{' '}
+                          <span className="text-gray-400">
+                            ({new Date(entry.created_at).toLocaleString()})
+                          </span>
                         </div>
                       ))}
                     </div>

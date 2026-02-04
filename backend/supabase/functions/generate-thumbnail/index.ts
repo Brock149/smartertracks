@@ -71,7 +71,7 @@ serve(async (req) => {
     const publicUrl = pub?.publicUrl
     if (!publicUrl) throw new Error('Could not resolve public URL for original image')
 
-    const transformUrl = `${publicUrl}${publicUrl.includes('?') ? '&' : '?'}width=128&quality=60&format=webp`
+    const transformUrl = `${publicUrl}${publicUrl.includes('?') ? '&' : '?'}width=96&quality=50&format=webp`
 
     // Fetch transformed image bytes
     const transformedRes = await fetch(transformUrl)

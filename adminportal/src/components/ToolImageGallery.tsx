@@ -19,13 +19,20 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
   const nextImg = () => setSelectedIdx((prev) => (prev! + 1) % images.length);
   const prevImg = () => setSelectedIdx((prev) => (prev! - 1 + images.length) % images.length);
 
+  const getThumbSrc = (img: { image_url: string; thumb_url?: string | null }) => {
+    const base = img.thumb_url || img.image_url;
+    if (!base) return '';
+    const joiner = base.includes('?') ? '&' : '?';
+    return `${base}${joiner}width=64&quality=50&format=webp`;
+  };
+
   return (
     <>
       <div className="flex flex-wrap gap-2">
         {images.map((img, idx) => (
           <img
             key={img.id}
-            src={img.thumb_url || img.image_url}
+            src={getThumbSrc(img)}
             alt="Tool"
             className="w-12 h-12 object-cover rounded cursor-pointer border"
             onClick={() => { setSelectedIdx(idx); setImgError(false); }}

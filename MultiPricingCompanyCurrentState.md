@@ -84,3 +84,31 @@ Minimal sequence to move forward now
 5) (Optional) Add scheduled job for trial expiry suspend.
 This keeps signup-with-code and JWT as-is (stable), focuses on the business flow (plans, billing, trials), and uses your existing limits/enforcement/UI.
 ( will defintely need help/coaching through stripe setup, currently setup for 350 per month plan but kind of glitchy, hard to manage/see your subscription, etc.)
+
+Revised Plan in phases:Here’s a revised phased plan (keeps your goals, adds clearer deliverables and order):
+Phase 1: Plan Catalog & Limits Defaults
+Define plan config in code (Tier 1 trial 2/2 enforce; Tier 2 15/150 $200/mo $2,220/yr; Tier 3 75/750 $350/mo $3,600/yr; Tier 4 custom).
+Add small helper to copy plan defaults into company (limits, enforcement_mode initial, billing_cycle, plan_id, trial_expires_at).
+Superadmin UI: choose plan → prefill limits; allow overrides (already works).
+Phase 2: Stripe Checkout + Webhooks (Monthly)
+Edge Function to create Checkout Session given plan_id, company name, email.
+Webhook handler: on successful payment create/activate company (or update existing), set plan_id, billing_cycle=monthly, limits from plan, enforcement_mode=observe (or enforce if you prefer for trials), is_active=true.
+Return/signup code issuance: generate access code and email/display after success.
+Guardrails: idempotency keys, signature verification, log-only fallback on errors.
+Phase 3: Trials and Lead Flows
+Free/trial self-serve: endpoint to provision company with tiny enforced limits (2 users/2 tools), trial_expires_at set, enforcement_mode=enforce.
+Landing page lead forms for annual/custom: capture intent; superadmin manually sets plan/limits and activates.
+Optional: auto-suspend on trial expiry (flag only; no deletes).
+Phase 4: Admin/Superadmin UX Enhancements
+Superadmin dashboard: ensure usage vs limits prominent; add plan/billing badges and trial status.
+Admin portal: subtle “limit status” indicator (superadmin-only view), clean copy, better success/error handling on signup.
+Hide debug UI, keep JWT off for signup-with-code until invoke + Authorization is wired.
+Phase 5: Enforcement Rollout & Safety
+Default new companies: observe for paid, enforce for trial; toggle path for superadmin.
+Pre-check in signup-with-code (optional) to surface clearer limit errors before DB triggers.
+Monitoring: log limit violations, webhook failures, trial expirations.
+Phase 6: Housekeeping & Performance
+Scheduled job to mark trials past expiry and optionally suspend.
+Confirm/search indexes already present; add pagination to tool search responses if not done.
+Backups/checklists: keep current backup cadence before billing changes.
+If this looks good, I suggest we start with Phase 1 (plan config + default application) since it unblocks Stripe/webhook work.

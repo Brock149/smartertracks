@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 
 interface ToolGroup {
@@ -32,6 +33,12 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
   useEffect(() => {
     fetchGroups();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchGroups();
+    }, [])
+  );
 
   const fetchGroups = async () => {
     try {

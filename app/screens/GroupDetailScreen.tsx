@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 
 interface ToolGroup {
@@ -40,6 +41,12 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
   useEffect(() => {
     fetchGroup();
   }, [groupId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchGroup();
+    }, [groupId])
+  );
 
   const fetchGroup = async () => {
     try {
@@ -122,10 +129,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
   };
 
   const handleTransferGroup = () => {
-    navigation.navigate('AllTools', {
-      screen: 'TransferMultiple',
-      params: { groupId },
-    });
+    navigation.navigate('TransferMultiple', { groupId });
   };
 
   const groupCountText = useMemo(() => `Tools in Group (${groupTools.length})`, [groupTools.length]);
@@ -153,7 +157,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.detailCard}>
             <View style={styles.detailHeader}>
-              <View>
+              <View style={styles.detailHeaderInfo}>
                 <Text style={styles.detailTitle}>{group?.name || 'Group'}</Text>
                 {group?.description ? (
                   <Text style={styles.detailSubtitle}>{group.description}</Text>
@@ -161,7 +165,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
               </View>
               <TouchableOpacity style={styles.transferButton} onPress={handleTransferGroup}>
                 <Ionicons name="swap-horizontal-outline" size={18} color="#ffffff" />
-                <Text style={styles.transferButtonText}>Transfer Group</Text>
+                <Text style={styles.transferButtonText}>Claim Group</Text>
               </TouchableOpacity>
             </View>
 
@@ -172,7 +176,11 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
             ) : (
               <View style={styles.toolsList}>
                 {groupTools.map((tool) => (
-                  <View key={tool.id} style={styles.toolRow}>
+                  <TouchableOpacity
+                    key={tool.id}
+                    style={styles.toolRow}
+                    onPress={() => navigation.navigate('ToolDetail', { tool })}
+                  >
                     <View style={styles.toolInfo}>
                       <Text style={styles.toolName}>
                         #{tool.number} - {tool.name}
@@ -180,7 +188,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
                       <Text style={styles.toolMeta}>Owner: {tool.owner_name || 'Unassigned'}</Text>
                       <Text style={styles.toolMeta}>Location: {tool.location || 'Unknown'}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -251,9 +259,14 @@ const styles = StyleSheet.create({
   detailHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  detailHeaderInfo: {
+    flex: 1,
+    minWidth: 180,
   },
   detailTitle: {
     fontSize: 18,

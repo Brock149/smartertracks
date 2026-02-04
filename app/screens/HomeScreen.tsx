@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#111827',
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   statFootnote: {
     marginTop: 8,
     fontSize: 13,
-    color: '#9ca3af',
+    color: '#111827',
     textAlign: 'center',
   },
   recentSection: {

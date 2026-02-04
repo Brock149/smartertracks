@@ -665,6 +665,56 @@ $$;
 ALTER FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."recompute_company_active_on_delete"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_user_limit integer;
+  v_tool_limit integer;
+  v_user_count integer;
+  v_tool_count integer;
+  v_over boolean := false;
+begin
+  if old.company_id is null then
+    return old;
+  end if;
+
+  select user_limit, tool_limit
+    into v_user_limit, v_tool_limit
+  from public.companies
+  where id = old.company_id;
+
+  select count(*)::int into v_user_count
+  from public.users
+  where company_id = old.company_id;
+
+  select count(*)::int into v_tool_count
+  from public.tools
+  where company_id = old.company_id;
+
+  if v_user_limit is not null and v_user_count > v_user_limit then
+    v_over := true;
+  end if;
+  if v_tool_limit is not null and v_tool_count > v_tool_limit then
+    v_over := true;
+  end if;
+
+  if not v_over then
+    update public.companies
+    set is_active = true,
+        suspended_at = null
+    where id = old.company_id
+      and is_active = false;
+  end if;
+
+  return old;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."recompute_company_active_on_delete"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text")
     LANGUAGE "sql"
     AS $$
@@ -1111,6 +1161,31 @@ CREATE TABLE IF NOT EXISTS "public"."tool_checklists" (
 ALTER TABLE "public"."tool_checklists" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."tool_group_members" (
+    "group_id" "uuid" NOT NULL,
+    "tool_id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."tool_group_members" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."tool_groups" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "name" "text" NOT NULL,
+    "description" "text",
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "is_deleted" boolean DEFAULT false NOT NULL,
+    CONSTRAINT "ck_tool_groups_company_active" CHECK ("public"."is_company_active"("company_id"))
+);
+
+
+ALTER TABLE "public"."tool_groups" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."tool_images" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "tool_id" "uuid",
@@ -1141,6 +1216,7 @@ CREATE TABLE IF NOT EXISTS "public"."tool_transactions" (
     "deleted_tool_number" "text",
     "deleted_tool_name" "text",
     "company_id" "uuid" NOT NULL,
+    "batch_id" "uuid",
     CONSTRAINT "ck_tx_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
@@ -1164,6 +1240,23 @@ CREATE TABLE IF NOT EXISTS "public"."tools" (
 
 
 ALTER TABLE "public"."tools" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."transaction_batches" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "notes" "text",
+    "location" "text",
+    "stored_at" "text",
+    "from_user_id" "uuid",
+    "to_user_id" "uuid",
+    CONSTRAINT "ck_batches_company_active" CHECK ("public"."is_company_active"("company_id"))
+);
+
+
+ALTER TABLE "public"."transaction_batches" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."users" (
@@ -1230,6 +1323,16 @@ ALTER TABLE ONLY "public"."tool_checklists"
 
 
 
+ALTER TABLE ONLY "public"."tool_group_members"
+    ADD CONSTRAINT "tool_group_members_pkey" PRIMARY KEY ("group_id", "tool_id");
+
+
+
+ALTER TABLE ONLY "public"."tool_groups"
+    ADD CONSTRAINT "tool_groups_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."tool_images"
     ADD CONSTRAINT "tool_images_pkey" PRIMARY KEY ("id");
 
@@ -1252,6 +1355,11 @@ ALTER TABLE ONLY "public"."tools"
 
 ALTER TABLE ONLY "public"."tools"
     ADD CONSTRAINT "tools_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."transaction_batches"
+    ADD CONSTRAINT "transaction_batches_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1286,6 +1394,18 @@ CREATE UNIQUE INDEX "idx_location_aliases_unique_alias" ON "public"."location_al
 
 
 CREATE INDEX "idx_tool_checklists_tool_id" ON "public"."tool_checklists" USING "btree" ("tool_id");
+
+
+
+CREATE INDEX "idx_tool_group_members_tool_id" ON "public"."tool_group_members" USING "btree" ("tool_id");
+
+
+
+CREATE UNIQUE INDEX "idx_tool_groups_company_name" ON "public"."tool_groups" USING "btree" ("company_id", "lower"("name"));
+
+
+
+CREATE INDEX "idx_tool_transactions_batch_id" ON "public"."tool_transactions" USING "btree" ("batch_id");
 
 
 
@@ -1329,6 +1449,14 @@ CREATE INDEX "idx_tools_number_trgm" ON "public"."tools" USING "gin" ("lower"("n
 
 
 
+CREATE INDEX "idx_transaction_batches_company_id" ON "public"."transaction_batches" USING "btree" ("company_id");
+
+
+
+CREATE INDEX "idx_transaction_batches_created_at" ON "public"."transaction_batches" USING "btree" ("created_at" DESC);
+
+
+
 CREATE INDEX "idx_users_company_id" ON "public"."users" USING "btree" ("company_id");
 
 
@@ -1357,6 +1485,10 @@ CREATE OR REPLACE TRIGGER "trg_alias_active" BEFORE INSERT OR UPDATE ON "public"
 
 
 
+CREATE OR REPLACE TRIGGER "trg_batches_active" BEFORE INSERT OR UPDATE ON "public"."transaction_batches" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_checklists_active" BEFORE INSERT OR UPDATE ON "public"."tool_checklists" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
@@ -1377,6 +1509,14 @@ CREATE OR REPLACE TRIGGER "trg_images_active" BEFORE INSERT OR UPDATE ON "public
 
 
 
+CREATE OR REPLACE TRIGGER "trg_recompute_company_active_on_tool_delete" AFTER DELETE ON "public"."tools" FOR EACH ROW EXECUTE FUNCTION "public"."recompute_company_active_on_delete"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_recompute_company_active_on_user_delete" AFTER DELETE ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."recompute_company_active_on_delete"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_reports_active" BEFORE INSERT OR UPDATE ON "public"."checklist_reports" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
@@ -1386,6 +1526,10 @@ CREATE OR REPLACE TRIGGER "trg_settings_active" BEFORE INSERT OR UPDATE ON "publ
 
 
 CREATE OR REPLACE TRIGGER "trg_single_primary" BEFORE INSERT OR UPDATE ON "public"."tool_images" FOR EACH ROW EXECUTE FUNCTION "public"."ensure_single_primary"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tool_groups_active" BEFORE INSERT OR UPDATE ON "public"."tool_groups" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
 
@@ -1452,8 +1596,33 @@ ALTER TABLE ONLY "public"."tool_checklists"
 
 
 
+ALTER TABLE ONLY "public"."tool_group_members"
+    ADD CONSTRAINT "tool_group_members_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "public"."tool_groups"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tool_group_members"
+    ADD CONSTRAINT "tool_group_members_tool_id_fkey" FOREIGN KEY ("tool_id") REFERENCES "public"."tools"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tool_groups"
+    ADD CONSTRAINT "tool_groups_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tool_groups"
+    ADD CONSTRAINT "tool_groups_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."tool_images"
     ADD CONSTRAINT "tool_images_tool_id_fkey" FOREIGN KEY ("tool_id") REFERENCES "public"."tools"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tool_transactions"
+    ADD CONSTRAINT "tool_transactions_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "public"."transaction_batches"("id") ON DELETE SET NULL;
 
 
 
@@ -1487,6 +1656,26 @@ ALTER TABLE ONLY "public"."tools"
 
 
 
+ALTER TABLE ONLY "public"."transaction_batches"
+    ADD CONSTRAINT "transaction_batches_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."transaction_batches"
+    ADD CONSTRAINT "transaction_batches_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."transaction_batches"
+    ADD CONSTRAINT "transaction_batches_from_user_id_fkey" FOREIGN KEY ("from_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."transaction_batches"
+    ADD CONSTRAINT "transaction_batches_to_user_id_fkey" FOREIGN KEY ("to_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
 
@@ -1494,6 +1683,26 @@ ALTER TABLE ONLY "public"."users"
 
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+CREATE POLICY "Admins can delete checklist reports even if suspended" ON "public"."checklist_reports" FOR DELETE TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
+CREATE POLICY "Admins can delete tool checklists even if suspended" ON "public"."tool_checklists" FOR DELETE TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
+CREATE POLICY "Admins can delete tools even if suspended" ON "public"."tools" FOR DELETE TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
+CREATE POLICY "Admins can delete transaction batches in their company" ON "public"."transaction_batches" FOR DELETE TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
+CREATE POLICY "Admins can delete users even if suspended" ON "public"."users" FOR DELETE TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
 
 
 
@@ -1529,6 +1738,18 @@ CREATE POLICY "Admins can manage their own company" ON "public"."companies" TO "
 
 
 
+CREATE POLICY "Admins can manage tool group members in their company" ON "public"."tool_group_members" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND (EXISTS ( SELECT 1
+   FROM "public"."tool_groups" "g"
+  WHERE (("g"."id" = "tool_group_members"."group_id") AND ("g"."company_id" = "public"."get_user_company_id"("auth"."uid"()))))))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND (EXISTS ( SELECT 1
+   FROM "public"."tool_groups" "g"
+  WHERE (("g"."id" = "tool_group_members"."group_id") AND ("g"."company_id" = "public"."get_user_company_id"("auth"."uid"())))))));
+
+
+
+CREATE POLICY "Admins can manage tool groups in their company" ON "public"."tool_groups" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id"))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id")));
+
+
+
 CREATE POLICY "Admins can manage tools in their company" ON "public"."tools" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id"))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id")));
 
 
@@ -1538,6 +1759,10 @@ CREATE POLICY "Admins can manage transactions in their company" ON "public"."too
 
 
 CREATE POLICY "Admins can manage users in their company" ON "public"."users" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id"))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id")));
+
+
+
+CREATE POLICY "Admins can update transaction batches in their company" ON "public"."transaction_batches" FOR UPDATE TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
 
 
 
@@ -1619,6 +1844,10 @@ CREATE POLICY "Users can create checklist reports in their company" ON "public".
 
 
 
+CREATE POLICY "Users can create transaction batches in their company" ON "public"."transaction_batches" FOR INSERT TO "authenticated" WITH CHECK (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
 CREATE POLICY "Users can create transactions in their company" ON "public"."tool_transactions" FOR INSERT TO "authenticated" WITH CHECK ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND (("from_user_id" = "auth"."uid"()) OR ("to_user_id" = "auth"."uid"()) OR ("from_user_id" IS NULL)) AND (EXISTS ( SELECT 1
    FROM "public"."users"
   WHERE (("users"."id" = "tool_transactions"."to_user_id") AND ("users"."company_id" = "public"."get_user_company_id"("auth"."uid"())))))));
@@ -1677,7 +1906,21 @@ CREATE POLICY "Users can view their own record" ON "public"."users" FOR SELECT T
 
 
 
+CREATE POLICY "Users can view tool group members in their company" ON "public"."tool_group_members" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."tool_groups" "g"
+  WHERE (("g"."id" = "tool_group_members"."group_id") AND ("g"."company_id" = "public"."get_user_company_id"("auth"."uid"()))))));
+
+
+
+CREATE POLICY "Users can view tool groups in their company" ON "public"."tool_groups" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
 CREATE POLICY "Users can view tools in their company" ON "public"."tools" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
+CREATE POLICY "Users can view transaction batches in their company" ON "public"."transaction_batches" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
 
 
 
@@ -1703,6 +1946,12 @@ ALTER TABLE "public"."location_aliases" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."tool_checklists" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."tool_group_members" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."tool_groups" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."tool_images" ENABLE ROW LEVEL SECURITY;
 
 
@@ -1710,6 +1959,9 @@ ALTER TABLE "public"."tool_transactions" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tools" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."transaction_batches" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
@@ -1995,6 +2247,12 @@ GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_in
 
 
 
+GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "anon";
+GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "service_role";
@@ -2088,6 +2346,18 @@ GRANT ALL ON TABLE "public"."tool_checklists" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."tool_group_members" TO "anon";
+GRANT ALL ON TABLE "public"."tool_group_members" TO "authenticated";
+GRANT ALL ON TABLE "public"."tool_group_members" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tool_groups" TO "anon";
+GRANT ALL ON TABLE "public"."tool_groups" TO "authenticated";
+GRANT ALL ON TABLE "public"."tool_groups" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."tool_images" TO "anon";
 GRANT ALL ON TABLE "public"."tool_images" TO "authenticated";
 GRANT ALL ON TABLE "public"."tool_images" TO "service_role";
@@ -2103,6 +2373,12 @@ GRANT ALL ON TABLE "public"."tool_transactions" TO "service_role";
 GRANT ALL ON TABLE "public"."tools" TO "anon";
 GRANT ALL ON TABLE "public"."tools" TO "authenticated";
 GRANT ALL ON TABLE "public"."tools" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."transaction_batches" TO "anon";
+GRANT ALL ON TABLE "public"."transaction_batches" TO "authenticated";
+GRANT ALL ON TABLE "public"."transaction_batches" TO "service_role";
 
 
 

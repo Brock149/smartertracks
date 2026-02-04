@@ -73,6 +73,11 @@ function MainTabs() {
         options={{
           tabBarLabel: 'All Tools',
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('AllTools', { screen: 'AllToolsList' })
+          },
+        })}
       />
       <Tab.Screen 
         name="Groups" 
