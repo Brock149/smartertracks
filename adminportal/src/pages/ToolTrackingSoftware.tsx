@@ -76,7 +76,7 @@ export default function ToolTrackingSoftware() {
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               Trades teams lose real money to misplaced tools and verbal checkouts. Smarter Tracks is a
               simple, mobile-first tool tracking app that shows who has what, where it is, and when it
-              is due back.
+              changed hands.
             </p>
             <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-600">
               No more lost tools. No more finger-pointing. Just real accountability.

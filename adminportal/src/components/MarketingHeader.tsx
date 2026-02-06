@@ -47,19 +47,34 @@ export default function MarketingHeader() {
             >
               Contact
             </a>
-            <Link to="/tool-tracking-software" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            <Link
+              to="/tool-tracking-software"
+              className="hidden lg:inline-flex px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Tool Tracking
             </Link>
-            <Link to="/hvac-tool-tracking" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            <Link
+              to="/hvac-tool-tracking"
+              className="hidden lg:inline-flex px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               HVAC
             </Link>
-            <Link to="/construction-tool-management" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            <Link
+              to="/construction-tool-management"
+              className="hidden lg:inline-flex px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Construction
             </Link>
-            <Link to="/tool-inventory-software" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            <Link
+              to="/tool-inventory-software"
+              className="hidden lg:inline-flex px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Inventory
             </Link>
-            <Link to="/tool-checkout-system" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            <Link
+              to="/tool-checkout-system"
+              className="hidden lg:inline-flex px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Checkout
             </Link>
             <Link to="/login" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
