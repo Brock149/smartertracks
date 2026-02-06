@@ -36,7 +36,7 @@ export default function MarketingHeader() {
             <a
               href="/#demo"
               onClick={(event) => handleAnchorClick(event, 'demo')}
-              className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+              className="hidden lg:inline-flex px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
             >
               Demo
             </a>
