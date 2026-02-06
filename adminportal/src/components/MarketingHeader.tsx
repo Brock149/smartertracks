@@ -1,6 +1,20 @@
-import { Link } from 'react-router-dom'
+import type { MouseEvent } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 
 export default function MarketingHeader() {
+  const location = useLocation()
+
+  const handleAnchorClick = (event: MouseEvent<HTMLAnchorElement>, targetId: string) => {
+    if (location.pathname !== '/') return
+    const target = document.getElementById(targetId)
+    if (!target) return
+    event.preventDefault()
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (window.location.hash !== `#${targetId}`) {
+      window.history.replaceState(null, '', `#${targetId}`)
+    }
+  }
+
   return (
     <header className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -12,15 +26,27 @@ export default function MarketingHeader() {
             <Link to="/" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
               Home
             </Link>
-            <Link to="/#pricing" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            <a
+              href="/#pricing"
+              onClick={(event) => handleAnchorClick(event, 'pricing')}
+              className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Pricing
-            </Link>
-            <Link to="/#contact" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            </a>
+            <a
+              href="/#demo"
+              onClick={(event) => handleAnchorClick(event, 'demo')}
+              className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Demo
-            </Link>
-            <Link to="/#contact" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
+            </a>
+            <a
+              href="/#contact"
+              onClick={(event) => handleAnchorClick(event, 'contact')}
+              className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors"
+            >
               Contact
-            </Link>
+            </a>
             <Link to="/tool-tracking-software" className="px-2 py-1 rounded-md hover:text-gray-900 transition-colors">
               Tool Tracking
             </Link>

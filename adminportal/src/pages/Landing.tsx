@@ -5,7 +5,7 @@ import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
 
 export default function Landing() {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual')
   const priceLabel = 'per month'
   const starterAnnualMonthly = 185
   const proAnnualMonthly = 315
@@ -58,6 +58,121 @@ export default function Landing() {
               </Link>
               .
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-gray-900">
+              Everything You Need to Manage Your Tools
+            </h3>
+            <p className="mt-4 text-xl text-gray-600">
+              Comprehensive tool management for your entire team
+            </p>
+          </div>
+          
+          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Feature 1 */}
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Tool Inventory</h4>
+              <p className="mt-2 text-gray-600">
+                Complete inventory management with photos, descriptions, and location tracking for all your equipment.
+              </p>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                </svg>
+              </div>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Secure Tracking</h4>
+              <p className="mt-2 text-gray-600">
+                Know exactly where your tools are at all times with secure, real-time tracking and transaction history.
+              </p>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                </svg>
+              </div>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Team Management</h4>
+              <p className="mt-2 text-gray-600">
+                Manage your technicians, assign tools, and track accountability across your entire team.
+              </p>
+            </div>
+
+            {/* Feature 4 */}
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              </div>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Custom Checklists</h4>
+              <p className="mt-2 text-gray-600">
+                Create customizable maintenance checklists for your tools and track completion status.
+              </p>
+            </div>
+
+            {/* Feature 5 */}
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Analytics & History</h4>
+              <p className="mt-2 text-gray-600">
+                Get insights into tool usage and track tool history and transactions to optimize your operations.
+              </p>
+            </div>
+
+            {/* Feature 6 */}
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h4 className="mt-4 text-lg font-semibold text-gray-900">Mobile Access</h4>
+              <p className="mt-2 text-gray-600">
+                Access your tool inventory on the go with our mobile app for iOS and Android devices.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Demo Video Section */}
+      <section id="demo" className="py-16 bg-gray-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h3 className="text-3xl font-extrabold text-gray-900">See Smarter Tracks in Action</h3>
+          <p className="mt-4 text-xl text-gray-600">
+            Watch a quick demo to learn how teams track, transfer, and audit their tools.
+          </p>
+          <div className="mt-10">
+            <div className="relative pt-[56.25%] rounded-xl overflow-hidden shadow-xl">
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src="https://www.youtube.com/embed/86ttYD5idoc?si=8DU3W38G8DEytzAd"
+                title="Smarter Tracks Demo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -198,121 +313,6 @@ export default function Landing() {
                 <li>✓ Custom integrations</li>
                 <li>✓ Annual invoicing</li>
               </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
-              Everything You Need to Manage Your Tools
-            </h3>
-            <p className="mt-4 text-xl text-gray-600">
-              Comprehensive tool management for your entire team
-            </p>
-          </div>
-          
-          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Feature 1 */}
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Tool Inventory</h4>
-              <p className="mt-2 text-gray-600">
-                Complete inventory management with photos, descriptions, and location tracking for all your equipment.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                </svg>
-              </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Secure Tracking</h4>
-              <p className="mt-2 text-gray-600">
-                Know exactly where your tools are at all times with secure, real-time tracking and transaction history.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                </svg>
-              </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Team Management</h4>
-              <p className="mt-2 text-gray-600">
-                Manage your technicians, assign tools, and track accountability across your entire team.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                </svg>
-              </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Custom Checklists</h4>
-              <p className="mt-2 text-gray-600">
-                Create customizable maintenance checklists for your tools and track completion status.
-              </p>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Analytics & History</h4>
-              <p className="mt-2 text-gray-600">
-                Get insights into tool usage and track tool history and transactions to optimize your operations.
-              </p>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h4 className="mt-4 text-lg font-semibold text-gray-900">Mobile Access</h4>
-              <p className="mt-2 text-gray-600">
-                Access your tool inventory on the go with our mobile app for iOS and Android devices.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Demo Video Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-3xl font-extrabold text-gray-900">See Smarter Tracks in Action</h3>
-          <p className="mt-4 text-xl text-gray-600">
-            Watch a quick demo to learn how teams track, transfer, and audit their tools.
-          </p>
-          <div className="mt-10">
-            <div className="relative pt-[56.25%] rounded-xl overflow-hidden shadow-xl">
-              <iframe
-                className="absolute inset-0 w-full h-full"
-                src="https://www.youtube.com/embed/86ttYD5idoc?si=8DU3W38G8DEytzAd"
-                title="Smarter Tracks Demo"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
             </div>
           </div>
         </div>
