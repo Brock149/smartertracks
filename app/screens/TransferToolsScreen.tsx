@@ -192,7 +192,7 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
           *,
           owner:users!tools_current_owner_fkey(name)
         `)
-        .order('number');
+        .order('number_numeric', { ascending: true });
 
       if (toolsError) {
         console.error('Error fetching tools for search:', toolsError);
@@ -646,7 +646,7 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         {selectedTool && (
           <TouchableOpacity 

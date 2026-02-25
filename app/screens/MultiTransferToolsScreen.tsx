@@ -173,7 +173,7 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
           *,
           owner:users!tools_current_owner_fkey(name)
         `)
-        .order('number');
+        .order('number_numeric', { ascending: true });
 
       if (toolsError) {
         console.error('Error fetching tools for search:', toolsError);
@@ -551,7 +551,7 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#2563eb" />

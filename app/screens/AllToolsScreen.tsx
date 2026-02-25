@@ -145,10 +145,23 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
     fetchTools(true);
   }, []);
 
-  // Auto-refresh when screen comes into focus
+  // Keep a ref to the current search query so the focus effect can access it
+  // without going stale (avoids adding searchQuery to the callback deps which
+  // would recreate the effect on every keystroke)
+  const searchQueryRef = useRef(searchQuery);
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
+  // Auto-refresh when screen comes into focus — also re-runs the active search
+  // so owner name, location, and stored_at are all consistent after a claim
   useFocusEffect(
     React.useCallback(() => {
       fetchTools(true);
+      const term = searchQueryRef.current.trim();
+      if (term) {
+        performRemoteSearch(term, 0, false);
+      }
     }, [])
   );
 
@@ -174,7 +187,7 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
           *,
           owner:users!tools_current_owner_fkey(name)
         `, { count: 'exact' })
-        .order('number')
+        .order('number_numeric', { ascending: true })
         .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
       if (toolsError) {
@@ -313,14 +326,16 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error('No active session');
 
-      const { SUPABASE_URL } = (Constants.expoConfig?.extra || {}) as Record<string, string>;
+      const { SUPABASE_URL, SUPABASE_ANON_KEY } = (Constants.expoConfig?.extra || {}) as Record<string, string>;
       const supabaseUrl = SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL!;
+      const supabaseAnonKey = SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
       const url = `${supabaseUrl}/functions/v1/search-tools?q=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}&offset=${offset}`;
       const resp = await fetch(url, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          apikey: supabaseAnonKey,
         },
       });
 
@@ -342,6 +357,7 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
         return {
           ...t,
           current_location: t.location ?? '',
+          current_stored_at: t.stored_at ?? '',
           owner_name: t.owner_name ?? null,
           images,
         };
@@ -705,14 +721,21 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
                 )}
               </TouchableOpacity>
             </View>
+          ) : hasMore && !searchQuery.trim() ? (
+            <View style={styles.loadingMoreContainer}>
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text style={styles.loadingMoreText}>
+                {loadingMore ? 'Loading more tools...' : 'Loading...'}
+              </Text>
+            </View>
           ) : null
         }
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={9}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={0.01}
         onEndReached={() => {
-          if (!loadingMore && hasMore) {
+          if (!loadingMore && hasMore && !searchQuery.trim()) {
             setLoadingMore(true);
             fetchTools(false);
           }
@@ -1055,5 +1078,17 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
   },
 }); 

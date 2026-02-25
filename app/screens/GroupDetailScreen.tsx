@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
+import { resize } from '../utils';
 
 interface ToolGroup {
   id: string;
@@ -24,6 +26,7 @@ interface ToolSummary {
   name: string;
   owner_name?: string | null;
   location?: string | null;
+  thumbnail_url?: string | null;
 }
 
 type GroupDetailScreenProps = {
@@ -37,6 +40,8 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
   const [groupTools, setGroupTools] = useState<ToolSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const getThumbnailUrl = (url: string) => resize(url, 48, 45);
 
   useEffect(() => {
     fetchGroup();
@@ -97,6 +102,25 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
         });
       }
 
+      const thumbnailByTool = new Map<string, string>();
+      if (toolIds.length > 0) {
+        const { data: imagesData, error: imagesError } = await supabase
+          .from('tool_images')
+          .select('tool_id, image_url, thumb_url, is_primary, uploaded_at')
+          .in('tool_id', toolIds)
+          .order('is_primary', { ascending: false })
+          .order('uploaded_at', { ascending: true });
+
+        if (imagesError) throw imagesError;
+        (imagesData || []).forEach((row: any) => {
+          if (thumbnailByTool.has(row.tool_id)) return;
+          const resolved = row.thumb_url || getThumbnailUrl(row.image_url);
+          if (resolved) {
+            thumbnailByTool.set(row.tool_id, resolved);
+          }
+        });
+      }
+
       const tools: ToolSummary[] = (members || [])
         .map((row: any) => {
           const tool = Array.isArray(row.tools) ? row.tools[0] : row.tools;
@@ -107,6 +131,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
             name: tool.name,
             owner_name: ownerMap.get(tool.id) ?? null,
             location: latestLocation.get(tool.id) ?? null,
+            thumbnail_url: thumbnailByTool.get(tool.id) ?? null,
           } as ToolSummary;
         })
         .filter(Boolean) as ToolSummary[];
@@ -135,7 +160,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
   const groupCountText = useMemo(() => `Tools in Group (${groupTools.length})`, [groupTools.length]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#2563eb" />
@@ -181,6 +206,18 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
                     style={styles.toolRow}
                     onPress={() => navigation.navigate('ToolDetail', { tool })}
                   >
+                    {tool.thumbnail_url ? (
+                      <ExpoImage
+                        source={{ uri: tool.thumbnail_url }}
+                        style={styles.toolThumb}
+                        contentFit="cover"
+                        transition={150}
+                      />
+                    ) : (
+                      <View style={styles.toolThumbPlaceholder}>
+                        <Ionicons name="image-outline" size={18} color="#9ca3af" />
+                      </View>
+                    )}
                     <View style={styles.toolInfo}>
                       <Text style={styles.toolName}>
                         #{tool.number} - {tool.name}
@@ -307,9 +344,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
     backgroundColor: '#f9fafb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  toolThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#e5e7eb',
+  },
+  toolThumbPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toolInfo: {
     gap: 4,
+    flex: 1,
   },
   toolName: {
     fontSize: 14,

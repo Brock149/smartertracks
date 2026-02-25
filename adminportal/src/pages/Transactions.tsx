@@ -125,7 +125,7 @@ export default function Transactions() {
       const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
         .select('id, number, name, company_id, current_owner')
-        .order('number', { ascending: true })
+        .order('number_numeric', { ascending: true })
 
       if (toolsError) throw toolsError
       const list = toolsData || []

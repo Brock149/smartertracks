@@ -438,6 +438,19 @@ $$;
 ALTER FUNCTION "public"."ensure_single_primary"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."extract_tool_number"("text_number" "text") RETURNS integer
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+  SELECT COALESCE(
+    (regexp_match(text_number, '^\d+'))[1]::integer,
+    999999  -- Tools without numbers go to the end
+  );
+$$;
+
+
+ALTER FUNCTION "public"."extract_tool_number"("text_number" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_companies_overview"() RETURNS TABLE("id" "uuid", "name" "text", "is_active" boolean, "created_at" timestamp with time zone, "suspended_at" timestamp with time zone, "notes" "text", "user_count" bigint, "tool_count" bigint, "last_activity" timestamp with time zone, "user_limit" integer, "tool_limit" integer, "enforcement_mode" "text", "tier_name" "text", "billing_cycle" "text", "plan_id" "text", "trial_expires_at" timestamp with time zone)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -641,6 +654,66 @@ $$;
 
 
 ALTER FUNCTION "public"."is_superadmin"("uid" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."log_group_activity"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_actor_id uuid;
+  v_actor_name text;
+  v_action text;
+  v_group_id uuid;
+  v_group_name text;
+  v_company_id uuid;
+begin
+  v_actor_id := auth.uid();
+
+  if (tg_op = 'INSERT') then
+    v_action := 'created';
+    v_group_id := new.id;
+    v_group_name := new.name;
+    v_company_id := new.company_id;
+    if v_actor_id is null then
+      v_actor_id := new.created_by;
+    end if;
+  elsif (tg_op = 'DELETE') then
+    v_action := 'deleted';
+    v_group_id := old.id;
+    v_group_name := old.name;
+    v_company_id := old.company_id;
+    if v_actor_id is null then
+      v_actor_id := old.created_by;
+    end if;
+  else
+    return coalesce(new, old);
+  end if;
+
+  select name into v_actor_name from public.users where id = v_actor_id;
+
+  insert into public.group_activity_log (
+    company_id,
+    group_id,
+    group_name,
+    action,
+    actor_user_id,
+    actor_name
+  ) values (
+    v_company_id,
+    v_group_id,
+    v_group_name,
+    v_action,
+    v_actor_id,
+    v_actor_name
+  );
+
+  return coalesce(new, old);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."log_group_activity"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") RETURNS "text"
@@ -1133,6 +1206,22 @@ CREATE TABLE IF NOT EXISTS "public"."company_settings" (
 ALTER TABLE "public"."company_settings" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."group_activity_log" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "group_id" "uuid",
+    "group_name" "text",
+    "action" "text" NOT NULL,
+    "actor_user_id" "uuid",
+    "actor_name" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "group_activity_log_action_check" CHECK (("action" = ANY (ARRAY['created'::"text", 'deleted'::"text"])))
+);
+
+
+ALTER TABLE "public"."group_activity_log" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."location_aliases" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "company_id" "uuid" NOT NULL,
@@ -1235,6 +1324,7 @@ CREATE TABLE IF NOT EXISTS "public"."tools" (
     "deleted_owner_name" "text",
     "is_deleted" boolean DEFAULT false,
     "company_id" "uuid" NOT NULL,
+    "number_numeric" integer GENERATED ALWAYS AS (COALESCE((("regexp_match"("number", '^\d+'::"text"))[1])::integer, 999999)) STORED,
     CONSTRAINT "ck_tools_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
@@ -1310,6 +1400,11 @@ ALTER TABLE ONLY "public"."company_settings"
 
 ALTER TABLE ONLY "public"."company_settings"
     ADD CONSTRAINT "company_settings_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."group_activity_log"
+    ADD CONSTRAINT "group_activity_log_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1445,6 +1540,10 @@ CREATE INDEX "idx_tools_name_trgm" ON "public"."tools" USING "gin" ("lower"("nam
 
 
 
+CREATE INDEX "idx_tools_number_numeric" ON "public"."tools" USING "btree" ("public"."extract_tool_number"("number"));
+
+
+
 CREATE INDEX "idx_tools_number_trgm" ON "public"."tools" USING "gin" ("lower"("number") "public"."gin_trgm_ops");
 
 
@@ -1533,6 +1632,14 @@ CREATE OR REPLACE TRIGGER "trg_tool_groups_active" BEFORE INSERT OR UPDATE ON "p
 
 
 
+CREATE OR REPLACE TRIGGER "trg_tool_groups_log_create" AFTER INSERT ON "public"."tool_groups" FOR EACH ROW EXECUTE FUNCTION "public"."log_group_activity"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tool_groups_log_delete" AFTER DELETE ON "public"."tool_groups" FOR EACH ROW EXECUTE FUNCTION "public"."log_group_activity"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_tools_active" BEFORE INSERT OR UPDATE ON "public"."tools" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
@@ -1573,6 +1680,16 @@ ALTER TABLE ONLY "public"."company_settings"
 
 ALTER TABLE ONLY "public"."company_settings"
     ADD CONSTRAINT "company_settings_default_owner_id_fkey" FOREIGN KEY ("default_owner_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."group_activity_log"
+    ADD CONSTRAINT "group_activity_log_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."group_activity_log"
+    ADD CONSTRAINT "group_activity_log_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
 
 
 
@@ -1766,6 +1883,10 @@ CREATE POLICY "Admins can update transaction batches in their company" ON "publi
 
 
 
+CREATE POLICY "Admins can view group activity in their company" ON "public"."group_activity_log" FOR SELECT TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"()))));
+
+
+
 CREATE POLICY "Service role can do everything on access codes" ON "public"."company_access_codes" TO "service_role" USING (true) WITH CHECK (true);
 
 
@@ -1779,6 +1900,10 @@ CREATE POLICY "Service role can do everything on companies" ON "public"."compani
 
 
 CREATE POLICY "Service role can do everything on company_settings" ON "public"."company_settings" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role can do everything on group activity" ON "public"."group_activity_log" TO "service_role" USING (true) WITH CHECK (true);
 
 
 
@@ -1938,6 +2063,9 @@ ALTER TABLE "public"."company_access_codes" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."company_settings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."group_activity_log" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."location_aliases" ENABLE ROW LEVEL SECURITY;
@@ -2187,6 +2315,12 @@ GRANT ALL ON FUNCTION "public"."ensure_single_primary"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."extract_tool_number"("text_number" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."extract_tool_number"("text_number" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."extract_tool_number"("text_number" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_companies_overview"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_companies_overview"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_companies_overview"() TO "service_role";
@@ -2238,6 +2372,12 @@ GRANT ALL ON FUNCTION "public"."is_company_active"("cid" "uuid") TO "service_rol
 GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "anon";
+GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "service_role";
 
 
 
@@ -2331,6 +2471,12 @@ GRANT ALL ON TABLE "public"."company_access_codes" TO "service_role";
 GRANT ALL ON TABLE "public"."company_settings" TO "anon";
 GRANT ALL ON TABLE "public"."company_settings" TO "authenticated";
 GRANT ALL ON TABLE "public"."company_settings" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."group_activity_log" TO "anon";
+GRANT ALL ON TABLE "public"."group_activity_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."group_activity_log" TO "service_role";
 
 
 

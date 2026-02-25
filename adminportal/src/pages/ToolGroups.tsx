@@ -220,7 +220,7 @@ export default function ToolGroups() {
         .from('tools')
         .select('id, number, name')
         .eq('is_deleted', false)
-        .order('number', { ascending: true })
+        .order('number_numeric', { ascending: true })
 
       if (error) throw error
       setTools(data || [])

@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Decode a JWT payload without making a network call
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(padded))
+  } catch {
+    return null
+  }
+}
+
 serve(async (req) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -13,12 +25,9 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SERVICE_KEY') ?? '' // service role for RPC
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
 
-    // Require auth
+    // Require auth header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
@@ -27,20 +36,28 @@ serve(async (req) => {
       })
     }
 
+    // Decode the JWT locally to get the user ID — no auth.getUser() network call needed
     const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
-    if (authError || !user) {
+    const payload = decodeJwtPayload(token)
+    const userId = payload?.sub
+    if (!userId) {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
         headers: corsHeaders,
       })
     }
 
+    // Service role client for privileged DB operations
+    const supabaseClient = createClient(
+      supabaseUrl,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_KEY') ?? ''
+    )
+
     // Get company_id for isolation
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
       .select('company_id')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single()
 
     if (userError || !userData?.company_id) {
@@ -79,7 +96,44 @@ serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ results: data || [] }), {
+    const toolIds = (data || []).map((t: any) => t.id)
+
+    // Fetch latest stored_at for each result — search_tools RPC only returns location, not stored_at
+    let storedAtByTool: Record<string, string> = {}
+    if (toolIds.length > 0) {
+      const { data: txData } = await supabaseClient
+        .rpc('latest_transactions_for_tools', { p_tool_ids: toolIds })
+
+      if (txData) {
+        for (const tx of txData) {
+          storedAtByTool[tx.tool_id] = tx.stored_at ?? ''
+        }
+      } else {
+        // Fallback: direct query if RPC not available
+        const { data: fallbackTx } = await supabaseClient
+          .from('tool_transactions')
+          .select('tool_id, stored_at, timestamp')
+          .in('tool_id', toolIds)
+          .order('timestamp', { ascending: false })
+
+        if (fallbackTx) {
+          for (const tx of fallbackTx) {
+            if (!storedAtByTool[tx.tool_id]) {
+              storedAtByTool[tx.tool_id] = tx.stored_at ?? ''
+            }
+          }
+        }
+      }
+    }
+
+    // Attach company_id and stored_at to every result
+    const results = (data || []).map((tool: any) => ({
+      ...tool,
+      company_id: userData.company_id,
+      stored_at: storedAtByTool[tool.id] ?? '',
+    }))
+
+    return new Response(JSON.stringify({ results }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

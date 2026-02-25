@@ -184,7 +184,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
           owner:users!tools_current_owner_fkey(name)
         `)
         .eq('current_owner', user?.id)
-        .order('number');
+        .order('number_numeric', { ascending: true });
 
       if (toolsError) {
         console.error('Error fetching my tools:', toolsError);

@@ -148,7 +148,7 @@ export default function Tools() {
         .from('tools')
         .select('*')
         .eq('is_deleted', false)  // Only show non-deleted tools
-        .order('number', { ascending: true })
+        .order('number_numeric', { ascending: true })
 
       if (toolsError) throw toolsError
 

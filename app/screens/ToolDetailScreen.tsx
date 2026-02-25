@@ -266,19 +266,21 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     setClaiming(true);
 
     try {
-      // Normalize the location using our SQL function
-      const { data: normalizedLocationData, error: normalizeError } = await supabase
-        .rpc('normalize_location', {
-          p_company_id: tool.company_id,
-          p_input_location: location.trim()
-        });
+      // Normalize the location using our SQL function (only when company_id is available)
+      let finalLocation = location.trim();
+      if (tool.company_id) {
+        const { data: normalizedLocationData, error: normalizeError } = await supabase
+          .rpc('normalize_location', {
+            p_company_id: tool.company_id,
+            p_input_location: location.trim()
+          });
 
-      if (normalizeError) {
-        console.error('Error normalizing location:', normalizeError);
-        // Continue with original location if normalization fails
+        if (normalizeError) {
+          console.error('Error normalizing location:', normalizeError);
+        } else {
+          finalLocation = normalizedLocationData || location.trim();
+        }
       }
-
-      const finalLocation = normalizedLocationData || location.trim();
 
       // Create the transaction record
       const { data: transactionData, error: transactionError } = await supabase
@@ -359,20 +361,22 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     setClaiming(true);
 
     try {
-      // Normalize the location using our SQL function
+      // Normalize the location using our SQL function (only when company_id is available)
       const originalLocation = latestTransaction?.location || 'Current Location';
-      const { data: normalizedLocationData, error: normalizeError } = await supabase
-        .rpc('normalize_location', {
-          p_company_id: tool.company_id,
-          p_input_location: originalLocation
-        });
+      let finalLocation = originalLocation;
+      if (tool.company_id) {
+        const { data: normalizedLocationData, error: normalizeError } = await supabase
+          .rpc('normalize_location', {
+            p_company_id: tool.company_id,
+            p_input_location: originalLocation
+          });
 
-      if (normalizeError) {
-        console.error('Error normalizing location:', normalizeError);
-        // Continue with original location if normalization fails
+        if (normalizeError) {
+          console.error('Error normalizing location:', normalizeError);
+        } else {
+          finalLocation = normalizedLocationData || originalLocation;
+        }
       }
-
-      const finalLocation = normalizedLocationData || originalLocation;
 
       // Create a "self-transfer" to generate checklist report
       const { data: transactionData, error: transactionError } = await supabase
