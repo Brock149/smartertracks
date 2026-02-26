@@ -13,6 +13,7 @@ interface Tool {
   company_id: string
   current_owner: string | null
   photo_url?: string
+  estimated_cost?: number | null
   owner?: {
     name: string
   }
@@ -49,6 +50,7 @@ export default function Tools() {
     number: '',
     name: '',
     description: '',
+    estimated_cost: null as number | null,
     checklist: [] as Array<ChecklistItem | { item_name: string; required: boolean }>
   })
   const [newChecklistItem, setNewChecklistItem] = useState({
@@ -254,6 +256,7 @@ export default function Tools() {
         number: '',
         name: '',
         description: '',
+        estimated_cost: null,
         checklist: []
       });
       setNewToolImages([]);
@@ -403,6 +406,7 @@ export default function Tools() {
       number: '',
       name: '',
       description: '',
+      estimated_cost: null,
       checklist: []
     });
     setNewToolImages([]);
@@ -953,6 +957,25 @@ export default function Tools() {
                 </div>
 
                 <div>
+                  <label className="block font-medium mb-2 text-base md:text-lg">Estimated Cost (optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 text-gray-500 text-base md:text-lg">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={newTool.estimated_cost ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setNewTool(prev => ({ ...prev, estimated_cost: val === '' ? null : Math.round(Number(val)) }))
+                      }}
+                      placeholder="e.g. 450"
+                      className="w-full border rounded-lg pl-8 md:pl-12 pr-3 md:pr-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
                   <label className="block font-medium mb-2 text-base md:text-lg">Checklist Items</label>
                   <div className="space-y-3">
                     {newTool.checklist.map((item, index) => (
@@ -1077,6 +1100,25 @@ export default function Tools() {
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   />
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-2 text-lg">Estimated Cost (optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-lg">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={editingTool.estimated_cost ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setEditingTool({ ...editingTool, estimated_cost: val === '' ? null : Math.round(Number(val)) })
+                      }}
+                      placeholder="e.g. 450"
+                      className="w-full border rounded-lg pl-12 pr-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div>

@@ -15,6 +15,7 @@ import Users from './pages/Users'
 import Transactions from './pages/Transactions'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import ToolCosts from './pages/ToolCosts'
 import Billing from './pages/Billing'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsAndConditions from './pages/TermsAndConditions'
@@ -80,6 +81,7 @@ export default function App() {
         >
           <Route index element={<div>Welcome to Smarter Tracks - Tool Tracking System</div>} />
           <Route path="tools" element={<Tools />} />
+          <Route path="tool-costs" element={<ToolCosts />} />
           <Route path="groups" element={<ToolGroups />} />
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />
