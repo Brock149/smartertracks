@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { fetchToolImages } from '../lib/uploadImage'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -35,6 +36,41 @@ export default function ToolCosts() {
 
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 25
+
+  // On-demand image viewer state
+  const [imageViewToolId, setImageViewToolId] = useState<string | null>(null)
+  const [imageViewImages, setImageViewImages] = useState<Array<{ id: string; image_url: string; thumb_url?: string | null }>>([])
+  const [imageViewIdx, setImageViewIdx] = useState(0)
+  const [imageViewLoading, setImageViewLoading] = useState(false)
+  const [imageViewError, setImageViewError] = useState(false)
+
+  async function openImageViewer(toolId: string) {
+    setImageViewToolId(toolId)
+    setImageViewLoading(true)
+    setImageViewError(false)
+    setImageViewIdx(0)
+    setImageViewImages([])
+    try {
+      const imgs = await fetchToolImages(toolId)
+      if (imgs.length === 0) {
+        setImageViewImages([])
+      } else {
+        setImageViewImages(imgs)
+      }
+    } catch {
+      setImageViewError(true)
+    } finally {
+      setImageViewLoading(false)
+    }
+  }
+
+  function closeImageViewer() {
+    setImageViewToolId(null)
+    setImageViewImages([])
+    setImageViewIdx(0)
+    setImageViewLoading(false)
+    setImageViewError(false)
+  }
 
   useEffect(() => {
     fetchToolCosts()
@@ -466,6 +502,9 @@ export default function ToolCosts() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Location
                 </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Photo
+                </th>
                 <th
                   onClick={() => handleSort('cost')}
                   className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
@@ -484,6 +523,14 @@ export default function ToolCosts() {
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{tool.name}</td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600">{tool.owner_name}</td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-600">{tool.location}</td>
+                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center">
+                    <button
+                      onClick={() => openImageViewer(tool.id)}
+                      className="text-blue-600 hover:text-blue-800 hover:underline text-xs"
+                    >
+                      View Photo
+                    </button>
+                  </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-right">
                     {editingId === tool.id ? (
                       <div className="flex items-center justify-end gap-1">
@@ -521,7 +568,7 @@ export default function ToolCosts() {
               ))}
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     No tools found matching your criteria.
                   </td>
                 </tr>
@@ -530,7 +577,7 @@ export default function ToolCosts() {
             {paginated.length > 0 && (
               <tfoot className="bg-gray-50">
                 <tr>
-                  <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-700 text-right">
+                  <td colSpan={5} className="px-6 py-3 text-sm font-semibold text-gray-700 text-right">
                     Page Total:
                   </td>
                   <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
@@ -586,8 +633,14 @@ export default function ToolCosts() {
                 </button>
               )}
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between items-center text-sm">
               <span className="text-gray-500">Owner: {tool.owner_name}</span>
+              <button
+                onClick={() => openImageViewer(tool.id)}
+                className="text-blue-600 hover:text-blue-800 hover:underline text-xs"
+              >
+                View Photo
+              </button>
               <span className="text-gray-500">{tool.location}</span>
             </div>
           </div>
@@ -670,6 +723,82 @@ export default function ToolCosts() {
                 Next
               </button>
             </nav>
+          </div>
+        </div>
+      )}
+
+      {/* On-demand Image Viewer Modal */}
+      {imageViewToolId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 max-w-2xl w-full relative flex flex-col items-center">
+            <button
+              onClick={closeImageViewer}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+              aria-label="Close"
+            >
+              &times;
+            </button>
+
+            {imageViewLoading && (
+              <div className="py-16 flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+                <span className="text-gray-500 text-sm">Loading photo...</span>
+              </div>
+            )}
+
+            {!imageViewLoading && imageViewError && (
+              <div className="py-16 text-center">
+                <span className="text-red-500">Failed to load images.</span>
+              </div>
+            )}
+
+            {!imageViewLoading && !imageViewError && imageViewImages.length === 0 && (
+              <div className="py-16 text-center">
+                <span className="text-gray-500">No photos uploaded for this tool.</span>
+              </div>
+            )}
+
+            {!imageViewLoading && !imageViewError && imageViewImages.length > 0 && (
+              <div className="flex items-center w-full">
+                {imageViewImages.length > 1 && (
+                  <button
+                    onClick={() => setImageViewIdx((prev) => (prev - 1 + imageViewImages.length) % imageViewImages.length)}
+                    className="text-4xl font-bold text-white bg-gray-800 bg-opacity-70 hover:bg-opacity-90 rounded-full p-2 mx-2 select-none flex-shrink-0"
+                    aria-label="Previous"
+                  >
+                    &#8249;
+                  </button>
+                )}
+
+                <div className="mx-auto max-h-[75vh] overflow-hidden flex items-center justify-center">
+                  <img
+                    src={imageViewImages[imageViewIdx].image_url}
+                    alt="Tool Photo"
+                    className="max-h-[75vh] w-auto rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = ''
+                      setImageViewError(true)
+                    }}
+                  />
+                </div>
+
+                {imageViewImages.length > 1 && (
+                  <button
+                    onClick={() => setImageViewIdx((prev) => (prev + 1) % imageViewImages.length)}
+                    className="text-4xl font-bold text-white bg-gray-800 bg-opacity-70 hover:bg-opacity-90 rounded-full p-2 mx-2 select-none flex-shrink-0"
+                    aria-label="Next"
+                  >
+                    &#8250;
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!imageViewLoading && imageViewImages.length > 1 && (
+              <div className="mt-3 text-sm text-gray-500">
+                {imageViewIdx + 1} of {imageViewImages.length}
+              </div>
+            )}
           </div>
         </div>
       )}
