@@ -52,6 +52,50 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const [role, setRole] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!mounted || !user) { setLoading(false); return }
+      const { data } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      if (mounted) {
+        setRole(data?.role ?? null)
+        setLoading(false)
+      }
+    })
+    return () => { mounted = false }
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
+
+  if (role !== 'admin' && role !== 'superadmin') {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center px-4">
+        <div className="text-5xl mb-4">🔒</div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Admin Access Only</h2>
+        <p className="text-gray-600 max-w-md">
+          This page is only accessible by administrators. If you believe you should have access, please contact your company admin.
+        </p>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <Router>
@@ -81,13 +125,13 @@ export default function App() {
         >
           <Route index element={<div>Welcome to Smarter Tracks - Tool Tracking System</div>} />
           <Route path="tools" element={<Tools />} />
-          <Route path="tool-costs" element={<ToolCosts />} />
+          <Route path="tool-costs" element={<AdminOnlyRoute><ToolCosts /></AdminOnlyRoute>} />
           <Route path="groups" element={<ToolGroups />} />
           <Route path="users" element={<Users />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="billing" element={<Billing />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="billing" element={<AdminOnlyRoute><Billing /></AdminOnlyRoute>} />
+          <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
         </Route>
       </Routes>
     </Router>

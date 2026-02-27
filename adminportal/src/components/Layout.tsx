@@ -2,15 +2,15 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-const navLinks = [
-  { to: '/admin/tools', label: 'Tools', icon: '🧰' },
-  { to: '/admin/tool-costs', label: 'Tool Costs', icon: '💰' },
-  { to: '/admin/groups', label: 'Groups', icon: '🧩' },
-  { to: '/admin/users', label: 'Users', icon: '👥' },
-  { to: '/admin/transactions', label: 'Transactions', icon: '🔄' },
-  { to: '/admin/reports', label: 'Reports', icon: '📊' },
-  { to: '/admin/billing', label: 'Billing', icon: '💳' },
-  { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
+const allNavLinks = [
+  { to: '/admin/tools', label: 'Tools', icon: '🧰', adminOnly: false },
+  { to: '/admin/tool-costs', label: 'Tool Costs', icon: '💰', adminOnly: true },
+  { to: '/admin/groups', label: 'Groups', icon: '🧩', adminOnly: false },
+  { to: '/admin/users', label: 'Users', icon: '👥', adminOnly: false },
+  { to: '/admin/transactions', label: 'Transactions', icon: '🔄', adminOnly: false },
+  { to: '/admin/reports', label: 'Reports', icon: '📊', adminOnly: false },
+  { to: '/admin/billing', label: 'Billing', icon: '💳', adminOnly: true },
+  { to: '/admin/settings', label: 'Settings', icon: '⚙️', adminOnly: true },
 ]
 
 export default function Layout() {
@@ -26,6 +26,7 @@ export default function Layout() {
     toolCount: number
   } | null>(null)
   const [companyLoading, setCompanyLoading] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
@@ -36,11 +37,15 @@ export default function Layout() {
 
       const { data: userRecord, error: userError } = await supabase
         .from('users')
-        .select('company_id')
+        .select('company_id, role')
         .eq('id', userId)
         .single()
 
       if (userError) throw userError
+
+      if (isActive()) {
+        setUserRole(userRecord?.role ?? null)
+      }
 
       if (!userRecord?.company_id) {
         setCompanyName(null)
@@ -172,7 +177,9 @@ export default function Layout() {
         </div>
         <nav className="flex-1">
           <ul className="space-y-2">
-            {navLinks.map(link => (
+            {allNavLinks
+              .filter(link => !link.adminOnly || userRole === 'admin' || userRole === 'superadmin')
+              .map(link => (
               <li key={link.to}>
                 <Link
                   to={link.to}
@@ -217,7 +224,7 @@ export default function Layout() {
           </button>
           
           <div className="flex items-center gap-2 md:gap-4 flex-1 md:flex-none">
-            <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">{navLinks.find(l => location.pathname.startsWith(l.to))?.label || 'Dashboard'}</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">{allNavLinks.find(l => location.pathname.startsWith(l.to))?.label || 'Dashboard'}</h1>
             <span className="hidden md:inline ml-4 text-gray-400">|</span>
             <span className="hidden md:inline text-gray-500">Smarter Tracks - Tool Tracking System</span>
           </div>
