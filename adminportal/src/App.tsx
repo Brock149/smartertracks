@@ -25,6 +25,7 @@ import ConstructionToolManagement from './pages/ConstructionToolManagement'
 import HvacToolTracking from './pages/HvacToolTracking'
 import ToolInventorySoftware from './pages/ToolInventorySoftware'
 import ToolCheckoutSystem from './pages/ToolCheckoutSystem'
+import AppVersions from './pages/AppVersions'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -132,6 +133,7 @@ export default function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="billing" element={<AdminOnlyRoute><Billing /></AdminOnlyRoute>} />
           <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
+          <Route path="app-versions" element={<AdminOnlyRoute><AppVersions /></AdminOnlyRoute>} />
         </Route>
       </Routes>
     </Router>

@@ -11,6 +11,7 @@ const allNavLinks = [
   { to: '/admin/reports', label: 'Reports', icon: '📊', adminOnly: false },
   { to: '/admin/billing', label: 'Billing', icon: '💳', adminOnly: true },
   { to: '/admin/settings', label: 'Settings', icon: '⚙️', adminOnly: true },
+  { to: '/admin/app-versions', label: 'App Versions', icon: '📱', adminOnly: true },
 ]
 
 export default function Layout() {
