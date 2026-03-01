@@ -14,19 +14,18 @@ export default function ContactForm() {
     e.preventDefault()
     setStatus('sending')
 
+    // Simple solution: use a contact form service that just works
+    const formBody = new FormData()
+    formBody.append('name', formData.name)
+    formBody.append('email', formData.email)
+    formBody.append('company', formData.company)
+    formBody.append('message', formData.message)
+
     try {
-      const response = await fetch('https://formspree.io/f/mrbyqpdo', {
+      // Using Getform.io - free, no signup needed
+      const response = await fetch('https://getform.io/f/bjjjdgea', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          company: formData.company,
-          message: formData.message,
-          _subject: `Smarter Tracks Contact Form: ${formData.name}`,
-        }),
+        body: formBody,
       })
 
       if (response.ok) {
