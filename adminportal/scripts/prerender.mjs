@@ -17,9 +17,9 @@ const rootDir = resolve(__dirname, '..')
 const routesToRender = [
   {
     url: '/',
-    title: 'Smarter Tracks | Tool Tracking Software',
+    title: 'Smarter Tracks | Tool Tracking Software for HVAC & Construction',
     description:
-      'Smarter Tracks is tool tracking software for trades teams. Track tools, prevent losses, run audits, and keep crews accountable.',
+      'Smarter Tracks is tool tracking software for HVAC, construction, and trades teams. Track tools across jobsites, assign custody, run audits, and prevent tool loss.',
   },
   {
     url: '/tool-tracking-software',
