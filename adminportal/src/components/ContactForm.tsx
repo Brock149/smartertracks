@@ -9,9 +9,11 @@ export default function ContactForm() {
     message: '',
   })
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setHasAttemptedSubmit(true)
     setStatus('sending')
 
     // Simple solution: use a contact form service that just works
@@ -124,7 +126,7 @@ export default function ContactForm() {
           />
         </div>
 
-        {status === 'error' && (
+        {status === 'error' && hasAttemptedSubmit && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
             Something went wrong. Please try again or email us directly at{' '}
             <a href="mailto:brockcoburn@smartertracks.com" className="font-semibold underline">
