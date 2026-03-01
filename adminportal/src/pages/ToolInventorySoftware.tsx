@@ -65,9 +65,9 @@ export default function ToolInventorySoftware() {
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               Tool inventory software
             </p>
-            <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
               Know exactly what tools you own and where they are.
-            </h2>
+            </h1>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               Smarter Tracks is tool inventory software for field teams. Assign tools to techs,
               track custody, and run fast audits so you stop rebuying the same gear.
@@ -122,7 +122,7 @@ export default function ToolInventorySoftware() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">FAQ</h2>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {faqItems.map((item) => (
@@ -168,9 +168,9 @@ export default function ToolInventorySoftware() {
 
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-3xl font-extrabold text-white">
+          <h2 className="text-3xl font-extrabold text-white">
             Tool inventory software your crews will actually use.
-          </h3>
+          </h2>
           <p className="mt-4 text-xl text-blue-100">
             Start tracking today and stop losing tools to guesswork.
           </p>

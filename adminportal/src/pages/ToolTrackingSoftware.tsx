@@ -70,9 +70,9 @@ export default function ToolTrackingSoftware() {
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               Tool tracking software for HVAC, construction, and trades
             </p>
-            <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
               Tool Tracking Software That Stops Lost Tools.
-            </h2>
+            </h1>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               Trades teams lose real money to misplaced tools and verbal checkouts. Smarter Tracks is a
               simple, mobile-first tool tracking app that shows who has what, where it is, and when it
@@ -105,9 +105,9 @@ export default function ToolTrackingSoftware() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               Why tool tracking matters
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               Lost tools add up quickly when crews move between jobsites and trucks.
             </p>
@@ -142,7 +142,7 @@ export default function ToolTrackingSoftware() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">What is a tool tracking app?</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">What is a tool tracking app?</h2>
             <p className="mt-4 text-lg text-gray-600">
               A tool tracking app helps you assign tools, scan them in and out, and see tool
               locations across jobsites in real time.
@@ -174,9 +174,9 @@ export default function ToolTrackingSoftware() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               Smarter Tracks is built for trades teams
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               It is not a bloated enterprise asset manager. It is the clean, fast workflow crews
               actually use.
@@ -210,7 +210,7 @@ export default function ToolTrackingSoftware() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">Real ROI from tool tracking</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">Real ROI from tool tracking</h2>
             <p className="mt-4 text-lg text-gray-600">
               Most teams break even quickly by reducing tool loss and duplicate purchases.
             </p>
@@ -247,7 +247,7 @@ export default function ToolTrackingSoftware() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">FAQ</h2>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {faqItems.map((item) => (
@@ -299,9 +299,9 @@ export default function ToolTrackingSoftware() {
 
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-3xl font-extrabold text-white">
+          <h2 className="text-3xl font-extrabold text-white">
             Ready to stop losing tools?
-          </h3>
+          </h2>
           <p className="mt-4 text-xl text-blue-100">
             Track tools in under an hour and keep every crew accountable.
           </p>

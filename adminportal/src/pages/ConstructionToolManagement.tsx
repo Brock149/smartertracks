@@ -65,9 +65,9 @@ export default function ConstructionToolManagement() {
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               Construction tool tracking software
             </p>
-            <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
               Keep construction tools accountable on every jobsite.
-            </h2>
+            </h1>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               Smarter Tracks is construction tool tracking software built for contractors and field
               crews. Track tools across jobsites, assign custody, and run fast audits without the
@@ -100,9 +100,9 @@ export default function ConstructionToolManagement() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               Why construction teams lose tools
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               Shared tools move between crews, trucks, and jobsites without clear ownership.
             </p>
@@ -131,9 +131,9 @@ export default function ConstructionToolManagement() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               Construction tool tracking built for the field
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               Smarter Tracks keeps every tool accountable without slowing crews down.
             </p>
@@ -184,7 +184,7 @@ export default function ConstructionToolManagement() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">Construction ROI</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">Construction ROI</h2>
             <p className="mt-4 text-lg text-gray-600">
               Most construction teams see fewer losses, faster audits, and less downtime.
             </p>
@@ -209,7 +209,7 @@ export default function ConstructionToolManagement() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">FAQ</h2>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {faqItems.map((item) => (
@@ -261,9 +261,9 @@ export default function ConstructionToolManagement() {
 
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-3xl font-extrabold text-white">
+          <h2 className="text-3xl font-extrabold text-white">
             Construction tool tracking that keeps crews productive.
-          </h3>
+          </h2>
           <p className="mt-4 text-xl text-blue-100">
             Track tools, reduce losses, and keep projects moving with Smarter Tracks.
           </p>

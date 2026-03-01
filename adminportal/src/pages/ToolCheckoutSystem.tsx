@@ -65,9 +65,9 @@ export default function ToolCheckoutSystem() {
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               Tool checkout system
             </p>
-            <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
               Check tools out with accountability built in.
-            </h2>
+            </h1>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               Smarter Tracks is a tool checkout system that records every handoff. Assign tools to
               techs, scan checkouts, and track returns so tools stop disappearing.
@@ -121,7 +121,7 @@ export default function ToolCheckoutSystem() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">FAQ</h2>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {faqItems.map((item) => (
@@ -167,9 +167,9 @@ export default function ToolCheckoutSystem() {
 
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-3xl font-extrabold text-white">
+          <h2 className="text-3xl font-extrabold text-white">
             A tool checkout system that crews will actually use.
-          </h3>
+          </h2>
           <p className="mt-4 text-xl text-blue-100">
             Track checkouts, keep tools accountable, and reduce loss fast.
           </p>

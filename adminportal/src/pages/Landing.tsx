@@ -29,10 +29,10 @@ export default function Landing() {
       <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
               Smarter Tracks Tool Tracking Software
               <span className="block text-blue-600">Track Tools Across Jobsites and Crews</span>
-            </h2>
+            </h1>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               Tool tracking software built for HVAC, construction, and trades teams. Track equipment,
               manage inventory, and keep crews accountable with fast audits and clear history.

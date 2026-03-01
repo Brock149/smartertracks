@@ -65,9 +65,9 @@ export default function HvacToolTracking() {
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               HVAC tool tracking app
             </p>
-            <h2 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-3 text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
               Stop losing HVAC tools and keep techs accountable.
-            </h2>
+            </h1>
             <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
               HVAC teams lose thousands each year to misplaced gauges, meters, vac pumps, and shop
               tools. Smarter Tracks makes your inventory visible, assigned, and easy to audit.
@@ -99,9 +99,9 @@ export default function HvacToolTracking() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               The pain every HVAC manager knows
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               Tools disappear when nobody is accountable. That is what Smarter Tracks fixes.
             </p>
@@ -130,9 +130,9 @@ export default function HvacToolTracking() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               What an HVAC tool tracking app does
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               Track tools in real time without the cost of GPS.
             </p>
@@ -163,9 +163,9 @@ export default function HvacToolTracking() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               Built for HVAC, not generic construction
-            </h3>
+            </h2>
             <p className="mt-4 text-lg text-gray-600">
               Smarter Tracks fits the way HVAC teams actually work.
             </p>
@@ -197,9 +197,9 @@ export default function HvacToolTracking() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900">
               Why HVAC teams choose Smarter Tracks
-            </h3>
+            </h2>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -227,7 +227,7 @@ export default function HvacToolTracking() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">HVAC ROI</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">HVAC ROI</h2>
             <p className="mt-4 text-lg text-gray-600">
               Most HVAC teams report a major drop in missing tools and wasted time.
             </p>
@@ -252,7 +252,7 @@ export default function HvacToolTracking() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-gray-900">FAQ</h3>
+            <h2 className="text-3xl font-extrabold text-gray-900">FAQ</h2>
           </div>
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {faqItems.map((item) => (
@@ -304,9 +304,9 @@ export default function HvacToolTracking() {
 
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h3 className="text-3xl font-extrabold text-white">
+          <h2 className="text-3xl font-extrabold text-white">
             Try HVAC tool tracking that actually works.
-          </h3>
+          </h2>
           <p className="mt-4 text-xl text-blue-100">
             Stop rebuying the same drill kits and start tracking the smart way.
           </p>
