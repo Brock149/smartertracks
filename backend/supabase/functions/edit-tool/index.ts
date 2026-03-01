@@ -50,7 +50,7 @@ serve(async (req) => {
       )
     }
 
-    const { id, number, name, description, photo_url, checklist } = await req.json()
+    const { id, number, name, description, photo_url, checklist, estimated_cost } = await req.json()
 
     if (!id) {
       return new Response(JSON.stringify({ error: 'Tool ID is required' }), {
@@ -73,10 +73,16 @@ serve(async (req) => {
       )
     }
 
+    // Build update fields — only include estimated_cost when explicitly sent
+    const updateFields: Record<string, any> = { number, name, description, photo_url }
+    if (estimated_cost !== undefined) {
+      updateFields.estimated_cost = estimated_cost === null ? null : Math.round(Number(estimated_cost))
+    }
+
     // Update the tool in the tools table
     const { error: updateError } = await supabaseClient
       .from('tools')
-      .update({ number, name, description, photo_url })
+      .update(updateFields)
       .eq('id', id)
 
     if (updateError) throw updateError

@@ -7,6 +7,7 @@ import ViewAccessCodesModal from '../components/ViewAccessCodesModal'
 import RenameCompanyModal from '../components/RenameCompanyModal'
 import DeleteCompanyModal from '../components/DeleteCompanyModal'
 import EditLimitsModal from '../components/EditLimitsModal'
+import AppVersionsPage from './AppVersionsPage'
 
 export default function DashboardPage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const [renameCompany, setRenameCompany] = useState<Company|null>(null)
   const [deleteCompany, setDeleteCompany] = useState<Company|null>(null)
   const [limitsCompany, setLimitsCompany] = useState<Company|null>(null)
+  const [activeTab, setActiveTab] = useState<'companies' | 'app-versions'>('companies')
 
   useEffect(() => {
     console.log('Dashboard useEffect: fetch companies')
@@ -99,21 +101,53 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('companies')}
+              className={`${
+                activeTab === 'companies'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              🏢 Companies
+            </button>
+            <button
+              onClick={() => setActiveTab('app-versions')}
+              className={`${
+                activeTab === 'app-versions'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              📱 App Versions
+            </button>
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
+          {activeTab === 'app-versions' ? (
+            <AppVersionsPage />
+          ) : (
+            <>
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                  {error}
+                </div>
+              )}
 
-          {/* Debug Info (can remove later) */}
-          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4">
-            <p>Debug: Total companies = {companies.length}</p>
-            <p>Debug: Loading = {loading.toString()}</p>
-            {error && <p>Error: {error}</p>}
-          </div>
+              {/* Debug Info (can remove later) */}
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4">
+                <p>Debug: Total companies = {companies.length}</p>
+                <p>Debug: Loading = {loading.toString()}</p>
+                {error && <p>Error: {error}</p>}
+              </div>
 
           {/* Add Company Button */}
           <div className="flex justify-end mb-4">
@@ -289,6 +323,8 @@ export default function DashboardPage() {
               </table>
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
 

@@ -72,7 +72,7 @@ serve(async (req) => {
     }
 
     // Get the request body
-    const { number, name, description, photo_url, checklist } = await req.json()
+    const { number, name, description, photo_url, checklist, estimated_cost } = await req.json()
 
     // Validate required fields
     if (!number || !name) {
@@ -104,6 +104,18 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       )
+    }
+
+    // Set estimated_cost if provided (RPC doesn't handle this field)
+    if (estimated_cost != null) {
+      const { error: costError } = await supabaseClient
+        .from('tools')
+        .update({ estimated_cost: Math.round(Number(estimated_cost)) })
+        .eq('id', toolId)
+
+      if (costError) {
+        console.error('Failed to set estimated_cost:', costError.message)
+      }
     }
 
     // Get the created tool data to return

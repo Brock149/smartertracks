@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { supabase } from '../lib/supabase'
 
 interface VersionControl {
   id: string
@@ -13,7 +13,7 @@ interface VersionControl {
   updated_at: string
 }
 
-export default function AppVersions() {
+export default function AppVersionsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -94,48 +94,48 @@ export default function AppVersions() {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-500 text-lg">Loading version settings...</div>
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-3xl font-bold">Mobile App Version Control</h2>
-          <p className="text-lg text-gray-500 mt-1">
-            Manage minimum app versions and force updates for iOS and Android
-          </p>
-        </div>
+    <div className="bg-white shadow rounded-lg p-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Mobile App Version Control</h2>
+        <p className="text-gray-600 mt-1">
+          Manage minimum app versions and force updates for iOS and Android
+        </p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-6 text-lg">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg mb-6 text-lg">
+        <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg mb-4">
           {success}
         </div>
       )}
 
       {/* Information Panel */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <div className="flex items-start">
           <div className="flex-shrink-0">
             <span className="text-blue-500 text-2xl">ℹ️</span>
           </div>
           <div className="ml-3">
-            <h3 className="text-lg font-medium text-blue-800">How Force Updates Work</h3>
-            <div className="mt-2 text-blue-700">
+            <h3 className="text-base font-medium text-blue-800">How Force Updates Work</h3>
+            <div className="mt-2 text-sm text-blue-700">
               <ul className="list-disc list-inside space-y-1">
                 <li><strong>Minimum Version:</strong> Users below this version will be forced to update</li>
                 <li><strong>Current Version:</strong> The latest version available in the app stores</li>
                 <li><strong>Force Update Enabled:</strong> Toggle to control whether force updates are active</li>
-                <li>When a user's app version is below the minimum, they'll see an update screen</li>
-                <li>They won't be able to use the app until they update to at least the minimum version</li>
-                <li>Version format: Use semantic versioning (e.g., 1.2.5)</li>
+                <li>When enabled, users below minimum version will see an update screen and cannot proceed</li>
               </ul>
             </div>
           </div>
@@ -145,18 +145,18 @@ export default function AppVersions() {
       {/* Version Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {versions.map((version) => (
-          <div key={version.platform} className="bg-white rounded-lg shadow-lg p-6">
+          <div key={version.platform} className="border border-gray-200 rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center">
                 <span className="text-3xl mr-3">
                   {version.platform === 'ios' ? '🍎' : '🤖'}
                 </span>
-                <h3 className="text-2xl font-bold capitalize">{version.platform}</h3>
+                <h3 className="text-xl font-bold capitalize">{version.platform}</h3>
               </div>
               {editingPlatform !== version.platform && (
                 <button
                   onClick={() => startEditing(version)}
-                  className="px-4 py-2 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-50 text-sm font-medium"
+                  className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded hover:bg-blue-50"
                 >
                   Edit
                 </button>
@@ -166,7 +166,7 @@ export default function AppVersions() {
             {editingPlatform === version.platform ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Minimum Version (Required)
                   </label>
                   <input
@@ -174,7 +174,7 @@ export default function AppVersions() {
                     value={formData.minimum_version}
                     onChange={(e) => handleChange('minimum_version', e.target.value)}
                     placeholder="1.2.5"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Users below this version must update
@@ -182,7 +182,7 @@ export default function AppVersions() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Current Version (Latest)
                   </label>
                   <input
@@ -190,7 +190,7 @@ export default function AppVersions() {
                     value={formData.current_version}
                     onChange={(e) => handleChange('current_version', e.target.value)}
                     placeholder="1.2.5"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Latest version available in stores
@@ -198,7 +198,7 @@ export default function AppVersions() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Update Message
                   </label>
                   <textarea
@@ -206,12 +206,12 @@ export default function AppVersions() {
                     onChange={(e) => handleChange('update_message', e.target.value)}
                     placeholder="A new version is available! Please update to continue."
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Store URL
                   </label>
                   <input
@@ -223,11 +223,11 @@ export default function AppVersions() {
                         ? 'https://apps.apple.com/app/id...'
                         : 'https://play.google.com/store/apps/details?id=...'
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                   <div>
                     <label className="text-sm font-medium text-gray-700">
                       Force Update Enabled
@@ -247,17 +247,17 @@ export default function AppVersions() {
                   </label>
                 </div>
 
-                <div className="flex justify-end space-x-3 mt-6">
+                <div className="flex justify-end space-x-2 mt-4">
                   <button
                     onClick={cancelEditing}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => handleSave(version.platform)}
                     disabled={saving === version.platform}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {saving === version.platform ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -267,16 +267,16 @@ export default function AppVersions() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Minimum Version:</span>
-                  <span className="font-semibold text-lg">{version.minimum_version}</span>
+                  <span className="font-semibold">{version.minimum_version}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Current Version:</span>
-                  <span className="font-semibold text-lg">{version.current_version}</span>
+                  <span className="font-semibold">{version.current_version}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Force Update:</span>
                   <span
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
                       version.force_update_enabled
                         ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
@@ -285,22 +285,11 @@ export default function AppVersions() {
                     {version.force_update_enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
-                <div className="pt-3 border-t border-gray-200">
+                <div className="pt-2 border-t border-gray-200">
                   <span className="text-sm text-gray-600 block mb-1">Update Message:</span>
                   <p className="text-sm text-gray-800 italic">"{version.update_message}"</p>
                 </div>
-                <div>
-                  <span className="text-sm text-gray-600 block mb-1">Store URL:</span>
-                  <a
-                    href={version.store_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline break-all"
-                  >
-                    {version.store_url}
-                  </a>
-                </div>
-                <div className="text-xs text-gray-500 pt-2">
+                <div className="text-xs text-gray-500">
                   Last updated: {new Date(version.updated_at).toLocaleString()}
                 </div>
               </div>
@@ -310,29 +299,18 @@ export default function AppVersions() {
       </div>
 
       {/* Usage Instructions */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mt-8">
-        <h3 className="text-xl font-bold mb-4">How to Roll Out an Update</h3>
-        <ol className="list-decimal list-inside space-y-3 text-gray-700">
-          <li>
-            <strong>Deploy your new app version</strong> to the App Store and Google Play Store
-          </li>
-          <li>
-            <strong>Update "Current Version"</strong> to match the newly released version
-          </li>
-          <li>
-            <strong>Decide on minimum version:</strong>
-            <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-              <li>Keep same as before = Users can continue with old versions (soft update)</li>
-              <li>Set to new version = All users must update immediately (hard update)</li>
-              <li>Set to specific older version = Only very old versions must update</li>
+      <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <h3 className="text-base font-bold mb-2">Quick Guide</h3>
+        <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+          <li>Deploy new app version to App Store / Play Store</li>
+          <li>Update "Current Version" to match the new release</li>
+          <li>Set "Minimum Version" based on your needs:
+            <ul className="list-disc list-inside ml-6 mt-1 space-y-1">
+              <li>Same as current = Force all users to update</li>
+              <li>Lower than current = Only force very old versions</li>
             </ul>
           </li>
-          <li>
-            <strong>Enable force update</strong> if you want to block users on old versions
-          </li>
-          <li>
-            <strong>Customize the message</strong> users will see when they need to update
-          </li>
+          <li>Enable "Force Update" to start blocking old versions</li>
         </ol>
       </div>
     </div>
