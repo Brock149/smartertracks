@@ -16,18 +16,20 @@ export default function ContactForm() {
     setHasAttemptedSubmit(true)
     setStatus('sending')
 
-    // Simple solution: use a contact form service that just works
-    const formBody = new FormData()
-    formBody.append('name', formData.name)
-    formBody.append('email', formData.email)
-    formBody.append('company', formData.company)
-    formBody.append('message', formData.message)
-
     try {
-      // Using Getform.io - free, no signup needed
-      const response = await fetch('https://getform.io/f/bjjjdgea', {
+      // Using Basin - completely free, zero setup
+      const response = await fetch('https://usebasin.com/f/7ad2ce2b8b2b', {
         method: 'POST',
-        body: formBody,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          message: formData.message,
+        }),
       })
 
       if (response.ok) {
