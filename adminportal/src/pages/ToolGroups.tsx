@@ -82,15 +82,10 @@ export default function ToolGroups() {
   const [transferToolMember, setTransferToolMember] = useState<GroupMember | null>(null)
   const [singleTransferForm, setSingleTransferForm] = useState({ to_user_id: '', location: '', stored_at: '', notes: '' })
   const [singleTransferLoading, setSingleTransferLoading] = useState(false)
-  const [reportIssue, setReportIssue] = useState(false)
-  const [reportChecklistItemsByTool, setReportChecklistItemsByTool] = useState<Record<string, ChecklistItem[]>>({})
-  const [reportRows, setReportRows] = useState<Array<{
-    id: string
-    tool_id: string
-    checklist_item_id: string
-    status: 'damaged' | 'replace' | ''
-    comments: string
-  }>>([])
+  const [transferChecklistsByTool, setTransferChecklistsByTool] = useState<Record<string, ChecklistItem[]>>({})
+  const [transferChecklistStatus, setTransferChecklistStatus] = useState<Record<string, Record<string, 'damaged' | 'replace' | null>>>({})
+  const [transferChecklistComments, setTransferChecklistComments] = useState<Record<string, Record<string, string>>>({})
+  const [transferChecklistsLoading, setTransferChecklistsLoading] = useState(false)
 
   useEffect(() => {
     fetchGroups()
@@ -99,13 +94,6 @@ export default function ToolGroups() {
     fetchGroupActivity()
     fetchAllGroupTools()
   }, [])
-
-  useEffect(() => {
-    if (!reportIssue) {
-      setReportChecklistItemsByTool({})
-      setReportRows([])
-    }
-  }, [reportIssue])
 
   useEffect(() => {
     setGroupsPage(1)
@@ -298,22 +286,49 @@ export default function ToolGroups() {
     }
   }
 
-  async function fetchChecklistForTool(toolId: string) {
+  async function fetchChecklistsForTools(toolIds: string[]) {
+    if (toolIds.length === 0) return
     try {
+      setTransferChecklistsLoading(true)
       const { data, error } = await supabase
         .from('tool_checklists')
         .select('id, tool_id, item_name, required')
-        .eq('tool_id', toolId)
+        .in('tool_id', toolIds)
         .order('item_name')
 
       if (error) throw error
-      setReportChecklistItemsByTool(prev => ({
-        ...prev,
-        [toolId]: data || [],
-      }))
+      const byTool: Record<string, ChecklistItem[]> = {}
+      ;(data || []).forEach((item: any) => {
+        if (!byTool[item.tool_id]) byTool[item.tool_id] = []
+        byTool[item.tool_id].push(item)
+      })
+      setTransferChecklistsByTool(byTool)
     } catch (err: any) {
       setError(err.message || 'Failed to load checklist items')
+    } finally {
+      setTransferChecklistsLoading(false)
     }
+  }
+
+  function resetTransferChecklists() {
+    setTransferChecklistsByTool({})
+    setTransferChecklistStatus({})
+    setTransferChecklistComments({})
+  }
+
+  function collectChecklistReports() {
+    return Object.entries(transferChecklistStatus).flatMap(([toolId, statuses]) =>
+      Object.entries(statuses)
+        .filter(([_, status]) => status)
+        .map(([itemId, status]) => ({
+          tool_id: toolId,
+          checklist_item_id: itemId,
+          status: status === 'damaged'
+            ? 'Damaged/Needs Repair'
+            : 'Needs Replacement/Resupply',
+          comments: transferChecklistComments[toolId]?.[itemId]?.trim() || null,
+        }))
+    )
   }
 
   async function handleCreateGroup() {
@@ -491,6 +506,8 @@ export default function ToolGroups() {
   function openTransferTool(member: GroupMember) {
     setTransferToolMember(member)
     setSingleTransferForm({ to_user_id: '', location: '', stored_at: '', notes: '' })
+    resetTransferChecklists()
+    fetchChecklistsForTools([member.tool_id])
     setIsTransferToolOpen(true)
   }
 
@@ -507,7 +524,7 @@ export default function ToolGroups() {
       if (!session) { setError('You must be logged in'); return }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transaction`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transactions-batch`,
         {
           method: 'POST',
           headers: {
@@ -515,11 +532,12 @@ export default function ToolGroups() {
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            tool_id: transferToolMember.tool_id,
+            tool_ids: [transferToolMember.tool_id],
             to_user_id: singleTransferForm.to_user_id,
             location: singleTransferForm.location.trim(),
             stored_at: singleTransferForm.stored_at.trim(),
-            notes: singleTransferForm.notes.trim() || `Single tool transfer from group: ${selectedGroup?.name || ''}`,
+            notes: singleTransferForm.notes.trim() || `Tool transfer from group: ${selectedGroup?.name || ''}`,
+            checklist_reports: collectChecklistReports(),
           }),
         }
       )
@@ -529,12 +547,22 @@ export default function ToolGroups() {
 
       setIsTransferToolOpen(false)
       setTransferToolMember(null)
+      resetTransferChecklists()
       if (selectedGroup) await fetchGroupMembers(selectedGroup.id)
     } catch (err: any) {
       setError(err.message || 'Failed to transfer tool')
     } finally {
       setSingleTransferLoading(false)
     }
+  }
+
+  function openTransferGroup() {
+    if (!selectedGroup) return
+    setTransferForm({ to_user_id: '', location: '', stored_at: '', notes: '' })
+    resetTransferChecklists()
+    const toolIds = groupMembers.map((m) => m.tool_id).filter(Boolean)
+    fetchChecklistsForTools(toolIds)
+    setIsTransferOpen(true)
   }
 
   async function handleTransferGroup() {
@@ -548,18 +576,6 @@ export default function ToolGroups() {
     if (toolIds.length === 0) {
       setError('No tools in this group to transfer')
       return
-    }
-
-    if (reportIssue) {
-      if (reportRows.length === 0) {
-        setError('Please add at least one report')
-        return
-      }
-      const invalid = reportRows.some((row) => !row.tool_id || !row.checklist_item_id || !row.status)
-      if (invalid) {
-        setError('Please complete all report rows')
-        return
-      }
     }
 
     try {
@@ -585,16 +601,7 @@ export default function ToolGroups() {
             location: transferForm.location.trim(),
             stored_at: transferForm.stored_at.trim(),
             notes: transferForm.notes.trim() || `Group transfer: ${selectedGroup.name}`,
-            checklist_reports: reportIssue
-              ? reportRows.map((row) => ({
-                  tool_id: row.tool_id,
-                  checklist_item_id: row.checklist_item_id,
-                  status: row.status === 'damaged'
-                    ? 'Damaged/Needs Repair'
-                    : 'Needs Replacement/Resupply',
-                  comments: row.comments.trim() || null,
-                }))
-              : [],
+            checklist_reports: collectChecklistReports(),
           }),
         }
       )
@@ -606,9 +613,7 @@ export default function ToolGroups() {
 
       setIsTransferOpen(false)
       setTransferForm({ to_user_id: '', location: '', stored_at: '', notes: '' })
-      setReportIssue(false)
-      setReportChecklistItemsByTool({})
-      setReportRows([])
+      resetTransferChecklists()
       await fetchGroupMembers(selectedGroup.id)
     } catch (err: any) {
       setError(err.message || 'Failed to transfer tools')
@@ -823,7 +828,7 @@ export default function ToolGroups() {
                         Add Tools
                       </button>
                       <button
-                        onClick={() => setIsTransferOpen(true)}
+                        onClick={openTransferGroup}
                         className="px-3 py-2 text-sm font-medium text-gray-700 border-l border-gray-200 hover:bg-gray-50"
                       >
                         Transfer Group
@@ -1108,10 +1113,10 @@ export default function ToolGroups() {
 
       {isTransferOpen && selectedGroup && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative max-h-[90vh] flex flex-col">
             <button
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={() => setIsTransferOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl z-10"
+              onClick={() => { setIsTransferOpen(false); resetTransferChecklists() }}
               aria-label="Close"
             >
               ×
@@ -1120,7 +1125,7 @@ export default function ToolGroups() {
               <h3 className="text-xl font-semibold">Transfer Group</h3>
               <p className="text-sm text-gray-500 mt-1">{selectedGroup.name}</p>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
                 <select
@@ -1166,135 +1171,84 @@ export default function ToolGroups() {
                 />
               </div>
 
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={reportIssue}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                      setReportIssue(next)
-                      if (!next) {
-                        setReportChecklistItemsByTool({})
-                        setReportRows([])
-                      }
-                    }}
-                  />
-                  Report an issue for one tool
-                </label>
-
-                {reportIssue && (
-                  <div className="space-y-3">
-                    {reportRows.length === 0 && (
-                      <div className="text-sm text-gray-500">Add a report to get started.</div>
-                    )}
-                    {reportRows.map((row, idx) => {
-                      const items = reportChecklistItemsByTool[row.tool_id] || []
-                      return (
-                        <div key={row.id} className="rounded-md border border-gray-200 bg-white p-3 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-gray-700">Report {idx + 1}</div>
-                            <button
-                              type="button"
-                              onClick={() => setReportRows(prev => prev.filter(r => r.id !== row.id))}
-                              className="text-sm text-red-600 hover:text-red-800"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Tool</label>
-                            <select
-                              value={row.tool_id}
-                              onChange={async (e) => {
-                                const toolId = e.target.value
-                                setReportRows(prev => prev.map(r => r.id === row.id ? {
-                                  ...r,
-                                  tool_id: toolId,
-                                  checklist_item_id: '',
-                                } : r))
-                                if (toolId && !reportChecklistItemsByTool[toolId]) {
-                                  await fetchChecklistForTool(toolId)
-                                }
-                              }}
-                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">Select tool</option>
-                              {groupMembers.map((member) => (
-                                <option key={member.tool_id} value={member.tool_id}>
-                                  {member.tools?.name || 'Unknown'} #{member.tools?.number || 'N/A'}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Checklist Item</label>
-                            <select
-                              value={row.checklist_item_id}
-                              onChange={(e) => setReportRows(prev => prev.map(r => r.id === row.id ? {
-                                ...r,
-                                checklist_item_id: e.target.value,
-                              } : r))}
-                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              disabled={!row.tool_id}
-                            >
-                              <option value="">Select item</option>
-                              {items.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                  {item.item_name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                            <select
-                              value={row.status}
-                              onChange={(e) => setReportRows(prev => prev.map(r => r.id === row.id ? {
-                                ...r,
-                                status: e.target.value as 'damaged' | 'replace' | '',
-                              } : r))}
-                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">Select status</option>
-                              <option value="damaged">Damaged / Needs Repair</option>
-                              <option value="replace">Needs Replacement / Resupply</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Comments</label>
-                            <textarea
-                              value={row.comments}
-                              onChange={(e) => setReportRows(prev => prev.map(r => r.id === row.id ? {
-                                ...r,
-                                comments: e.target.value,
-                              } : r))}
-                              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              rows={2}
-                            />
-                          </div>
+              {transferChecklistsLoading ? (
+                <div className="text-sm text-gray-500">Loading checklists...</div>
+              ) : groupMembers.some((m) => (transferChecklistsByTool[m.tool_id] || []).length > 0) && (
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-gray-700">Tool Checklist</div>
+                  {groupMembers.map((member) => {
+                    const items = transferChecklistsByTool[member.tool_id] || []
+                    if (items.length === 0) return null
+                    return (
+                      <div key={member.tool_id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                        <div className="text-sm font-semibold text-gray-900">
+                          #{member.tools?.number || 'N/A'} - {member.tools?.name || 'Unknown'}
                         </div>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => setReportRows(prev => ([
-                        ...prev,
-                        {
-                          id: `${Date.now()}-${Math.random()}`,
-                          tool_id: '',
-                          checklist_item_id: '',
-                          status: '',
-                          comments: '',
-                        },
-                      ]))}
-                      className="text-sm text-blue-700 hover:text-blue-900"
-                    >
-                      + Report another tool
-                    </button>
-                  </div>
-                )}
-              </div>
+                        {items.map((item) => {
+                          const status = transferChecklistStatus[member.tool_id]?.[item.id] || null
+                          return (
+                            <div key={item.id} className="rounded-md border border-gray-200 bg-white p-2.5 space-y-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-sm text-gray-800">{item.item_name}</span>
+                                {item.required && (
+                                  <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Required</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={status === 'damaged'}
+                                    onChange={() => setTransferChecklistStatus((prev) => ({
+                                      ...prev,
+                                      [member.tool_id]: {
+                                        ...prev[member.tool_id],
+                                        [item.id]: status === 'damaged' ? null : 'damaged',
+                                      },
+                                    }))}
+                                    className="h-4 w-4"
+                                  />
+                                  Damaged
+                                </label>
+                                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={status === 'replace'}
+                                    onChange={() => setTransferChecklistStatus((prev) => ({
+                                      ...prev,
+                                      [member.tool_id]: {
+                                        ...prev[member.tool_id],
+                                        [item.id]: status === 'replace' ? null : 'replace',
+                                      },
+                                    }))}
+                                    className="h-4 w-4"
+                                  />
+                                  Replace
+                                </label>
+                              </div>
+                              {(status === 'damaged' || status === 'replace') && (
+                                <textarea
+                                  value={transferChecklistComments[member.tool_id]?.[item.id] || ''}
+                                  onChange={(e) => setTransferChecklistComments((prev) => ({
+                                    ...prev,
+                                    [member.tool_id]: {
+                                      ...prev[member.tool_id],
+                                      [item.id]: e.target.value,
+                                    },
+                                  }))}
+                                  placeholder="Add comments about the issue..."
+                                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  rows={2}
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
               <button
@@ -1420,86 +1374,157 @@ export default function ToolGroups() {
         </div>
       )}
 
-      {isTransferToolOpen && transferToolMember && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
-            <button
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null) }}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <div className="p-6 border-b">
-              <h3 className="text-xl font-semibold">Transfer Tool</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {transferToolMember.tools?.name || 'Unknown'} #{transferToolMember.tools?.number || 'N/A'}
-              </p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
-                <select
-                  value={singleTransferForm.to_user_id}
-                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, to_user_id: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select recipient</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>{user.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input
-                  type="text"
-                  value={singleTransferForm.location}
-                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, location: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stored At</label>
-                <select
-                  value={singleTransferForm.stored_at}
-                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, stored_at: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select storage location</option>
-                  <option value="on job site">On Job Site</option>
-                  <option value="on truck">On Truck</option>
-                  <option value="N/A">N/A</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={singleTransferForm.notes}
-                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                />
-              </div>
-            </div>
-            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+      {isTransferToolOpen && transferToolMember && (() => {
+        const toolId = transferToolMember.tool_id
+        const items = transferChecklistsByTool[toolId] || []
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative max-h-[90vh] flex flex-col">
               <button
-                onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null) }}
-                className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl z-10"
+                onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null); resetTransferChecklists() }}
+                aria-label="Close"
               >
-                Cancel
+                ×
               </button>
-              <button
-                onClick={handleTransferSingleTool}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                disabled={singleTransferLoading}
-              >
-                {singleTransferLoading ? 'Transferring...' : 'Transfer Tool'}
-              </button>
+              <div className="p-6 border-b">
+                <h3 className="text-xl font-semibold">Transfer Tool</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {transferToolMember.tools?.name || 'Unknown'} #{transferToolMember.tools?.number || 'N/A'}
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
+                  <select
+                    value={singleTransferForm.to_user_id}
+                    onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, to_user_id: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select recipient</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>{user.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={singleTransferForm.location}
+                    onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, location: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stored At</label>
+                  <select
+                    value={singleTransferForm.stored_at}
+                    onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, stored_at: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select storage location</option>
+                    <option value="on job site">On Job Site</option>
+                    <option value="on truck">On Truck</option>
+                    <option value="N/A">N/A</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={singleTransferForm.notes}
+                    onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={3}
+                  />
+                </div>
+                {transferChecklistsLoading ? (
+                  <div className="text-sm text-gray-500">Loading checklist...</div>
+                ) : items.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-gray-700">Tool Checklist</div>
+                    {items.map((item) => {
+                      const status = transferChecklistStatus[toolId]?.[item.id] || null
+                      return (
+                        <div key={item.id} className="rounded-md border border-gray-200 bg-gray-50 p-2.5 space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-sm text-gray-800">{item.item_name}</span>
+                            {item.required && (
+                              <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Required</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={status === 'damaged'}
+                                onChange={() => setTransferChecklistStatus((prev) => ({
+                                  ...prev,
+                                  [toolId]: {
+                                    ...prev[toolId],
+                                    [item.id]: status === 'damaged' ? null : 'damaged',
+                                  },
+                                }))}
+                                className="h-4 w-4"
+                              />
+                              Damaged
+                            </label>
+                            <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={status === 'replace'}
+                                onChange={() => setTransferChecklistStatus((prev) => ({
+                                  ...prev,
+                                  [toolId]: {
+                                    ...prev[toolId],
+                                    [item.id]: status === 'replace' ? null : 'replace',
+                                  },
+                                }))}
+                                className="h-4 w-4"
+                              />
+                              Replace
+                            </label>
+                          </div>
+                          {(status === 'damaged' || status === 'replace') && (
+                            <textarea
+                              value={transferChecklistComments[toolId]?.[item.id] || ''}
+                              onChange={(e) => setTransferChecklistComments((prev) => ({
+                                ...prev,
+                                [toolId]: {
+                                  ...prev[toolId],
+                                  [item.id]: e.target.value,
+                                },
+                              }))}
+                              placeholder="Add comments about the issue..."
+                              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              rows={2}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+                <button
+                  onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null); resetTransferChecklists() }}
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleTransferSingleTool}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                  disabled={singleTransferLoading}
+                >
+                  {singleTransferLoading ? 'Transferring...' : 'Transfer Tool'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
