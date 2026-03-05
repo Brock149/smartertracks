@@ -29,6 +29,11 @@ type GroupMember = {
   tools: ToolSummary | null
 }
 
+type GroupToolInfo = {
+  number: string
+  name: string
+}
+
 type GroupActivity = {
   id: string
   action: string
@@ -46,6 +51,7 @@ export default function ToolGroups() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [groupSearch, setGroupSearch] = useState('')
+  const [allGroupToolsMap, setAllGroupToolsMap] = useState<Record<string, GroupToolInfo[]>>({})
   const [groupsPage, setGroupsPage] = useState(1)
   const groupsPerPage = 15
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -55,6 +61,7 @@ export default function ToolGroups() {
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([])
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
   const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [transferLoading, setTransferLoading] = useState(false)
   const [transferForm, setTransferForm] = useState({
@@ -80,6 +87,7 @@ export default function ToolGroups() {
     fetchTools()
     fetchUsers()
     fetchGroupActivity()
+    fetchAllGroupTools()
   }, [])
 
   useEffect(() => {
@@ -122,14 +130,50 @@ export default function ToolGroups() {
     }
   }
 
+  async function fetchAllGroupTools() {
+    try {
+      const { data, error } = await supabase
+        .from('tool_group_members')
+        .select('group_id, tools ( number, name )')
+
+      if (error) throw error
+      const map: Record<string, GroupToolInfo[]> = {}
+      ;(data || []).forEach((row: any) => {
+        const tool = Array.isArray(row.tools) ? row.tools[0] : row.tools
+        if (tool) {
+          if (!map[row.group_id]) map[row.group_id] = []
+          map[row.group_id].push({ number: tool.number, name: tool.name })
+        }
+      })
+      setAllGroupToolsMap(map)
+    } catch {
+      // non-critical, sidebar tool search just won't work
+    }
+  }
+
+  const matchingToolsByGroup = useMemo(() => {
+    const term = groupSearch.trim().toLowerCase()
+    if (!term) return {} as Record<string, GroupToolInfo[]>
+    const result: Record<string, GroupToolInfo[]> = {}
+    groups.forEach((g) => {
+      const tools = allGroupToolsMap[g.id] || []
+      const matches = tools.filter(
+        (t) => t.number.toLowerCase().includes(term) || t.name.toLowerCase().includes(term)
+      )
+      if (matches.length > 0) result[g.id] = matches
+    })
+    return result
+  }, [groupSearch, groups, allGroupToolsMap])
+
   const filteredGroups = useMemo(() => {
     const term = groupSearch.trim().toLowerCase()
     if (!term) return groups
     return groups.filter(group =>
       group.name.toLowerCase().includes(term) ||
-      (group.description || '').toLowerCase().includes(term)
+      (group.description || '').toLowerCase().includes(term) ||
+      !!matchingToolsByGroup[group.id]
     )
-  }, [groups, groupSearch])
+  }, [groups, groupSearch, matchingToolsByGroup])
 
   const totalGroupPages = Math.max(Math.ceil(filteredGroups.length / groupsPerPage), 1)
   const pagedGroups = useMemo(() => {
@@ -333,7 +377,7 @@ export default function ToolGroups() {
       if (error) throw error
       setSelectedToolIds([])
       setIsAddToolsOpen(false)
-      await fetchGroupMembers(selectedGroup.id)
+      await Promise.all([fetchGroupMembers(selectedGroup.id), fetchAllGroupTools()])
     } catch (err: any) {
       setError(err.message || 'Failed to add tools to group')
     } finally {
@@ -352,7 +396,7 @@ export default function ToolGroups() {
         .eq('tool_id', toolId)
 
       if (error) throw error
-      await fetchGroupMembers(selectedGroup.id)
+      await Promise.all([fetchGroupMembers(selectedGroup.id), fetchAllGroupTools()])
     } catch (err: any) {
       setError(err.message || 'Failed to remove tool from group')
     } finally {
@@ -456,6 +500,21 @@ export default function ToolGroups() {
     })
   }, [tools, toolSearch, membersByToolId])
 
+  const filteredMembers = useMemo(() => {
+    const term = memberSearch.trim().toLowerCase()
+    if (!term) return groupMembers
+    return groupMembers.filter((member) => {
+      const t = member.tools
+      if (!t) return false
+      return (
+        (t.name || '').toLowerCase().includes(term) ||
+        (t.number || '').toLowerCase().includes(term) ||
+        (t.owner_name || '').toLowerCase().includes(term) ||
+        (t.location || '').toLowerCase().includes(term)
+      )
+    })
+  }, [groupMembers, memberSearch])
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -533,38 +592,56 @@ export default function ToolGroups() {
                 type="text"
                 value={groupSearch}
                 onChange={(e) => setGroupSearch(e.target.value)}
-                placeholder="Search groups..."
+                placeholder="Search groups or tools..."
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             {pagedGroups.length === 0 ? (
-              <div className="text-sm text-gray-500">No groups yet.</div>
+              <div className="text-sm text-gray-500">
+                {groupSearch.trim() ? 'No groups or tools match your search.' : 'No groups yet.'}
+              </div>
             ) : (
               <div className="space-y-2">
-                {pagedGroups.map((group) => (
-                  <button
-                    key={group.id}
-                    onClick={() => {
-                      setSelectedGroup(group)
-                      fetchGroupMembers(group.id)
-                    }}
-                    className={`w-full text-left px-3 py-2 rounded-md border transition relative ${
-                      selectedGroup?.id === group.id
-                        ? 'bg-blue-50 border-blue-500 shadow-sm ring-1 ring-blue-200'
-                        : 'bg-white border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    {selectedGroup?.id === group.id && (
-                      <span className="absolute left-0 top-0 h-full w-1 rounded-l-md bg-blue-600" />
-                    )}
-                    <div className="font-medium text-gray-900">{group.name}</div>
-                    {group.description && (
-                      <div className="text-sm text-gray-500 line-clamp-2">
-                        {group.description}
-                      </div>
-                    )}
-                  </button>
-                ))}
+                {pagedGroups.map((group) => {
+                  const toolMatches = matchingToolsByGroup[group.id]
+                  return (
+                    <button
+                      key={group.id}
+                      onClick={() => {
+                        setSelectedGroup(group)
+                        setMemberSearch('')
+                        fetchGroupMembers(group.id)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-md border transition relative ${
+                        selectedGroup?.id === group.id
+                          ? 'bg-blue-50 border-blue-500 shadow-sm ring-1 ring-blue-200'
+                          : 'bg-white border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      {selectedGroup?.id === group.id && (
+                        <span className="absolute left-0 top-0 h-full w-1 rounded-l-md bg-blue-600" />
+                      )}
+                      <div className="font-medium text-gray-900">{group.name}</div>
+                      {group.description && (
+                        <div className="text-sm text-gray-500 line-clamp-2">
+                          {group.description}
+                        </div>
+                      )}
+                      {toolMatches && toolMatches.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
+                          {toolMatches.map((t, idx) => (
+                            <div key={`${t.number}-${idx}`} className="text-xs text-gray-600 flex items-center gap-1.5">
+                              <svg className="h-3 w-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                              <span>#{t.number} - {t.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             )}
             {totalGroupPages > 1 && (
@@ -623,16 +700,46 @@ export default function ToolGroups() {
                 </div>
 
                 <div className="bg-white border rounded-lg">
-                  <div className="border-b px-4 py-3 text-sm font-medium text-gray-700">
-                    Tools in Group ({groupMembers.length})
+                  <div className="border-b px-4 py-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-gray-700">
+                      {memberSearch.trim()
+                        ? `Showing ${filteredMembers.length} of ${groupMembers.length} tools`
+                        : `Tools in Group (${groupMembers.length})`}
+                    </span>
+                    {groupMembers.length > 0 && (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          placeholder="Search within group..."
+                          className="border rounded-lg pl-8 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+                        />
+                        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        {memberSearch && (
+                          <button
+                            onClick={() => setMemberSearch('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {groupMembers.length === 0 ? (
+                  {filteredMembers.length === 0 ? (
                     <div className="px-4 py-6 text-sm text-gray-500">
-                      No tools in this group yet.
+                      {groupMembers.length === 0
+                        ? 'No tools in this group yet.'
+                        : 'No tools match your search.'}
                     </div>
                   ) : (
                     <div className="divide-y">
-                      {groupMembers.map((member) => (
+                      {filteredMembers.map((member) => (
                         <div key={member.tool_id} className="px-4 py-3 flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
                             {member.tools?.id ? (

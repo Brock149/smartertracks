@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 
@@ -16,6 +17,11 @@ interface ToolGroup {
   id: string;
   name: string;
   description: string | null;
+}
+
+interface GroupToolInfo {
+  number: string;
+  name: string;
 }
 
 type GroupsScreenProps = {
@@ -27,6 +33,7 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
+  const [groupToolsMap, setGroupToolsMap] = useState<Record<string, GroupToolInfo[]>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [sortMode, setSortMode] = useState<'alpha' | 'most'>('most');
 
@@ -56,15 +63,22 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
 
       const { data: memberRows, error: memberError } = await supabase
         .from('tool_group_members')
-        .select('group_id');
+        .select('group_id, tools ( number, name )');
 
       if (memberError) throw memberError;
 
       const counts: Record<string, number> = {};
+      const toolsMap: Record<string, GroupToolInfo[]> = {};
       (memberRows || []).forEach((row: any) => {
         counts[row.group_id] = (counts[row.group_id] || 0) + 1;
+        const tool = Array.isArray(row.tools) ? row.tools[0] : row.tools;
+        if (tool) {
+          if (!toolsMap[row.group_id]) toolsMap[row.group_id] = [];
+          toolsMap[row.group_id].push({ number: tool.number, name: tool.name });
+        }
       });
       setGroupCounts(counts);
+      setGroupToolsMap(toolsMap);
     } catch (err: any) {
       setError(err.message || 'Failed to load groups');
     } finally {
@@ -72,21 +86,41 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
     }
   };
 
-  const filteredGroups = groups.filter((group) => {
+  const matchingToolsByGroup = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return true;
-    return group.name.toLowerCase().includes(term);
-  });
+    if (!term) return {} as Record<string, GroupToolInfo[]>;
+    const result: Record<string, GroupToolInfo[]> = {};
+    groups.forEach((g) => {
+      const tools = groupToolsMap[g.id] || [];
+      const matches = tools.filter(
+        (t) => t.number.toLowerCase().includes(term) || t.name.toLowerCase().includes(term)
+      );
+      if (matches.length > 0) result[g.id] = matches;
+    });
+    return result;
+  }, [searchTerm, groups, groupToolsMap]);
 
-  const sortedGroups = [...filteredGroups].sort((a, b) => {
-    if (sortMode === 'alpha') {
-      return a.name.localeCompare(b.name);
-    }
-    const aCount = groupCounts[a.id] ?? 0;
-    const bCount = groupCounts[b.id] ?? 0;
-    if (aCount === bCount) return a.name.localeCompare(b.name);
-    return bCount - aCount;
-  });
+  const filteredGroups = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return groups;
+    return groups.filter((group) => {
+      if (group.name.toLowerCase().includes(term)) return true;
+      if (matchingToolsByGroup[group.id]) return true;
+      return false;
+    });
+  }, [groups, searchTerm, matchingToolsByGroup]);
+
+  const sortedGroups = useMemo(() => {
+    return [...filteredGroups].sort((a, b) => {
+      if (sortMode === 'alpha') {
+        return a.name.localeCompare(b.name);
+      }
+      const aCount = groupCounts[a.id] ?? 0;
+      const bCount = groupCounts[b.id] ?? 0;
+      if (aCount === bCount) return a.name.localeCompare(b.name);
+      return bCount - aCount;
+    });
+  }, [filteredGroups, sortMode, groupCounts]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -134,7 +168,7 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
               <TextInput
                 value={searchTerm}
                 onChangeText={setSearchTerm}
-                placeholder="Search groups..."
+                placeholder="Search groups or tools..."
                 placeholderTextColor="#9ca3af"
                 style={styles.searchInput}
                 autoCapitalize="none"
@@ -144,28 +178,45 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
           </View>
           <View style={styles.groupList}>
             {sortedGroups.length === 0 ? (
-              <Text style={styles.emptyText}>No groups yet.</Text>
+              <Text style={styles.emptyText}>
+                {searchTerm.trim() ? 'No groups or tools match your search.' : 'No groups yet.'}
+              </Text>
             ) : (
-              sortedGroups.map((group) => (
-                <TouchableOpacity
-                  key={group.id}
-                  style={styles.groupCard}
-                  onPress={() => navigation.navigate('GroupDetail', { groupId: group.id })}
-                >
-                  <View style={styles.groupRow}>
-                    <View style={styles.groupInfo}>
-                      <Text style={styles.groupName}>{group.name}</Text>
-                      {group.description ? (
-                        <Text style={styles.groupDescription}>{group.description}</Text>
-                      ) : null}
+              sortedGroups.map((group) => {
+                const toolMatches = matchingToolsByGroup[group.id];
+                return (
+                  <TouchableOpacity
+                    key={group.id}
+                    style={styles.groupCard}
+                    onPress={() => navigation.navigate('GroupDetail', { groupId: group.id })}
+                  >
+                    <View style={styles.groupRow}>
+                      <View style={styles.groupInfo}>
+                        <Text style={styles.groupName}>{group.name}</Text>
+                        {group.description ? (
+                          <Text style={styles.groupDescription}>{group.description}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.groupCountPill}>
+                        <Text style={styles.groupCountText}>{groupCounts[group.id] ?? 0}</Text>
+                        <Text style={styles.groupCountLabel}>tools</Text>
+                      </View>
                     </View>
-                    <View style={styles.groupCountPill}>
-                      <Text style={styles.groupCountText}>{groupCounts[group.id] ?? 0}</Text>
-                      <Text style={styles.groupCountLabel}>tools</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))
+                    {toolMatches && toolMatches.length > 0 && (
+                      <View style={styles.matchedToolsList}>
+                        {toolMatches.map((t, idx) => (
+                          <View key={`${t.number}-${idx}`} style={styles.matchedToolRow}>
+                            <Ionicons name="construct-outline" size={13} color="#6b7280" />
+                            <Text style={styles.matchedToolText}>
+                              #{t.number} - {t.name}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -329,6 +380,23 @@ const styles = StyleSheet.create({
   groupCountLabel: {
     fontSize: 11,
     color: '#2563eb',
+  },
+  matchedToolsList: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 6,
+  },
+  matchedToolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 4,
+  },
+  matchedToolText: {
+    fontSize: 13,
+    color: '#374151',
   },
   emptyText: {
     fontSize: 13,

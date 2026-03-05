@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
   const [groupTools, setGroupTools] = useState<ToolSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toolSearch, setToolSearch] = useState('');
 
   const getThumbnailUrl = (url: string) => resize(url, 48, 45);
 
@@ -157,7 +159,23 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
     navigation.navigate('TransferMultiple', { groupId });
   };
 
-  const groupCountText = useMemo(() => `Tools in Group (${groupTools.length})`, [groupTools.length]);
+  const filteredGroupTools = useMemo(() => {
+    const term = toolSearch.trim().toLowerCase();
+    if (!term) return groupTools;
+    return groupTools.filter((tool) =>
+      tool.name.toLowerCase().includes(term) ||
+      tool.number.toLowerCase().includes(term) ||
+      (tool.owner_name || '').toLowerCase().includes(term) ||
+      (tool.location || '').toLowerCase().includes(term)
+    );
+  }, [groupTools, toolSearch]);
+
+  const groupCountText = useMemo(() => {
+    if (toolSearch.trim()) {
+      return `Showing ${filteredGroupTools.length} of ${groupTools.length} tools`;
+    }
+    return `Tools in Group (${groupTools.length})`;
+  }, [groupTools.length, filteredGroupTools.length, toolSearch]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -194,13 +212,35 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
               </TouchableOpacity>
             </View>
 
+            <View style={styles.searchContainer}>
+              <Ionicons name="search-outline" size={16} color="#9ca3af" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                value={toolSearch}
+                onChangeText={setToolSearch}
+                placeholder="Search tools in this group..."
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {toolSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setToolSearch('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={18} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+
             <Text style={styles.detailSectionTitle}>{groupCountText}</Text>
 
-            {groupTools.length === 0 ? (
-              <Text style={styles.emptyText}>No tools in this group.</Text>
+            {filteredGroupTools.length === 0 ? (
+              <Text style={styles.emptyText}>
+                {groupTools.length === 0
+                  ? 'No tools in this group.'
+                  : 'No tools match your search.'}
+              </Text>
             ) : (
               <View style={styles.toolsList}>
-                {groupTools.map((tool) => (
+                {filteredGroupTools.map((tool) => (
                   <TouchableOpacity
                     key={tool.id}
                     style={styles.toolRow}
@@ -328,6 +368,28 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#111827',
+  },
+  clearButton: {
+    padding: 4,
   },
   detailSectionTitle: {
     fontSize: 14,
