@@ -13,6 +13,7 @@ type ToolSummary = {
   id: string
   number: string
   name: string
+  description?: string | null
   owner_name?: string | null
   location?: string | null
 }
@@ -72,6 +73,15 @@ export default function ToolGroups() {
   })
   const [groupActivity, setGroupActivity] = useState<GroupActivity[]>([])
   const [activeView, setActiveView] = useState<'groups' | 'activity'>('groups')
+  const [isEditGroupOpen, setIsEditGroupOpen] = useState(false)
+  const [editGroupForm, setEditGroupForm] = useState({ name: '', description: '' })
+  const [editingMemberTool, setEditingMemberTool] = useState<ToolSummary | null>(null)
+  const [editToolForm, setEditToolForm] = useState({ name: '', description: '' })
+  const [editToolLoading, setEditToolLoading] = useState(false)
+  const [isTransferToolOpen, setIsTransferToolOpen] = useState(false)
+  const [transferToolMember, setTransferToolMember] = useState<GroupMember | null>(null)
+  const [singleTransferForm, setSingleTransferForm] = useState({ to_user_id: '', location: '', stored_at: '', notes: '' })
+  const [singleTransferLoading, setSingleTransferLoading] = useState(false)
   const [reportIssue, setReportIssue] = useState(false)
   const [reportChecklistItemsByTool, setReportChecklistItemsByTool] = useState<Record<string, ChecklistItem[]>>({})
   const [reportRows, setReportRows] = useState<Array<{
@@ -200,7 +210,7 @@ export default function ToolGroups() {
       const [toolsData, txData] = await Promise.all([
         supabase
           .from('tools')
-          .select('id, number, name, owner:users!tools_current_owner_fkey(name)')
+          .select('id, number, name, description, owner:users!tools_current_owner_fkey(name)')
           .in('id', toolIds),
         supabase
           .from('tool_transactions')
@@ -226,6 +236,7 @@ export default function ToolGroups() {
             id: tool.id,
             number: tool.number,
             name: tool.name,
+            description: tool.description ?? null,
             owner_name: tool.owner?.name ?? null,
             location: latestLocation.get(tool.id) ?? null,
           } as ToolSummary,
@@ -401,6 +412,128 @@ export default function ToolGroups() {
       setError(err.message || 'Failed to remove tool from group')
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  async function handleEditGroup() {
+    if (!selectedGroup || !editGroupForm.name.trim()) return
+    try {
+      setActionLoading(true)
+      setError(null)
+      const { error } = await supabase
+        .from('tool_groups')
+        .update({
+          name: editGroupForm.name.trim(),
+          description: editGroupForm.description.trim() || null,
+        })
+        .eq('id', selectedGroup.id)
+
+      if (error) throw error
+      setIsEditGroupOpen(false)
+      const updatedGroup = { ...selectedGroup, name: editGroupForm.name.trim(), description: editGroupForm.description.trim() || null }
+      setSelectedGroup(updatedGroup)
+      await Promise.all([fetchGroups(), fetchAllGroupTools()])
+    } catch (err: any) {
+      setError(err.message || 'Failed to update group')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  function openEditGroup() {
+    if (!selectedGroup) return
+    setEditGroupForm({ name: selectedGroup.name, description: selectedGroup.description || '' })
+    setIsEditGroupOpen(true)
+  }
+
+  async function handleEditMemberTool() {
+    if (!editingMemberTool) return
+    try {
+      setEditToolLoading(true)
+      setError(null)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { setError('You must be logged in'); return }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/edit-tool`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            id: editingMemberTool.id,
+            number: editingMemberTool.number,
+            name: editToolForm.name.trim(),
+            description: editToolForm.description.trim(),
+          }),
+        }
+      )
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to update tool')
+
+      setEditingMemberTool(null)
+      if (selectedGroup) await Promise.all([fetchGroupMembers(selectedGroup.id), fetchAllGroupTools()])
+    } catch (err: any) {
+      setError(err.message || 'Failed to update tool')
+    } finally {
+      setEditToolLoading(false)
+    }
+  }
+
+  function openEditMemberTool(tool: ToolSummary) {
+    setEditToolForm({ name: tool.name, description: tool.description || '' })
+    setEditingMemberTool(tool)
+  }
+
+  function openTransferTool(member: GroupMember) {
+    setTransferToolMember(member)
+    setSingleTransferForm({ to_user_id: '', location: '', stored_at: '', notes: '' })
+    setIsTransferToolOpen(true)
+  }
+
+  async function handleTransferSingleTool() {
+    if (!transferToolMember) return
+    if (!singleTransferForm.to_user_id || !singleTransferForm.location.trim() || !singleTransferForm.stored_at.trim()) {
+      setError('Please fill in recipient, location, and stored at')
+      return
+    }
+    try {
+      setSingleTransferLoading(true)
+      setError(null)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { setError('You must be logged in'); return }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-transaction`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            tool_id: transferToolMember.tool_id,
+            to_user_id: singleTransferForm.to_user_id,
+            location: singleTransferForm.location.trim(),
+            stored_at: singleTransferForm.stored_at.trim(),
+            notes: singleTransferForm.notes.trim() || `Single tool transfer from group: ${selectedGroup?.name || ''}`,
+          }),
+        }
+      )
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to transfer tool')
+
+      setIsTransferToolOpen(false)
+      setTransferToolMember(null)
+      if (selectedGroup) await fetchGroupMembers(selectedGroup.id)
+    } catch (err: any) {
+      setError(err.message || 'Failed to transfer tool')
+    } finally {
+      setSingleTransferLoading(false)
     }
   }
 
@@ -678,10 +811,16 @@ export default function ToolGroups() {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="inline-flex rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
                       <button
-                        onClick={() => setIsAddToolsOpen(true)}
+                        onClick={openEditGroup}
                         className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                       >
-                        Add Tools to Selected Group
+                        Edit Group
+                      </button>
+                      <button
+                        onClick={() => setIsAddToolsOpen(true)}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 border-l border-gray-200 hover:bg-gray-50"
+                      >
+                        Add Tools
                       </button>
                       <button
                         onClick={() => setIsTransferOpen(true)}
@@ -693,7 +832,7 @@ export default function ToolGroups() {
                         onClick={() => setDeleteGroupId(selectedGroup.id)}
                         className="px-3 py-2 text-sm font-medium text-red-600 border-l border-gray-200 hover:bg-red-50"
                       >
-                        Delete Selected Group
+                        Delete Group
                       </button>
                     </div>
                   </div>
@@ -762,13 +901,31 @@ export default function ToolGroups() {
                               </span>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleRemoveTool(member.tool_id)}
-                            className="text-sm text-red-600 hover:text-red-800"
-                            disabled={actionLoading}
-                          >
-                            Remove
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {member.tools && (
+                              <button
+                                onClick={() => openEditMemberTool(member.tools!)}
+                                className="text-sm text-blue-600 hover:text-blue-800"
+                                disabled={actionLoading}
+                              >
+                                Edit
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openTransferTool(member)}
+                              className="text-sm text-blue-600 hover:text-blue-800"
+                              disabled={actionLoading}
+                            >
+                              Transfer
+                            </button>
+                            <button
+                              onClick={() => handleRemoveTool(member.tool_id)}
+                              className="text-sm text-red-600 hover:text-red-800"
+                              disabled={actionLoading}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1152,6 +1309,192 @@ export default function ToolGroups() {
                 disabled={transferLoading}
               >
                 {transferLoading ? 'Transferring...' : 'Transfer Group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditGroupOpen && selectedGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => setIsEditGroupOpen(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="p-6 border-b">
+              <h3 className="text-xl font-semibold">Edit Group</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Group Name</label>
+                <input
+                  type="text"
+                  value={editGroupForm.name}
+                  onChange={(e) => setEditGroupForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                <textarea
+                  value={editGroupForm.description}
+                  onChange={(e) => setEditGroupForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsEditGroupOpen(false)}
+                className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditGroup}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={actionLoading || !editGroupForm.name.trim()}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingMemberTool && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => setEditingMemberTool(null)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="p-6 border-b">
+              <h3 className="text-xl font-semibold">Edit Tool</h3>
+              <p className="text-sm text-gray-500 mt-1">#{editingMemberTool.number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tool Name</label>
+                <input
+                  type="text"
+                  value={editToolForm.name}
+                  onChange={(e) => setEditToolForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={editToolForm.description}
+                  onChange={(e) => setEditToolForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setEditingMemberTool(null)}
+                className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditMemberTool}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={editToolLoading || !editToolForm.name.trim()}
+              >
+                {editToolLoading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isTransferToolOpen && transferToolMember && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null) }}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="p-6 border-b">
+              <h3 className="text-xl font-semibold">Transfer Tool</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {transferToolMember.tools?.name || 'Unknown'} #{transferToolMember.tools?.number || 'N/A'}
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
+                <select
+                  value={singleTransferForm.to_user_id}
+                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, to_user_id: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select recipient</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={singleTransferForm.location}
+                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, location: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stored At</label>
+                <select
+                  value={singleTransferForm.stored_at}
+                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, stored_at: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select storage location</option>
+                  <option value="on job site">On Job Site</option>
+                  <option value="on truck">On Truck</option>
+                  <option value="N/A">N/A</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={singleTransferForm.notes}
+                  onChange={(e) => setSingleTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null) }}
+                className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTransferSingleTool}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={singleTransferLoading}
+              >
+                {singleTransferLoading ? 'Transferring...' : 'Transfer Tool'}
               </button>
             </div>
           </div>
