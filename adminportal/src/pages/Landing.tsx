@@ -45,16 +45,16 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-16 lg:items-center">
             <div className="text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-1.5 mb-6">
+                <span className="text-amber-700 font-semibold text-sm">Built for Trades, by Tradesmen</span>
+              </div>
               <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl tracking-tight">
-                Tool Tracking Software Your Crew Will Actually Use
+                Ditch the Clipboard.{' '}
+                <span className="text-blue-600">Always Know Who Has What Tool.</span>
               </h1>
               <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
-                Most tool tracking fails because field teams won't use it. Smarter Tracks was built
-                mobile-first for HVAC, construction, and trades crews — so your guys track tools
-                from the truck, the job site, or the shop.
-              </p>
-              <p className="mt-4 text-lg text-gray-500 max-w-xl mx-auto lg:mx-0">
-                Every checkout logged. Every tool accounted for. No hardware required.
+                Know which job site it's on, whose hands it's in, and when it was last moved
+                — before it goes missing.
               </p>
               <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <a
