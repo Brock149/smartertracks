@@ -59,33 +59,33 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           <div className="lg:grid lg:grid-cols-[1.1fr,1fr] lg:gap-16 lg:items-center">
             <div className="text-center lg:text-left">
-              <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl tracking-tight leading-tight">
+              <h1 className="text-5xl font-extrabold text-gray-900 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
                 Ditch the Clipboard.{' '}
                 <span className="text-blue-600">Always Know Who Has What Tool.</span>
               </h1>
-              <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
+              <p className="mt-6 text-2xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
                 Know which job site it's on and whose hands it's in — without calling around,
                 checking spreadsheets, or hoping someone wrote it down. Stop buying tools you
                 already own. Stop losing billable hours hunting for equipment.
               </p>
-              <p className="mt-4 text-sm font-bold text-gray-600 uppercase tracking-widest">
+              <p className="mt-5 text-base font-bold text-gray-600 uppercase tracking-widest">
                 Built for Trades, by Tradesmen
               </p>
               <div className="mt-9 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <a
                   href="#book-demo"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg text-center"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-5 rounded-lg text-xl font-semibold transition-colors shadow-lg text-center"
                 >
                   Book a Free Demo
                 </a>
                 <a
                   href="#pricing"
-                  className="text-gray-600 hover:text-gray-900 px-6 py-4 rounded-lg text-lg font-medium transition-colors text-center"
+                  className="text-gray-600 hover:text-gray-900 px-7 py-5 rounded-lg text-xl font-medium transition-colors text-center"
                 >
                   See Pricing &darr;
                 </a>
               </div>
-              <p className="mt-6 text-sm text-gray-500">
+              <p className="mt-6 text-base text-gray-500">
                 Already have an account?{' '}
                 <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
                   Login
