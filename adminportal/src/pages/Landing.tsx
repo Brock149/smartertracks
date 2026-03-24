@@ -45,16 +45,17 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-16 lg:items-center">
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-1.5 mb-6">
-                <span className="text-amber-700 font-semibold text-sm">Built for Trades, by Tradesmen</span>
-              </div>
               <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl tracking-tight">
                 Ditch the Clipboard.{' '}
                 <span className="text-blue-600">Always Know Who Has What Tool.</span>
               </h1>
               <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
-                Know which job site it's on, whose hands it's in, and when it was last moved
-                — before it goes missing.
+                Know which job site it's on and whose hands it's in — without calling around,
+                checking spreadsheets, or hoping someone wrote it down. Smarter Tracks replaces
+                your sign-out sheet with a system your whole team runs from their phone.
+              </p>
+              <p className="mt-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                Built for Trades, by Tradesmen
               </p>
               <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <a
