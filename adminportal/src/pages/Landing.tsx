@@ -5,8 +5,15 @@ import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
 import ContactForm from '../components/ContactForm'
 
+const APP_SCREENSHOTS = [
+  { src: '/screenshots/alltools.png', alt: 'All Tools screen showing tool inventory with photos and current owners' },
+  { src: '/screenshots/tooldescriptions.png', alt: 'Tool Details screen showing custody, location, and stored at information' },
+  { src: '/screenshots/homeinfo.png', alt: 'Home dashboard showing tool counts, transfers, and recent receipts' },
+]
+
 export default function Landing() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual')
+  const [currentScreenshot, setCurrentScreenshot] = useState(0)
   const priceLabel = 'per month'
   const starterAnnualMonthly = 185
   const proAnnualMonthly = 315
@@ -20,6 +27,13 @@ export default function Landing() {
         'Tool tracking software built for trades teams. Track every tool, log every checkout, run audits from your phone. Book a free demo with Smarter Tracks.',
       canonicalPath: '/',
     })
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentScreenshot((prev) => (prev + 1) % APP_SCREENSHOTS.length)
+    }, 4000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -51,10 +65,10 @@ export default function Landing() {
               </h1>
               <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
                 Know which job site it's on and whose hands it's in — without calling around,
-                checking spreadsheets, or hoping someone wrote it down. Smarter Tracks replaces
-                your sign-out sheet with a system your whole team runs from their phone.
+                checking spreadsheets, or hoping someone wrote it down. Stop buying tools you
+                already own. Stop losing billable hours hunting for equipment.
               </p>
-              <p className="mt-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">
+              <p className="mt-4 text-sm font-semibold text-gray-500 uppercase tracking-wider">
                 Built for Trades, by Tradesmen
               </p>
               <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -79,47 +93,42 @@ export default function Landing() {
               </p>
             </div>
 
-            {/* Dashboard mockup visual */}
-            <div className="mt-12 lg:mt-0" aria-hidden="true">
-              <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden max-w-lg mx-auto">
-                <div className="bg-gray-900 px-5 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-400" />
-                    <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                    <div className="w-3 h-3 rounded-full bg-green-400" />
-                  </div>
-                  <span className="text-gray-400 text-xs font-medium">smartertracks.com/admin</span>
-                </div>
-                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-                  <div className="bg-gray-100 rounded-lg px-3 py-2 text-sm text-gray-400 flex-1">
-                    Search 247 tools...
-                  </div>
-                  <div className="bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">
-                    + Add Tool
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {[
-                    { name: 'DeWalt 20V Impact Driver', serial: 'DW-2847', person: 'Mike R.', status: 'Checked Out', color: 'text-blue-600' },
-                    { name: 'Milwaukee M18 Hammer Drill', serial: 'MW-1053', person: 'Van #3', status: 'In Transit', color: 'text-amber-600' },
-                    { name: 'Fluke 87V Multimeter', serial: 'FK-4421', person: 'Warehouse', status: 'Available', color: 'text-green-600' },
-                    { name: 'Hilti TE 6-A36 Rotary', serial: 'HT-7892', person: 'Sarah T.', status: 'Checked Out', color: 'text-blue-600' },
-                    { name: 'Ridgid 12R Threader', serial: 'RG-3310', person: 'Job Site #4', status: 'On Site', color: 'text-purple-600' },
-                  ].map((tool) => (
-                    <div key={tool.serial} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                      <div>
-                        <div className="font-medium text-gray-900 text-sm">{tool.name}</div>
-                        <div className="text-xs text-gray-400">SN: {tool.serial}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-700">{tool.person}</div>
-                        <div className={`text-xs font-medium ${tool.color}`}>{tool.status}</div>
-                      </div>
+            {/* App screenshots carousel */}
+            <div className="mt-12 lg:mt-0 relative">
+              <div className="relative max-w-sm mx-auto">
+                {/* Phone frame */}
+                <div className="relative bg-gray-900 rounded-[3rem] p-3 shadow-2xl">
+                  <div className="bg-white rounded-[2.5rem] overflow-hidden relative" style={{ aspectRatio: '9/19.5' }}>
+                    {/* Screenshot carousel */}
+                    <div className="relative w-full h-full">
+                      {APP_SCREENSHOTS.map((screenshot, index) => (
+                        <img
+                          key={index}
+                          src={screenshot.src}
+                          alt={screenshot.alt}
+                          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+                            index === currentScreenshot ? 'opacity-100' : 'opacity-0'
+                          }`}
+                          loading={index === 0 ? 'eager' : 'lazy'}
+                        />
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                  {/* Notch */}
+                  <div className="absolute top-5 left-1/2 -translate-x-1/2 w-24 h-7 bg-gray-900 rounded-full" />
                 </div>
-                <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 text-center">
-                  <span className="text-xs text-gray-400">Showing 5 of 247 tools</span>
+                {/* Carousel indicators */}
+                <div className="flex justify-center gap-2 mt-6">
+                  {APP_SCREENSHOTS.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentScreenshot(index)}
+                      className={`h-2 rounded-full transition-all ${
+                        index === currentScreenshot ? 'w-8 bg-blue-600' : 'w-2 bg-gray-300'
+                      }`}
+                      aria-label={`Go to screenshot ${index + 1}`}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
