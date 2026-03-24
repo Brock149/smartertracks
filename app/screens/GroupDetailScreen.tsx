@@ -25,6 +25,9 @@ interface ToolSummary {
   id: string;
   number: string;
   name: string;
+  description?: string | null;
+  current_owner?: string | null;
+  company_id?: string | null;
   owner_name?: string | null;
   location?: string | null;
   thumbnail_url?: string | null;
@@ -70,7 +73,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
 
       const { data: members, error: memberError } = await supabase
         .from('tool_group_members')
-        .select('tool_id, tools ( id, number, name, current_owner, users!tools_current_owner_fkey(name) )')
+        .select('tool_id, tools ( id, number, name, description, current_owner, company_id, users!tools_current_owner_fkey(name) )')
         .eq('group_id', groupId);
 
       if (memberError) throw memberError;
@@ -131,6 +134,9 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
             id: tool.id,
             number: tool.number,
             name: tool.name,
+            description: tool.description ?? null,
+            current_owner: tool.current_owner ?? null,
+            company_id: tool.company_id ?? null,
             owner_name: ownerMap.get(tool.id) ?? null,
             location: latestLocation.get(tool.id) ?? null,
             thumbnail_url: thumbnailByTool.get(tool.id) ?? null,

@@ -15,112 +15,288 @@ export default function Landing() {
 
   useEffect(() => {
     setPageMeta({
-      title: 'Smarter Tracks | Tool Tracking Software for HVAC & Construction',
+      title: 'Tool Tracking Software for HVAC & Construction | Smarter Tracks',
       description:
-        'Smarter Tracks is tool tracking software for HVAC, construction, and trades teams. Track tools across jobsites, assign custody, run audits, and prevent tool loss.',
+        'Tool tracking software built for trades teams. Track every tool, log every checkout, run audits from your phone. Book a free demo with Smarter Tracks.',
       canonicalPath: '/',
     })
   }, [])
 
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.src = 'https://assets.calendly.com/assets/external/widget.js'
+    script.async = true
+    document.head.appendChild(script)
+    return () => {
+      try {
+        document.head.removeChild(script)
+      } catch { /* script already removed */ }
+    }
+  }, [])
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-white">
       <MarketingHeader />
 
+      {/* ===================== CRO SECTION (conversion-focused) ===================== */}
+
       {/* Hero */}
-      <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28">
+      <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28 bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl">
-              Smarter Tracks Tool Tracking Software
-              <span className="block text-blue-600">Track Tools Across Jobsites and Crews</span>
-            </h1>
-            <p className="mt-6 max-w-3xl mx-auto text-xl text-gray-600">
-              <strong>Tool tracking software</strong> built for HVAC, construction, and trades teams.
-              Track equipment, manage inventory, assign tool custody, and keep crews accountable with
-              fast audits and clear transfer history.
-            </p>
-            <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-500">
-              Smarter Tracks is the <strong>tool tracking app</strong> that replaces clipboards,
-              spreadsheets, and verbal checkouts with a real system your whole team can use from their phone.
-            </p>
-            <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <a
-                href="#demo"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors shadow-lg"
-              >
-                Watch Demo
-              </a>
-              <a
-                href="#pricing"
-                className="bg-white hover:bg-gray-50 text-gray-900 px-8 py-3 rounded-lg text-lg font-semibold border-2 border-blue-600 transition-colors shadow-lg"
-              >
-                View Plans
-              </a>
-              <a
-                href="https://calendly.com/brockcoburn-smartertracks/30min"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white hover:bg-gray-50 text-gray-900 px-8 py-3 rounded-lg text-lg font-semibold border border-gray-300 transition-colors shadow-lg"
-              >
-                Book a Demo
-              </a>
+          <div className="lg:grid lg:grid-cols-2 lg:gap-16 lg:items-center">
+            <div className="text-center lg:text-left">
+              <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl tracking-tight">
+                Tool Tracking Software Your Crew Will Actually Use
+              </h1>
+              <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
+                Most tool tracking fails because field teams won't use it. Smarter Tracks was built
+                mobile-first for HVAC, construction, and trades crews — so your guys track tools
+                from the truck, the job site, or the shop.
+              </p>
+              <p className="mt-4 text-lg text-gray-500 max-w-xl mx-auto lg:mx-0">
+                Every checkout logged. Every tool accounted for. No hardware required.
+              </p>
+              <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                <a
+                  href="#book-demo"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg text-center"
+                >
+                  Book a Free Demo
+                </a>
+                <a
+                  href="#pricing"
+                  className="text-gray-600 hover:text-gray-900 px-6 py-4 rounded-lg text-lg font-medium transition-colors text-center"
+                >
+                  See Pricing &darr;
+                </a>
+              </div>
+              <p className="mt-6 text-sm text-gray-500">
+                Already have an account?{' '}
+                <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+                  Login
+                </Link>
+              </p>
             </div>
-            <p className="mt-6 text-gray-600">
-              Have a company code?{' '}
-              <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
-                Sign Up here
-              </Link>
-              {' • '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
-                Login
-              </Link>
-            </p>
+
+            {/* Dashboard mockup visual */}
+            <div className="mt-12 lg:mt-0" aria-hidden="true">
+              <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden max-w-lg mx-auto">
+                <div className="bg-gray-900 px-5 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-400" />
+                    <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                    <div className="w-3 h-3 rounded-full bg-green-400" />
+                  </div>
+                  <span className="text-gray-400 text-xs font-medium">smartertracks.com/admin</span>
+                </div>
+                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+                  <div className="bg-gray-100 rounded-lg px-3 py-2 text-sm text-gray-400 flex-1">
+                    Search 247 tools...
+                  </div>
+                  <div className="bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">
+                    + Add Tool
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {[
+                    { name: 'DeWalt 20V Impact Driver', serial: 'DW-2847', person: 'Mike R.', status: 'Checked Out', color: 'text-blue-600' },
+                    { name: 'Milwaukee M18 Hammer Drill', serial: 'MW-1053', person: 'Van #3', status: 'In Transit', color: 'text-amber-600' },
+                    { name: 'Fluke 87V Multimeter', serial: 'FK-4421', person: 'Warehouse', status: 'Available', color: 'text-green-600' },
+                    { name: 'Hilti TE 6-A36 Rotary', serial: 'HT-7892', person: 'Sarah T.', status: 'Checked Out', color: 'text-blue-600' },
+                    { name: 'Ridgid 12R Threader', serial: 'RG-3310', person: 'Job Site #4', status: 'On Site', color: 'text-purple-600' },
+                  ].map((tool) => (
+                    <div key={tool.serial} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                      <div>
+                        <div className="font-medium text-gray-900 text-sm">{tool.name}</div>
+                        <div className="text-xs text-gray-400">SN: {tool.serial}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-700">{tool.person}</div>
+                        <div className={`text-xs font-medium ${tool.color}`}>{tool.status}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 text-center">
+                  <span className="text-xs text-gray-400">Showing 5 of 247 tools</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Demo Video - MOVED UP */}
-      <section id="demo" className="py-16 bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900">
-            See Smarter Tracks Tool Tracking in Action
-          </h2>
-          <p className="mt-4 text-xl text-gray-600">
-            Watch a 2-minute demo to see how teams use our <strong>tool tracking software</strong> to
-            track, transfer, and audit their tools from any device.
-          </p>
-          <div className="mt-10">
-            <div className="relative pt-[56.25%] rounded-xl overflow-hidden shadow-2xl border-4 border-blue-100">
-              <iframe
-                className="absolute inset-0 w-full h-full"
-                src="https://www.youtube.com/embed/86ttYD5idoc?si=8DU3W38G8DEytzAd"
-                title="Smarter Tracks tool tracking software demo video"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+      {/* Trust bar */}
+      <section className="py-6 bg-white border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap justify-center gap-x-10 gap-y-3 text-sm text-gray-500 font-medium">
+            <span className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              No hardware required
+            </span>
+            <span className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              Same-day setup
+            </span>
+            <span className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              iOS &amp; Android apps
+            </span>
+            <span className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              Free trial available
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Benefits (outcomes, not features) */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+              What Changes When You Start Tracking Tools
+            </h2>
+            <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
+              The difference between knowing where your tools are and guessing.
+            </p>
+          </div>
+          <div className="mt-16 grid grid-cols-1 gap-12 md:grid-cols-3">
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
+                <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="mt-6 text-xl font-bold text-gray-900">Stop Replacing Tools You Already Own</h3>
+              <p className="mt-3 text-gray-600">
+                When nobody tracks who has what, you end up buying the same tools twice. Smarter Tracks
+                gives every tool a digital paper trail — so nothing slips through the cracks.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+                <svg className="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h3 className="mt-6 text-xl font-bold text-gray-900">Get Crews Accountable Without the Awkward Conversations</h3>
+              <p className="mt-3 text-gray-600">
+                No more "Hey, who took the..." texts. With custody tracking and automatic transfer logs,
+                everyone knows who's responsible for what — no finger-pointing needed.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-50">
+                <svg className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="mt-6 text-xl font-bold text-gray-900">Run Audits in Minutes, Not Hours</h3>
+              <p className="mt-3 text-gray-600">
+                Forget printed checklists and warehouse walk-throughs. Open the app, verify what's on
+                site, flag what's missing — done. From any phone, anywhere.
+              </p>
             </div>
           </div>
-          <div className="mt-8">
+        </div>
+      </section>
+
+      {/* ROI / Social Proof */}
+      <section className="py-16 bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-extrabold text-gray-900">
+              The ROI of Getting Serious About Tool Tracking
+            </h2>
+            <p className="mt-4 max-w-3xl mx-auto text-lg text-gray-600">
+              Teams using Smarter Tracks see measurable results within the first 90 days.
+            </p>
+          </div>
+          <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
+              <div className="text-4xl font-extrabold text-green-700">35%</div>
+              <p className="mt-2 text-gray-700 font-medium">Fewer lost tools in the first 90 days</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
+              <div className="text-4xl font-extrabold text-green-700">$8,000+</div>
+              <p className="mt-2 text-gray-700 font-medium">Saved annually eliminating duplicate purchases</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
+              <div className="text-4xl font-extrabold text-green-700">15 hrs</div>
+              <p className="mt-2 text-gray-700 font-medium">Reclaimed monthly from tool searches</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
+              <div className="text-4xl font-extrabold text-green-700">Same day</div>
+              <p className="mt-2 text-gray-700 font-medium">Setup time for most teams</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-extrabold text-gray-900">
+              How It Works
+            </h2>
+            <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
+              Get your team tracking tools in three steps. Most teams are fully operational the same day.
+            </p>
+          </div>
+          <div className="mt-16 grid grid-cols-1 gap-10 md:grid-cols-3">
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg">
+                1
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-gray-900">Add Your Tools</h3>
+              <p className="mt-2 text-gray-600">
+                Enter your tool inventory with photos, serial numbers, and costs.
+                Assign each tool to a person, vehicle, or location.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg">
+                2
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-gray-900">Track Every Checkout</h3>
+              <p className="mt-2 text-gray-600">
+                When a tool changes hands, the transfer is logged automatically with a timestamp
+                and the person responsible. No clipboards.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg">
+                3
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-gray-900">Audit From Your Phone</h3>
+              <p className="mt-2 text-gray-600">
+                Run tool audits in minutes from any phone. See what's missing,
+                who had it last, and resolve discrepancies fast.
+              </p>
+            </div>
+          </div>
+          <div className="mt-12 text-center">
             <a
-              href="#pricing"
+              href="#book-demo"
               className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg"
             >
-              Start Free Trial
+              Book a Free Demo
             </a>
           </div>
         </div>
       </section>
 
-      {/* Pricing - MOVED UP */}
+      {/* Pricing */}
       <section id="pricing" className="py-20 bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-4xl font-extrabold text-gray-900">
-              Tool Tracking Software Pricing
+              Simple, Transparent Pricing
             </h2>
             <p className="mt-4 text-lg text-gray-600">
-              Start free, then upgrade when your team grows. Every plan includes full
-              <strong> tool tracking</strong>, transfers, and audit features.
+              No hidden fees. No per-user charges. Pick a plan and get your whole team on it.
             </p>
             <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-white p-1 shadow-md">
               <button
@@ -150,20 +326,20 @@ export default function Landing() {
           <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-4">
             <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-lg transition-shadow">
               <h3 className="mt-2 text-2xl font-semibold text-gray-900">Free Trial</h3>
-              <p className="mt-2 text-gray-600">Try <strong>tool tracking</strong> with your team</p>
+              <p className="mt-2 text-gray-600">Try tool tracking with your team</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">$0</div>
-              <p className="text-gray-500">Get started instantly</p>
-              <Link
-                to="/get-started?plan=trial"
+              <p className="text-gray-500">No credit card required</p>
+              <a
+                href="#book-demo"
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 transition-colors"
               >
-                Start Free Trial
-              </Link>
+                Book a Demo
+              </a>
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                <li>✓ 3 users</li>
-                <li>✓ 5 tools</li>
-                <li>✓ Full tool tracking</li>
-                <li>✓ Tool transfers and history</li>
+                <li>&#10003; 3 users</li>
+                <li>&#10003; 5 tools</li>
+                <li>&#10003; Full tool tracking</li>
+                <li>&#10003; Tool transfers and history</li>
               </ul>
             </div>
 
@@ -177,23 +353,23 @@ export default function Landing() {
               <p className="text-gray-500">
                 {billingCycle === 'annual'
                   ? '$2,220 billed yearly'
-                  : '15 users • 150 tools'}
+                  : '15 users \u2022 150 tools'}
               </p>
               {billingCycle === 'annual' && (
                 <p className="text-sm text-green-700 font-semibold">{starterSavings}</p>
               )}
-              <Link
-                to={`/get-started?plan=tier2&billing=${billingCycle}`}
+              <a
+                href="#book-demo"
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg border-2 border-blue-600 bg-white px-4 py-3 text-blue-600 font-semibold hover:bg-blue-50 transition-colors"
               >
-                Buy Now
-              </Link>
+                Book a Demo
+              </a>
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                <li>✓ 15 users</li>
-                <li>✓ 150 tools</li>
-                <li>✓ Tool transfer history</li>
-                <li>✓ Photos on tools</li>
-                <li>✓ Damaged tool reporting</li>
+                <li>&#10003; 15 users</li>
+                <li>&#10003; 150 tools</li>
+                <li>&#10003; Tool transfer history</li>
+                <li>&#10003; Photos on tools</li>
+                <li>&#10003; Damaged tool reporting</li>
               </ul>
             </div>
 
@@ -210,23 +386,23 @@ export default function Landing() {
               <p className="text-gray-500">
                 {billingCycle === 'annual'
                   ? '$3,780 billed yearly'
-                  : '75 users • 750 tools'}
+                  : '75 users \u2022 750 tools'}
               </p>
               {billingCycle === 'annual' && (
                 <p className="text-sm text-green-700 font-semibold">{proSavings}</p>
               )}
-              <Link
-                to={`/get-started?plan=tier3&billing=${billingCycle}`}
+              <a
+                href="#book-demo"
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 transition-colors shadow-md"
               >
-                Buy Now
-              </Link>
+                Book a Demo
+              </a>
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                <li>✓ 75 users</li>
-                <li>✓ 750 tools</li>
-                <li>✓ Tool transfer history</li>
-                <li>✓ Photos on tools</li>
-                <li>✓ Damaged tool reporting</li>
+                <li>&#10003; 75 users</li>
+                <li>&#10003; 750 tools</li>
+                <li>&#10003; Tool transfer history</li>
+                <li>&#10003; Photos on tools</li>
+                <li>&#10003; Damaged tool reporting</li>
               </ul>
             </div>
 
@@ -234,214 +410,84 @@ export default function Landing() {
               <h3 className="mt-2 text-2xl font-semibold text-gray-900">Custom</h3>
               <p className="mt-2 text-gray-600">For large teams and custom needs</p>
               <div className="mt-6 text-4xl font-extrabold text-gray-900">Let's talk</div>
-              <p className="text-gray-500">Custom tool tracking limits and billing</p>
+              <p className="text-gray-500">Custom limits and billing</p>
               <a
-                href="mailto:brockcoburn@smartertracks.com"
+                href="#book-demo"
                 className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 font-semibold hover:bg-gray-50 transition-colors"
               >
-                Schedule a Demo
+                Book a Demo
               </a>
               <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                <li>✓ Custom limits and onboarding</li>
-                <li>✓ Dedicated support</li>
-                <li>✓ Custom integrations</li>
-                <li>✓ Annual invoicing</li>
+                <li>&#10003; Custom limits and onboarding</li>
+                <li>&#10003; Dedicated support</li>
+                <li>&#10003; Custom integrations</li>
+                <li>&#10003; Annual invoicing</li>
               </ul>
             </div>
           </div>
 
           <div className="mt-12 text-center">
             <p className="text-gray-600 text-lg">
-              Need help choosing? <a href="https://calendly.com/brockcoburn-smartertracks/30min" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 font-semibold">Book a demo</a> and we'll walk you through it.
+              Not sure which plan fits?{' '}
+              <a href="#book-demo" className="text-blue-600 hover:text-blue-700 font-semibold">
+                Book a demo
+              </a>{' '}
+              and we'll help you figure it out.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ROI / Social Proof */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-gray-900">
-              The ROI of Tool Tracking Software
+      {/* Book a Demo — Calendly Embed */}
+      <section id="book-demo" className="py-20 bg-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+              See It In Action — Book a Free Demo
             </h2>
-            <p className="mt-4 max-w-3xl mx-auto text-lg text-gray-600">
-              <strong>Tool tracking</strong> directly impacts your bottom line by reducing replacement
-              costs, eliminating downtime, and improving crew accountability.
+            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+              Pick a time that works for you. We'll walk through exactly how Smarter Tracks works
+              for your team — your tools, your crew, your workflow. 30 minutes, no pressure.
             </p>
           </div>
-          <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 shadow-sm border border-green-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">35%</div>
-              <p className="mt-2 text-gray-700 font-medium"><strong>Fewer lost tools</strong> in the first 90 days</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 shadow-sm border border-green-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">$8,000+</div>
-              <p className="mt-2 text-gray-700 font-medium"><strong>Saved annually</strong> eliminating duplicate purchases</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 shadow-sm border border-green-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">15 hrs</div>
-              <p className="mt-2 text-gray-700 font-medium"><strong>Reclaimed monthly</strong> from tool searches</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 shadow-sm border border-green-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">Same day</div>
-              <p className="mt-2 text-gray-700 font-medium"><strong>Setup time</strong> for most teams</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-gray-900">
-              How Smarter Tracks Tool Tracking Works
-            </h2>
-            <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
-              Get your team up and running with <strong>tool tracking</strong> in three simple steps.
-              Most teams are fully operational the same day.
-            </p>
-          </div>
-          <div className="mt-12 grid grid-cols-1 gap-10 md:grid-cols-3">
-            <div className="text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg">
-                1
-              </div>
-              <h3 className="mt-4 text-xl font-semibold text-gray-900">Add Your Tools</h3>
-              <p className="mt-2 text-gray-600">
-                Enter your <strong>tool inventory</strong> with photos, serial numbers, and costs.
-                Assign each tool to a location, vehicle, or warehouse.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg">
-                2
-              </div>
-              <h3 className="mt-4 text-xl font-semibold text-gray-900">Assign and Transfer</h3>
-              <p className="mt-2 text-gray-600">
-                Assign tools to technicians or crews. Every <strong>tool checkout</strong> and return
-                is logged automatically with a timestamp and user.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white text-2xl font-bold shadow-lg">
-                3
-              </div>
-              <h3 className="mt-4 text-xl font-semibold text-gray-900">Audit and Track</h3>
-              <p className="mt-2 text-gray-600">
-                Run <strong>tool audits</strong> from your phone in minutes. See what's missing,
-                who has it, and resolve discrepancies fast.
-              </p>
-            </div>
-          </div>
-          <div className="mt-12 text-center">
-            <a
-              href="#pricing"
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg"
-            >
-              Get Started Now
+          <div
+            className="calendly-inline-widget"
+            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1"
+            style={{ minWidth: '320px', height: '700px' }}
+          />
+          <p className="mt-4 text-center text-sm text-gray-400">
+            Prefer email?{' '}
+            <a href="mailto:brockcoburn@smartertracks.com" className="text-blue-600 hover:text-blue-700 font-medium">
+              brockcoburn@smartertracks.com
             </a>
+          </p>
+        </div>
+      </section>
+
+      {/* Risk reduction */}
+      <section className="py-12 bg-gray-50 border-y border-gray-200">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap justify-center gap-x-12 gap-y-4 text-center">
+            <div>
+              <div className="text-lg font-bold text-gray-900">Free trial included</div>
+              <p className="text-sm text-gray-500">No credit card required</p>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-gray-900">Cancel anytime</div>
+              <p className="text-sm text-gray-500">No long-term contracts</p>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-gray-900">Same-day onboarding</div>
+              <p className="text-sm text-gray-500">We help you get set up</p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Features Grid */}
+      {/* ===================== SEO CONTENT (for Google, below the fold) ===================== */}
+
+      {/* Industry-specific pages with internal links */}
       <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-gray-900">
-              Everything You Need to Track and Manage Your Tools
-            </h2>
-            <p className="mt-4 text-xl text-gray-600">
-              Comprehensive <strong>tool management</strong> and <strong>tool tracking</strong> for your entire team
-            </p>
-          </div>
-
-          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="text-center p-6 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Tool Inventory Management</h3>
-              <p className="mt-2 text-gray-600">
-                Complete <strong>tool inventory</strong> management with photos, descriptions, and
-                location tracking for every piece of equipment.
-              </p>
-            </div>
-
-            <div className="text-center p-6 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Secure Tool Tracking</h3>
-              <p className="mt-2 text-gray-600">
-                Know exactly where your tools are with <strong>secure tool tracking</strong> and a
-                full transaction history.
-              </p>
-            </div>
-
-            <div className="text-center p-6 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Team and Crew Management</h3>
-              <p className="mt-2 text-gray-600">
-                Manage your technicians, assign tools to crews, and <strong>track tool
-                accountability</strong> across your organization.
-              </p>
-            </div>
-
-            <div className="text-center p-6 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Tool Checklists and Audits</h3>
-              <p className="mt-2 text-gray-600">
-                Run fast <strong>tool audits</strong> from your phone. Create maintenance checklists
-                and verify what's on-site before jobs start.
-              </p>
-            </div>
-
-            <div className="text-center p-6 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Tool History and Analytics</h3>
-              <p className="mt-2 text-gray-600">
-                See the full <strong>tool tracking history</strong> for every item. Know who had it,
-                where it went, and when it changed hands.
-              </p>
-            </div>
-
-            <div className="text-center p-6 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">Mobile Tool Tracking App</h3>
-              <p className="mt-2 text-gray-600">
-                Access your <strong>tool tracking app</strong> from any phone. Scan barcodes, transfer
-                tools, and run audits from the field.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Industry-specific (HVAC, Construction, etc.) */}
-      <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-3xl font-extrabold text-gray-900">
@@ -477,7 +523,8 @@ export default function Landing() {
               <h3 className="text-xl font-semibold text-gray-900">Field Service Tool Tracking</h3>
               <p className="mt-3 text-gray-600">
                 Plumbing, electrical, mechanical, and general trades teams all deal with the same
-                problem. Smarter Tracks gives every field team a simple <strong>tool tracking system</strong>.
+                problem. Smarter Tracks gives every field team a simple{' '}
+                <Link to="/tool-tracking-software" className="text-blue-600 hover:text-blue-700 font-semibold">tool tracking software</Link> system.
               </p>
               <Link to="/tool-tracking-software" className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-semibold">
                 Learn about tool tracking software &rarr;
@@ -487,11 +534,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ==================== SEO CONTENT BELOW ==================== */}
-      {/* All the educational content for Google and deep readers */}
-
       {/* Why tool tracking matters */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-3xl font-extrabold text-gray-900">
@@ -499,7 +543,7 @@ export default function Landing() {
             </h2>
             <p className="mt-4 max-w-3xl mx-auto text-lg text-gray-600">
               Contractors, HVAC companies, and field service teams lose thousands of dollars each year
-              to <strong>missing tools</strong>, duplicate purchases, and time spent searching.
+              to missing tools, duplicate purchases, and time spent searching.
               Without a <strong>tool tracking system</strong>, there is no clear record of who has
               what or where tools moved last.
             </p>
@@ -516,7 +560,7 @@ export default function Landing() {
               <div className="text-4xl font-extrabold text-red-600">1 in 5</div>
               <p className="mt-2 text-gray-600">
                 Contractors say they rebuy tools they already own because nobody knows who has them.
-                A <strong>tool tracking app</strong> eliminates that guesswork.
+                A <Link to="/tool-tracking-software" className="text-blue-600 hover:text-blue-700 font-semibold">tool tracking app</Link> eliminates that guesswork.
               </p>
             </div>
             <div className="text-center">
@@ -531,7 +575,7 @@ export default function Landing() {
       </section>
 
       {/* What is tool tracking */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-extrabold text-gray-900 text-center">
             What Is Tool Tracking Software?
@@ -540,7 +584,7 @@ export default function Landing() {
             <p>
               <strong>Tool tracking software</strong> is a digital system that records which tools
               your company owns, who has them, and where they are right now. Instead of relying on
-              spreadsheets, whiteboards, or memory, a <strong>tool tracking app</strong> like
+              spreadsheets, whiteboards, or memory, a tool tracking app like
               Smarter Tracks gives every team member a shared, up-to-date view of your entire
               tool inventory.
             </p>
@@ -548,13 +592,13 @@ export default function Landing() {
               With Smarter Tracks, every tool gets a profile with photos, serial numbers, cost,
               and custody history. When a technician checks a tool out, the system logs the transfer
               automatically. When a foreman runs an audit, they can verify tool locations from their
-              phone in minutes instead of hours. This is <strong>tool tracking</strong> built for
+              phone in minutes instead of hours. This is tool tracking built for
               real-world field operations.
             </p>
             <p>
               Unlike enterprise asset management platforms that cost thousands and take months to
-              deploy, Smarter Tracks is affordable <strong>tool tracking software</strong> designed
-              for small and mid-size trades teams. You can label tools, add your crew, and start
+              deploy, Smarter Tracks is affordable <Link to="/tool-tracking-software" className="text-blue-600 hover:text-blue-700 font-semibold">tool tracking software</Link> designed
+              for small and mid-size trades teams. You can add your tools, invite your crew, and start
               tracking the same day you sign up.
             </p>
           </div>
@@ -562,7 +606,7 @@ export default function Landing() {
       </section>
 
       {/* Tool tracking vs spreadsheets */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-extrabold text-gray-900 text-center">
             Tool Tracking Software vs. Spreadsheets
@@ -618,14 +662,14 @@ export default function Landing() {
       </section>
 
       {/* Mobile App Section */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h2 className="text-3xl font-extrabold text-gray-900">
               Take Your Tool Tracking Mobile
             </h2>
             <p className="mt-4 text-xl text-gray-600">
-              Download the Smarter Tracks <strong>mobile tool tracking app</strong> for iOS and Android.
+              Download the Smarter Tracks mobile app for iOS and Android.
               Field technicians can access your tool inventory, transfer tools, and run audits right
               from the job site.
             </p>
@@ -666,7 +710,7 @@ export default function Landing() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-extrabold text-gray-900 text-center">
             Tool Tracking Software FAQ
@@ -681,7 +725,7 @@ export default function Landing() {
               </dd>
             </div>
             <div>
-              <dt className="text-lg font-semibold text-gray-900">How does Smarter Tracks tool tracking work?</dt>
+              <dt className="text-lg font-semibold text-gray-900">How does Smarter Tracks work?</dt>
               <dd className="mt-2 text-gray-600">
                 You add your tools to the app, assign them to technicians or locations, and the system
                 tracks every checkout, return, and transfer. Admins can run audits from their phone,
@@ -689,9 +733,9 @@ export default function Landing() {
               </dd>
             </div>
             <div>
-              <dt className="text-lg font-semibold text-gray-900">Does tool tracking require GPS or Bluetooth hardware?</dt>
+              <dt className="text-lg font-semibold text-gray-900">Does it require GPS or Bluetooth hardware?</dt>
               <dd className="mt-2 text-gray-600">
-                No. Smarter Tracks uses assignment-based <strong>tool tracking</strong> — no GPS tags,
+                No. Smarter Tracks uses assignment-based tool tracking — no GPS tags,
                 no Bluetooth beacons, no extra hardware. Custody is recorded through the app when
                 tools are checked in and out.
               </dd>
@@ -699,33 +743,29 @@ export default function Landing() {
             <div>
               <dt className="text-lg font-semibold text-gray-900">Can I track tools across multiple jobsites?</dt>
               <dd className="mt-2 text-gray-600">
-                Yes. Smarter Tracks lets you assign tools to specific locations, vehicles, or
-                warehouses. When tools move between jobsites, the transfer is logged so you always
-                know where everything is.
+                Yes. Assign tools to specific locations, vehicles, or warehouses. When tools move
+                between jobsites, the transfer is logged so you always know where everything is.
               </dd>
             </div>
             <div>
-              <dt className="text-lg font-semibold text-gray-900">How fast can my team get started with tool tracking?</dt>
+              <dt className="text-lg font-semibold text-gray-900">How fast can my team get started?</dt>
               <dd className="mt-2 text-gray-600">
                 Most teams are up and running the same day. Add your tools, invite your crew, and
-                start <strong>tracking tools</strong> immediately. There's no complex setup or
-                training required.
+                start tracking immediately. We also offer onboarding demos to get you set up.
               </dd>
             </div>
             <div>
-              <dt className="text-lg font-semibold text-gray-900">Is there a mobile app for tool tracking?</dt>
+              <dt className="text-lg font-semibold text-gray-900">Is there a mobile app?</dt>
               <dd className="mt-2 text-gray-600">
-                Yes. Smarter Tracks has native <strong>tool tracking apps</strong> for iOS and Android.
-                Download from the App Store or Google Play so field techs can scan tools, transfer
-                custody, and run audits directly from their phones.
+                Yes. Smarter Tracks has native apps for iOS and Android. Field techs can scan tools,
+                transfer custody, and run audits directly from their phones.
               </dd>
             </div>
             <div>
-              <dt className="text-lg font-semibold text-gray-900">What types of teams use tool tracking software?</dt>
+              <dt className="text-lg font-semibold text-gray-900">What types of teams use Smarter Tracks?</dt>
               <dd className="mt-2 text-gray-600">
                 HVAC companies, construction contractors, plumbers, electricians, mechanical
-                contractors, and any field service team that manages shared tools. If your crew
-                shares tools, <strong>tool tracking software</strong> will save you time and money.
+                contractors, and any field service team that manages shared tools.
               </dd>
             </div>
           </dl>
@@ -736,26 +776,18 @@ export default function Landing() {
       <section className="py-16 bg-blue-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-extrabold text-white">
-            Ready to Start Tracking Your Tools?
+            Ready to See How It Works for Your Team?
           </h2>
           <p className="mt-4 text-xl text-blue-100">
-            Join trades teams already using Smarter Tracks <strong>tool tracking software</strong> to
-            stop losing tools, save money, and keep crews accountable.
+            Book a free 30-minute demo. We'll walk through how Smarter Tracks handles your tools,
+            your crew, and your workflow.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
+          <div className="mt-8">
             <a
-              href="#pricing"
-              className="bg-white hover:bg-gray-100 text-blue-600 px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg"
+              href="#book-demo"
+              className="bg-white hover:bg-gray-100 text-blue-600 px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-block"
             >
-              Start Free Trial
-            </a>
-            <a
-              href="https://calendly.com/brockcoburn-smartertracks/30min"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="border-2 border-white text-white hover:bg-blue-700 px-10 py-4 rounded-lg text-lg font-semibold transition-colors"
-            >
-              Book a Demo
+              Book a Free Demo
             </a>
           </div>
         </div>
@@ -769,8 +801,8 @@ export default function Landing() {
               Get in Touch
             </h2>
             <p className="mt-4 text-xl text-gray-600">
-              Want to discuss enterprise tool tracking features, company setup with access codes,<br />
-              or schedule a demo? Fill out the form below and we'll get back to you within 24 hours.
+              Have questions about tool tracking, pricing, or how Smarter Tracks works for your team?<br />
+              Fill out the form below and we'll get back to you within 24 hours.
             </p>
           </div>
           <ContactForm />
