@@ -57,7 +57,7 @@ export default function Landing() {
       {/* Hero */}
       <section className="relative bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-          <div className="lg:grid lg:grid-cols-[1.3fr,1fr] lg:gap-20 lg:items-center">
+          <div className="lg:grid lg:grid-cols-[1.5fr,1fr] lg:gap-20 lg:items-center">
             <div className="text-center lg:text-left">
               <h1 className="text-5xl font-extrabold text-gray-900 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
                 Ditch the Clipboard.
