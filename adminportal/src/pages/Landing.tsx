@@ -32,7 +32,7 @@ export default function Landing() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentScreenshot((prev) => (prev + 1) % APP_SCREENSHOTS.length)
-    }, 4000)
+    }, 5500)
     return () => clearInterval(interval)
   }, [])
 
@@ -55,8 +55,8 @@ export default function Landing() {
       {/* ===================== CRO SECTION (conversion-focused) ===================== */}
 
       {/* Hero */}
-      <section className="relative pt-16 pb-20 sm:pt-24 sm:pb-28 bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
           <div className="lg:grid lg:grid-cols-2 lg:gap-16 lg:items-center">
             <div className="text-center lg:text-left">
               <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl tracking-tight">
@@ -96,6 +96,17 @@ export default function Landing() {
             {/* App screenshots carousel */}
             <div className="mt-12 lg:mt-0 relative">
               <div className="relative max-w-sm mx-auto">
+                {/* Previous button */}
+                <button
+                  onClick={() => setCurrentScreenshot((prev) => (prev - 1 + APP_SCREENSHOTS.length) % APP_SCREENSHOTS.length)}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-3 transition-colors group"
+                  aria-label="Previous screenshot"
+                >
+                  <svg className="w-6 h-6 text-gray-700 group-hover:text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
                 {/* Phone frame */}
                 <div className="relative bg-gray-900 rounded-[3rem] p-3 shadow-2xl">
                   <div className="bg-white rounded-[2.5rem] overflow-hidden relative" style={{ aspectRatio: '9/19.5' }}>
@@ -117,6 +128,18 @@ export default function Landing() {
                   {/* Notch */}
                   <div className="absolute top-5 left-1/2 -translate-x-1/2 w-24 h-7 bg-gray-900 rounded-full" />
                 </div>
+
+                {/* Next button */}
+                <button
+                  onClick={() => setCurrentScreenshot((prev) => (prev + 1) % APP_SCREENSHOTS.length)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-3 transition-colors group"
+                  aria-label="Next screenshot"
+                >
+                  <svg className="w-6 h-6 text-gray-700 group-hover:text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
                 {/* Carousel indicators */}
                 <div className="flex justify-center gap-2 mt-6">
                   {APP_SCREENSHOTS.map((_, index) => (
@@ -124,7 +147,7 @@ export default function Landing() {
                       key={index}
                       onClick={() => setCurrentScreenshot(index)}
                       className={`h-2 rounded-full transition-all ${
-                        index === currentScreenshot ? 'w-8 bg-blue-600' : 'w-2 bg-gray-300'
+                        index === currentScreenshot ? 'w-8 bg-blue-600' : 'w-2 bg-gray-300 hover:bg-gray-400'
                       }`}
                       aria-label={`Go to screenshot ${index + 1}`}
                     />
