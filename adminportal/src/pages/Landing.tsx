@@ -57,35 +57,35 @@ export default function Landing() {
       {/* Hero */}
       <section className="relative bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-          <div className="lg:grid lg:grid-cols-[1fr,1.2fr] lg:gap-12 lg:items-center">
+          <div className="lg:grid lg:grid-cols-[1.1fr,1fr] lg:gap-16 lg:items-center">
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl lg:text-5xl tracking-tight leading-tight">
+              <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl lg:text-6xl tracking-tight leading-tight">
                 Ditch the Clipboard.{' '}
                 <span className="text-blue-600">Always Know Who Has What Tool.</span>
               </h1>
-              <p className="mt-5 text-lg text-gray-600 max-w-xl mx-auto lg:mx-0 sm:text-xl">
+              <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
                 Know which job site it's on and whose hands it's in — without calling around,
                 checking spreadsheets, or hoping someone wrote it down. Stop buying tools you
                 already own. Stop losing billable hours hunting for equipment.
               </p>
-              <p className="mt-4 text-xs font-bold text-gray-600 uppercase tracking-widest">
+              <p className="mt-4 text-sm font-bold text-gray-600 uppercase tracking-widest">
                 Built for Trades, by Tradesmen
               </p>
-              <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+              <div className="mt-9 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <a
                   href="#book-demo"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-lg text-base font-semibold transition-colors shadow-lg text-center"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg text-center"
                 >
                   Book a Free Demo
                 </a>
                 <a
                   href="#pricing"
-                  className="text-gray-600 hover:text-gray-900 px-6 py-3.5 rounded-lg text-base font-medium transition-colors text-center"
+                  className="text-gray-600 hover:text-gray-900 px-6 py-4 rounded-lg text-lg font-medium transition-colors text-center"
                 >
                   See Pricing &darr;
                 </a>
               </div>
-              <p className="mt-5 text-sm text-gray-500">
+              <p className="mt-6 text-sm text-gray-500">
                 Already have an account?{' '}
                 <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
                   Login
@@ -94,7 +94,7 @@ export default function Landing() {
             </div>
 
             {/* App screenshots carousel */}
-            <div className="mt-8 lg:mt-0 relative">
+            <div className="mt-10 lg:mt-0 relative">
               <div className="relative max-w-md mx-auto px-10">
                 {/* Previous button */}
                 <button
