@@ -56,10 +56,6 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="relative bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="lg:grid lg:grid-cols-2 lg:gap-16 lg:items-center">
-      {/* Hero */}
-      <section className="relative bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           <div className="lg:grid lg:grid-cols-[1fr,1.2fr] lg:gap-12 lg:items-center">
             <div className="text-center lg:text-left">
