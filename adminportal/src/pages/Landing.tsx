@@ -60,8 +60,10 @@ export default function Landing() {
           <div className="lg:grid lg:grid-cols-[1.3fr,1fr] lg:gap-20 lg:items-center">
             <div className="text-center lg:text-left">
               <h1 className="text-5xl font-extrabold text-gray-900 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
-                Ditch the Clipboard.{' '}
-                <span className="text-blue-600">Always Know Who Has What Tool.</span>
+                Ditch the Clipboard.
+              </h1>
+              <h1 className="text-5xl font-extrabold text-blue-600 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
+                Always Know Who Has What Tool.
               </h1>
               <p className="mt-6 text-2xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
                 Know which job site it's on and whose hands it's in — without calling around,
