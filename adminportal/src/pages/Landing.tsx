@@ -48,6 +48,24 @@ export default function Landing() {
     }
   }, [])
 
+  // Google Ads conversion tracking for embedded Calendly bookings.
+  // When a visitor books, Calendly fires a postMessage event that we
+  // forward to Google Ads as a conversion.
+  // Replace 'AW-XXXXXXXXXX/YYYYYYYYYY' with your actual conversion label
+  // from Google Ads → Goals → Conversions → your conversion action → Tag setup.
+  useEffect(() => {
+    function handleCalendlyMessage(e: MessageEvent) {
+      if (e.data?.event === 'calendly.event_scheduled') {
+        const gtagFn = (window as Window & { gtag?: (...args: unknown[]) => void }).gtag
+        if (typeof gtagFn === 'function') {
+          gtagFn('event', 'conversion', { send_to: 'AW-XXXXXXXXXX/YYYYYYYYYY' })
+        }
+      }
+    }
+    window.addEventListener('message', handleCalendlyMessage)
+    return () => window.removeEventListener('message', handleCalendlyMessage)
+  }, [])
+
   return (
     <div className="min-h-screen bg-white">
       <MarketingHeader />
