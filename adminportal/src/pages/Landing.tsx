@@ -56,17 +56,24 @@ export default function Landing() {
       console.log('Calendly message received:', e.data)
       if (e.data?.event === 'calendly.event_scheduled') {
         console.log('Booking detected! Firing Google Ads conversion...')
-        const gtagFn = (window as Window & { gtag?: (...args: unknown[]) => void }).gtag
-        if (typeof gtagFn === 'function') {
-          gtagFn('event', 'conversion', { 
-            send_to: 'AW-17910572468/RJljCMvzgY8cELTLttxC',
-            value: 1.0,
-            currency: 'USD'
-          })
-          console.log('Google Ads conversion fired successfully')
-        } else {
-          console.error('gtag function not found')
-        }
+        
+        // Wait a bit to ensure gtag is fully loaded
+        setTimeout(() => {
+          const gtagFn = (window as Window & { gtag?: (...args: unknown[]) => void }).gtag
+          if (typeof gtagFn === 'function') {
+            gtagFn('event', 'conversion', { 
+              send_to: 'AW-17910572468/RJljCMvzgY8cELTLttxC',
+              value: 1.0,
+              currency: 'USD',
+              event_callback: () => {
+                console.log('Google Ads conversion callback executed')
+              }
+            })
+            console.log('Google Ads conversion fired successfully')
+          } else {
+            console.error('gtag function not found')
+          }
+        }, 100)
       }
     }
     window.addEventListener('message', handleCalendlyMessage)
