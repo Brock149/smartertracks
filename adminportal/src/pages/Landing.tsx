@@ -53,7 +53,9 @@ export default function Landing() {
   // forward to Google Ads as a conversion.
   useEffect(() => {
     function handleCalendlyMessage(e: MessageEvent) {
+      console.log('Calendly message received:', e.data)
       if (e.data?.event === 'calendly.event_scheduled') {
+        console.log('Booking detected! Firing Google Ads conversion...')
         const gtagFn = (window as Window & { gtag?: (...args: unknown[]) => void }).gtag
         if (typeof gtagFn === 'function') {
           gtagFn('event', 'conversion', { 
@@ -61,6 +63,9 @@ export default function Landing() {
             value: 1.0,
             currency: 'USD'
           })
+          console.log('Google Ads conversion fired successfully')
+        } else {
+          console.error('gtag function not found')
         }
       }
     }
