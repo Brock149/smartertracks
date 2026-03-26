@@ -275,14 +275,14 @@ export default function TermsAndConditions() {
         <h2 className="text-2xl font-semibold mt-8 mb-4">18. Governing Law &amp; Dispute Resolution</h2>
         <p className="mb-4">
           These Terms shall be governed by and construed in accordance with the laws of the State of
-          Alabama, United States, without regard to its conflict of law provisions.
+          Florida, United States, without regard to its conflict of law provisions.
         </p>
         <p className="mb-4">
           Any dispute arising out of or relating to these Terms or your use of the Platform shall first be
           attempted to be resolved through good-faith negotiation. If the dispute cannot be resolved within
           thirty (30) days, it shall be resolved through binding arbitration administered in accordance
           with the rules of the American Arbitration Association, with the arbitration taking place in
-          Alabama. You agree to waive any right to a jury trial or to participate in a class action lawsuit
+          Florida. You agree to waive any right to a jury trial or to participate in a class action lawsuit
           against the Company.
         </p>
 

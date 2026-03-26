@@ -466,28 +466,28 @@ export default function Transactions() {
           <div className="p-8 text-center text-gray-500 text-lg">No transactions found</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+            <table className="w-full divide-y divide-gray-200 table-fixed">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[20%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     Tool
                   </th>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[12%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     From
                   </th>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[12%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     To
                   </th>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[12%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     Location
                   </th>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[10%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     Stored At
                   </th>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[14%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     Date/Time
                   </th>
-                  <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[20%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
                     Notes
                   </th>
                 </tr>
@@ -495,8 +495,8 @@ export default function Transactions() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {getPaginatedTransactions().map((transaction) => (
                   <tr key={transaction.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg font-medium text-gray-900">
+                    <td className="px-6 py-4">
+                      <div className="text-lg font-medium text-gray-900 break-words">
                         {transaction.tool_id ? (
                           <>#{transaction.tool?.number} - {transaction.tool?.name}</>
                         ) : (
@@ -504,29 +504,29 @@ export default function Transactions() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg text-gray-900">
+                    <td className="px-6 py-4">
+                      <div className="text-lg text-gray-900 break-words">
                         {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg text-gray-900">
+                    <td className="px-6 py-4">
+                      <div className="text-lg text-gray-900 break-words">
                         {transaction.deleted_to_user_name || transaction.to_user?.name}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg text-gray-900">{transaction.location}</div>
+                    <td className="px-6 py-4">
+                      <div className="text-lg text-gray-900 break-words">{transaction.location}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg text-gray-900">{transaction.stored_at}</div>
+                    <td className="px-6 py-4">
+                      <div className="text-lg text-gray-900 break-words">{transaction.stored_at}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg text-gray-900">
+                    <td className="px-6 py-4">
+                      <div className="text-lg text-gray-900 break-words">
                         {new Date(transaction.timestamp).toLocaleString()}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900">
+                      <div className="text-lg text-gray-900 break-words">
                         {transaction.notes || '-'}
                       </div>
                     </td>
