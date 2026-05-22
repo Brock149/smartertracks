@@ -45,7 +45,7 @@ export default function Tools() {
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
   const [loadingChecklist, setLoadingChecklist] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [sortMode, setSortMode] = useState<'number' | 'name'>('number')
+  const [sortMode, setSortMode] = useState<'number' | 'name' | 'created_at'>('number')
   const [newTool, setNewTool] = useState({
     number: '',
     name: '',
@@ -262,6 +262,8 @@ export default function Tools() {
       setNewToolImages([]);
       setNewToolImagesAdded([]);
       setIsCreateModalOpen(false)
+      setSortMode('created_at')
+      setCurrentPage(1)
       fetchTools();
     } catch (error: any) {
       setError(error.message || 'An unexpected error occurred')
@@ -557,6 +559,18 @@ export default function Tools() {
         if (Number.isNaN(bn)) return -1
         return an - bn
       }
+      if (sortMode === 'created_at') {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0
+        // Newest first
+        if (bt !== at) return bt - at
+        const an = parseInt(String(a.number), 10)
+        const bn = parseInt(String(b.number), 10)
+        if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number))
+        if (Number.isNaN(an)) return 1
+        if (Number.isNaN(bn)) return -1
+        return an - bn
+      }
       const nameCompare = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
       if (nameCompare !== 0) return nameCompare
       const an = parseInt(String(a.number), 10)
@@ -666,6 +680,17 @@ export default function Tools() {
                     }`}
                   >
                     Name
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSortMode('created_at'); setCurrentPage(1); }}
+                    className={`px-3 py-1 text-sm font-medium border-l border-gray-200 ${
+                      sortMode === 'created_at'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Newest
                   </button>
                 </div>
               </div>
