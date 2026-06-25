@@ -6,7 +6,8 @@
       },
       "ios": {
         "distribution": "store",
-        "resourceClass": "m1-medium"
+        "resourceClass": "m1-medium",
+        "image": "macos-sequoia-15.6-xcode-26.2"
       }
     }
   },

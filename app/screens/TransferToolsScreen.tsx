@@ -438,6 +438,25 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
 
       const finalLocation = normalizedLocationData || location.trim();
 
+      // Forced, non-editable attribution describing HOW this happened.
+      // Resolve the display name from the users table (auth metadata is often empty).
+      let actorName = (user?.user_metadata?.name as string | undefined)?.trim() || '';
+      if (!actorName && user?.id) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        actorName = (profile?.name || '').trim();
+      }
+      const actorEmail = user?.email || 'no email';
+      const actorLabel = actorName ? `${actorName} (${actorEmail})` : actorEmail;
+      const isSelfClaim = selectedTool.current_owner !== user?.id;
+      const overallNotes = notes.trim();
+      const attribution = isSelfClaim
+        ? `Tool claimed by ${actorLabel} — responsibility acknowledged`
+        : `Transferred by ${actorLabel}`;
+
       // Create the transaction record
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
@@ -447,7 +466,8 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
           to_user_id: toUserId,
           location: finalLocation,
           stored_at: storedAt.trim(),
-          notes: notes.trim() || `Tool transferred via mobile app`,
+          notes: overallNotes,
+          attribution,
           company_id: selectedTool.company_id,
         })
         .select()
@@ -457,14 +477,15 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
         throw transactionError;
       }
 
-      // Create checklist reports for items that need attention
+      // Create checklist reports for items that need attention. Blank item
+      // comments fall back to the overall notes so reports aren't left empty.
       const reportsToInsert = checklistItems
         .filter(item => item.status !== 'ok')
         .map(item => ({
           transaction_id: transactionData.id,
           checklist_item_id: item.id,
           status: item.status === 'damaged' ? 'Damaged/Needs Repair' : 'Needs Replacement/Resupply',
-          comments: item.comments?.trim() || '',
+          comments: item.comments?.trim() || overallNotes || '',
           company_id: selectedTool.company_id,
         }));
 

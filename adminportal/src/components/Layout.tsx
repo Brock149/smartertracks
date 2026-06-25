@@ -6,6 +6,7 @@ const allNavLinks = [
   { to: '/admin/tools', label: 'Tools', icon: '🧰', adminOnly: false },
   { to: '/admin/tool-costs', label: 'Tool Costs', icon: '💰', adminOnly: true },
   { to: '/admin/groups', label: 'Groups', icon: '🧩', adminOnly: false },
+  { to: '/admin/personal-tools', label: 'Personal Tools', icon: '🧑‍🔧', adminOnly: true },
   { to: '/admin/users', label: 'Users', icon: '👥', adminOnly: false },
   { to: '/admin/transactions', label: 'Transactions', icon: '🔄', adminOnly: false },
   { to: '/admin/reports', label: 'Reports', icon: '📊', adminOnly: false },

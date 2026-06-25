@@ -309,3 +309,15 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions."stripe-webhook"]
 verify_jwt = false
+
+[functions."scheduled-inventory-export"]
+verify_jwt = false
+
+[functions."purge-deleted-personal-tools"]
+verify_jwt = false
+
+[functions."process-scheduled-export-runs"]
+verify_jwt = false
+
+[functions."tracker-webhook"]
+verify_jwt = false

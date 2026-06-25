@@ -51,6 +51,7 @@ interface LatestTransaction {
   stored_at: string;
   timestamp: string;
   notes: string;
+  attribution?: string | null;
   from_user_name?: string;
   to_user_name?: string;
 }
@@ -91,10 +92,13 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   const [storedAt, setStoredAt] = useState('');
   const [storedAtPickerVisible, setStoredAtPickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [attemptedClaim, setAttemptedClaim] = useState(false);
+  const [claimErrors, setClaimErrors] = useState<string[]>([]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   
   // Derived state – are the required claim fields filled in?
-  const isClaimFormValid = location.trim().length > 0 && storedAt.trim().length > 0;
+  const isClaimFormValid = location.trim().length > 0 && storedAt.trim().length > 0 && acknowledged;
   
   // Warning modal state
   const [warningModalVisible, setWarningModalVisible] = useState(false);
@@ -130,6 +134,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           stored_at,
           timestamp,
           notes,
+          attribution,
           from_user_id,
           to_user_id,
           deleted_from_user_name,
@@ -150,8 +155,13 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           stored_at: transaction.stored_at,
           timestamp: transaction.timestamp,
           notes: transaction.notes,
-          from_user_name: transaction.deleted_from_user_name || (transaction.from_user as any)?.name,
-          to_user_name: transaction.deleted_to_user_name || (transaction.to_user as any)?.name,
+          attribution: (transaction as any).attribution || null,
+          from_user_name: transaction.deleted_from_user_name
+            ? `${transaction.deleted_from_user_name} (removed)`
+            : (transaction.from_user as any)?.name,
+          to_user_name: transaction.deleted_to_user_name
+            ? `${transaction.deleted_to_user_name} (removed)`
+            : (transaction.to_user as any)?.name,
         });
       }
 
@@ -245,7 +255,12 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     // Clear location and stored at fields - user must fill them in
     setLocation('');
     setStoredAt('');
-    setNotes(`Tool claimed by ${user?.user_metadata?.name || user?.email}`);
+    // Notes is now the tech's own free-text box. The "claimed by" line is
+    // recorded separately (and non-editably) in the transaction's attribution.
+    setNotes('');
+    setAcknowledged(false);
+    setAttemptedClaim(false);
+    setClaimErrors([]);
     
     // Reset checklist items to default 'ok' status
     setChecklistItems(prev => prev.map(item => ({
@@ -258,10 +273,18 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   };
 
   const handleClaimSubmit = async () => {
-    if (!location.trim() || !storedAt.trim()) {
-      Alert.alert('Error', 'Please fill in both Location and Stored At fields');
+    // Validate and, on failure, stack a fresh set of red messages so repeated
+    // taps make it visually obvious what's missing (per request).
+    setAttemptedClaim(true);
+    const missing: string[] = [];
+    if (!location.trim()) missing.push('Must enter a location');
+    if (!storedAt.trim()) missing.push('Must select where it’s stored');
+    if (!acknowledged) missing.push('Must check responsibility acknowledgement');
+    if (missing.length > 0) {
+      setClaimErrors(prev => [...prev, ...missing]);
       return;
     }
+    setClaimErrors([]);
 
     setClaiming(true);
 
@@ -282,16 +305,56 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         }
       }
 
+      // Build the forced, non-editable attribution line for this claim.
+      // The display name lives in the users table (auth metadata is often empty),
+      // so resolve it there and only append the email when we actually have a name.
+      let claimerName = (user?.user_metadata?.name as string | undefined)?.trim() || '';
+      if (!claimerName && user?.id) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        claimerName = (profile?.name || '').trim();
+      }
+      const claimerEmail = user?.email || 'no email';
+      const baseAttribution = claimerName
+        ? `Tool claimed by ${claimerName} (${claimerEmail}) — responsibility acknowledged`
+        : `Tool claimed by ${claimerEmail} — responsibility acknowledged`;
+      // If the tech flagged any checklist items, summarize them on the
+      // transaction so the damage shows up directly in the transaction log
+      // (app + admin) under the acknowledgment line.
+      const attribution = appendDamageSummary(baseAttribution);
+      const overallNotes = notes.trim();
+
+      // Resolve the *live* current owner from the DB rather than trusting the
+      // tool snapshot we were navigated with. That snapshot can be stale (e.g.
+      // the tool looked unassigned in the list when this screen opened), which
+      // previously caused claims to log "From: System" even though another tech
+      // actually held the tool. Reading it fresh keeps the From column correct.
+      let liveFromOwner: string | null = tool.current_owner ?? null;
+      {
+        const { data: liveTool } = await supabase
+          .from('tools')
+          .select('current_owner')
+          .eq('id', tool.id)
+          .single();
+        if (liveTool) {
+          liveFromOwner = liveTool.current_owner ?? null;
+        }
+      }
+
       // Create the transaction record
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
         .insert({
           tool_id: tool.id,
-          from_user_id: tool.current_owner,
+          from_user_id: liveFromOwner,
           to_user_id: user?.id,
           location: finalLocation,
           stored_at: storedAt.trim(),
-          notes: notes.trim() || `Tool claimed by ${user?.user_metadata?.name || user?.email}`,
+          notes: overallNotes,
+          attribution,
           company_id: tool.company_id,
         })
         .select()
@@ -301,14 +364,16 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         throw transactionError;
       }
 
-      // Create checklist reports for items that need attention
+      // Create checklist reports for items that need attention.
+      // If a flagged item has no comment of its own, fall back to the overall
+      // transaction notes so the damage report isn't left blank.
       const reportsToInsert = checklistItems
         .filter(item => item.status !== 'ok')
         .map(item => ({
           transaction_id: transactionData.id,
           checklist_item_id: item.id,
           status: item.status === 'damaged' ? 'Damaged/Needs Repair' : 'Needs Replacement/Resupply',
-          comments: item.comments?.trim() || '',
+          comments: item.comments?.trim() || overallNotes || '',
           company_id: tool.company_id,
         }));
 
@@ -349,6 +414,18 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     }
   };
 
+  // Build a short, human summary of any flagged checklist items and append it
+  // to a transaction's attribution line (newline-separated), e.g.:
+  //   "Overall Tool Condition – Needs Repair; Hose – Needs Replacement reported"
+  const appendDamageSummary = (base: string): string => {
+    const flagged = checklistItems.filter(item => item.status !== 'ok');
+    if (flagged.length === 0) return base;
+    const parts = flagged.map(item =>
+      `${item.item_name} – ${item.status === 'damaged' ? 'Needs Repair' : 'Needs Replacement'}`
+    );
+    return `${base}\n${parts.join('; ')} reported`;
+  };
+
   const updateChecklistItem = (itemId: string, status: 'ok' | 'damaged' | 'needs_replacement', comments?: string) => {
     setChecklistItems(prev => prev.map(item => 
       item.id === itemId 
@@ -379,6 +456,20 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
       }
 
       // Create a "self-transfer" to generate checklist report
+      let reporterName = (user?.user_metadata?.name as string | undefined)?.trim() || '';
+      if (!reporterName && user?.id) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        reporterName = (profile?.name || '').trim();
+      }
+      const reporterEmail = user?.email || 'no email';
+      const baseReportAttribution = reporterName
+        ? `Checklist report submitted by ${reporterName} (${reporterEmail})`
+        : `Checklist report submitted by ${reporterEmail}`;
+      const reportAttribution = appendDamageSummary(baseReportAttribution);
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
         .insert({
@@ -387,7 +478,8 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           to_user_id: user?.id,
           location: finalLocation,
           stored_at: latestTransaction?.stored_at || 'N/A',
-          notes: `Checklist report submitted by ${user?.user_metadata?.name || user?.email}`,
+          notes: '',
+          attribution: reportAttribution,
           company_id: tool.company_id,
         })
         .select()
@@ -752,11 +844,16 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         </View>
 
         {/* Latest Transaction Notes */}
-        {latestTransaction?.notes && (
+        {(latestTransaction?.notes || latestTransaction?.attribution) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Latest Transaction Notes</Text>
             <View style={styles.notesCard}>
-              <Text style={styles.notesText}>{latestTransaction.notes}</Text>
+              {!!latestTransaction?.attribution && (
+                <Text style={styles.attributionText}>{latestTransaction.attribution}</Text>
+              )}
+              {!!latestTransaction?.notes && (
+                <Text style={styles.notesText}>{latestTransaction.notes}</Text>
+              )}
             </View>
           </View>
         )}
@@ -812,20 +909,27 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         )}
       </View>
 
-      {/* Claim Ownership Modal */}
+      {/* Claim Ownership Modal — fullScreen so it can't be swiped closed;
+          the user must use Cancel. This also fixes scroll/drag conflicts. */}
       <Modal
         visible={claimModalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setClaimModalVisible(false)}
       >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={80}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <SafeAreaView style={[
-              styles.modalContainer,
-              isClaimFormValid ? styles.modalContainerValid : styles.modalContainerInitial,
-            ]}>
-              <View style={styles.modalHeader}>
+            <SafeAreaView
+              edges={['left', 'right', 'bottom']}
+              style={[
+                styles.modalContainer,
+                isClaimFormValid ? styles.modalContainerValid : styles.modalContainerInitial,
+              ]}
+            >
+              {/* In a fullScreen Modal the safe-area insets can report 0, which
+                  left Cancel jammed against the status bar/clock. Add an explicit
+                  top padding so the header always clears the top of the screen. */}
+              <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 44) + 8 }]}>
                 <TouchableOpacity 
                   onPress={() => setClaimModalVisible(false)}
                   style={styles.cancelButton}
@@ -932,16 +1036,52 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
               />
             </View>
 
-            {/* Claim Tool Button */}
+            {/* Responsibility Acknowledgment */}
+            <View style={styles.inputSection}>
+              <TouchableOpacity
+                style={[
+                  styles.ackRow,
+                  attemptedClaim && !acknowledged && styles.ackRowError,
+                ]}
+                onPress={() => {
+                  setAcknowledged(prev => !prev);
+                  setClaimErrors([]);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.ackCheckbox, acknowledged && styles.ackCheckboxChecked]}>
+                  {acknowledged && (
+                    <Ionicons name="checkmark" size={18} color="#ffffff" />
+                  )}
+                </View>
+                <Text style={styles.ackText}>
+                  By claiming this tool, I acknowledge that I am taking
+                  responsibility for it and that it is now in my possession and
+                  care.
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Stacked validation messages (grow on each failed tap) */}
+            {claimErrors.length > 0 && (
+              <View style={styles.claimErrorBox}>
+                {claimErrors.map((msg, idx) => (
+                  <Text key={idx} style={styles.claimErrorText}>{msg}</Text>
+                ))}
+              </View>
+            )}
+
+            {/* Claim Tool Button — always pressable so an invalid tap gives
+                feedback instead of silently doing nothing. */}
             <View style={styles.bottomButtonSection}>
               <TouchableOpacity
                 onPress={handleClaimSubmit}
-                disabled={!isClaimFormValid || claiming}
+                disabled={claiming}
                 style={[
                   styles.claimButton,
-                  (!isClaimFormValid || claiming)
-                    ? styles.finishClaimButtonDisabled
-                    : styles.finishClaimButtonEnabled,
+                  isClaimFormValid
+                    ? styles.finishClaimButtonEnabled
+                    : styles.finishClaimButtonDisabled,
                 ]}
               >
                 <Ionicons name="hand-left-outline" size={20} color="#ffffff" />
@@ -1220,6 +1360,64 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1f2937',
     lineHeight: 24,
+  },
+  attributionText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  ackRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fdba74',
+    borderRadius: 12,
+    padding: 14,
+  },
+  ackCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#f97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    marginTop: 2,
+    backgroundColor: '#ffffff',
+  },
+  ackCheckboxChecked: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  ackRowError: {
+    borderColor: '#dc2626',
+    borderWidth: 2,
+    backgroundColor: '#fef2f2',
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  claimErrorBox: {
+    paddingHorizontal: 16,
+  },
+  claimErrorText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  ackText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#7c2d12',
+    lineHeight: 21,
   },
   bottomSection: {
     padding: 16,

@@ -72,6 +72,7 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
   const [storedAt, setStoredAt] = useState('');
   const [storedAtPickerVisible, setStoredAtPickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [userPickerVisible, setUserPickerVisible] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -120,7 +121,9 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
     selectedTools.length > 0 &&
     location.trim().length > 0 &&
     storedAt.trim().length > 0 &&
-    (isClaimingAny || toUser.trim().length > 0)
+    (isClaimingAny || toUser.trim().length > 0) &&
+    // When claiming any tool, the responsibility acknowledgment is required.
+    (!isClaimingAny || acknowledged)
   );
 
   const fetchUsers = async () => {
@@ -514,7 +517,9 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
             to_user_id: toUserId,
             location: location.trim(),
             stored_at: storedAt.trim(),
-            notes: notes.trim() || 'Multi-tool transfer via mobile app',
+            // Notes is now the tech's own free text only. The "how" (claim vs
+            // transfer vs admin override) is recorded server-side in attribution.
+            notes: notes.trim(),
             checklist_reports,
           }),
         }
@@ -526,7 +531,21 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
       }
 
       Alert.alert('Success', 'Tools transferred successfully!', [
-        { text: 'OK', onPress: resetForm },
+        {
+          text: 'OK',
+          onPress: () => {
+            resetForm();
+            // Close the form and route the user somewhere sensible, mirroring
+            // the single-claim behavior (no leftover selection / multi mode).
+            if (route?.params?.groupId) {
+              // Group flow: go back to that group's detail screen.
+              navigation.navigate('GroupDetail', { groupId: route.params.groupId });
+            } else {
+              // Regular flow: back to All Tools, exiting multi-select mode.
+              navigation.navigate('AllToolsList', { clearSelection: true });
+            }
+          },
+        },
       ]);
     } catch (error) {
       console.error('Error transferring tools:', error);
@@ -543,6 +562,7 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
     setLocation('');
     setStoredAt('');
     setNotes('');
+    setAcknowledged(false);
     setToUser('');
     setChecklistsByTool({});
     setChecklistStatusByTool({});
@@ -746,6 +766,27 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
               numberOfLines={3}
             />
           </View>
+
+          {isClaimingAny && (
+            <View style={styles.inputSection}>
+              <TouchableOpacity
+                style={styles.ackRow}
+                onPress={() => setAcknowledged((prev) => !prev)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.ackCheckbox, acknowledged && styles.ackCheckboxChecked]}>
+                  {acknowledged && (
+                    <Ionicons name="checkmark" size={18} color="#ffffff" />
+                  )}
+                </View>
+                <Text style={styles.ackText}>
+                  By claiming {selectedTools.length > 1 ? 'these tools' : 'this tool'}, I acknowledge
+                  that I am taking responsibility for {selectedTools.length > 1 ? 'them' : 'it'} and
+                  that {selectedTools.length > 1 ? 'they are' : 'it is'} now in my possession and care.
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {selectedTools.length > 0 && (
@@ -1254,6 +1295,38 @@ const styles = StyleSheet.create({
   notesInput: {
     height: 90,
     textAlignVertical: 'top',
+  },
+  ackRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fdba74',
+    borderRadius: 12,
+    padding: 14,
+  },
+  ackCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#f97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    marginTop: 2,
+    backgroundColor: '#ffffff',
+  },
+  ackCheckboxChecked: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  ackText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#7c2d12',
+    lineHeight: 21,
   },
   dropdownButton: {
     flexDirection: 'row',

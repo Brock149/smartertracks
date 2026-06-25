@@ -55,7 +55,7 @@ serve(async (req) => {
 
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('company_id')
+      .select('company_id, name, role')
       .eq('id', user.id)
       .single()
 
@@ -110,7 +110,7 @@ serve(async (req) => {
 
     const { data: toUserData, error: toUserError } = await supabase
       .from('users')
-      .select('company_id')
+      .select('company_id, name, email')
       .eq('id', to_user_id)
       .single()
 
@@ -143,6 +143,32 @@ serve(async (req) => {
       })
 
     const finalLocation = normalizedLocationData || location
+
+    // Build a forced, non-editable attribution describing HOW this happened.
+    // This is constructed server-side from the caller's identity/role so it
+    // cannot be edited by the user, and is kept separate from the free-text notes.
+    const callerName = (userData.name || '').trim()
+    const callerEmail = user.email || 'no email'
+    // Only append the email when we actually have a name, otherwise we'd
+    // duplicate the email (e.g. "email (email)").
+    const callerLabel = callerName ? `${callerName} (${callerEmail})` : callerEmail
+    const recipientName = toUserData.name || 'Unknown user'
+    // Show the recipient's email too (mirrors how the caller is labeled).
+    const recipientEmail = (toUserData as any).email || ''
+    const recipientLabel = recipientEmail ? `${recipientName} (${recipientEmail})` : recipientName
+    const isSelfClaim = to_user_id === user.id
+    const isAdmin = userData.role === 'admin' || userData.role === 'superadmin'
+
+    let attribution: string
+    if (isSelfClaim) {
+      attribution = `Tool claimed by ${callerLabel} — responsibility acknowledged`
+    } else if (isAdmin) {
+      // Admin assigned the tool on the tech's behalf: the recipient never
+      // checked the responsibility box, so make that explicit.
+      attribution = `Admin override: ${callerLabel} assigned tools to ${recipientLabel} — responsibility NOT acknowledged`
+    } else {
+      attribution = `Transferred by ${callerLabel} to ${recipientLabel}`
+    }
 
     const { data: batchData, error: batchError } = await supabase
       .from('transaction_batches')
@@ -192,6 +218,7 @@ serve(async (req) => {
           location: finalLocation,
           stored_at,
           notes,
+          attribution,
           company_id: userCompanyId,
           timestamp: new Date().toISOString(),
           batch_id: batchId,
@@ -214,7 +241,9 @@ serve(async (req) => {
               transaction_id: transaction.id,
               checklist_item_id: report.checklist_item_id,
               status: report.status,
-              comments: report.comments,
+              // If a flagged item has no comment, fall back to the overall
+              // transaction notes so the damage report isn't left blank.
+              comments: report.comments || notes || '',
               company_id: userCompanyId,
             }))
           )

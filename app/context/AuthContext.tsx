@@ -7,7 +7,10 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   suspended: boolean;
+  companyId: string | null;
+  hasCompany: boolean;
   refreshSuspended: () => Promise<void>;
+  refreshCompany: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<{ error: any }>;
@@ -32,9 +35,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [suspended, setSuspended] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
-  // Returns true if the user's company is suspended (is_active = false)
-  async function checkSuspended(uid: string): Promise<boolean> {
+  // Loads the user's company id + whether that company is suspended in one go.
+  async function loadCompanyState(uid: string): Promise<{ companyId: string | null; suspended: boolean }> {
     try {
       const { data: userRow, error: userErr } = await supabase
         .from('users')
@@ -42,7 +46,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .eq('id', uid)
         .single();
 
-      if (userErr || !userRow?.company_id) return false;
+      if (userErr || !userRow?.company_id) return { companyId: null, suspended: false };
 
       const { data: companyRow, error: compErr } = await supabase
         .from('companies')
@@ -50,11 +54,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .eq('id', userRow.company_id)
         .single();
 
-      if (compErr || companyRow == null) return false;
+      if (compErr || companyRow == null) return { companyId: userRow.company_id, suspended: false };
 
-      return companyRow.is_active === false;
+      return { companyId: userRow.company_id, suspended: companyRow.is_active === false };
     } catch (e) {
-      return false;
+      return { companyId: null, suspended: false };
     }
   }
 
@@ -65,8 +69,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        const suspended = await checkSuspended(session.user.id);
-        setSuspended(suspended);
+        const state = await loadCompanyState(session.user.id);
+        setSuspended(state.suspended);
+        setCompanyId(state.companyId);
       }
       setLoading(false);
     })();
@@ -79,8 +84,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          const suspended = await checkSuspended(session.user.id);
-          setSuspended(suspended);
+          const state = await loadCompanyState(session.user.id);
+          setSuspended(state.suspended);
+          setCompanyId(state.companyId);
+        } else {
+          setCompanyId(null);
         }
         setLoading(false);
       })();
@@ -115,8 +123,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const refreshSuspended = async () => {
     if (!user) return;
-    const suspendedNow = await checkSuspended(user.id);
-    setSuspended(suspendedNow);
+    const state = await loadCompanyState(user.id);
+    setSuspended(state.suspended);
+    setCompanyId(state.companyId);
+  };
+
+  const refreshCompany = async () => {
+    if (!user) {
+      setCompanyId(null);
+      return;
+    }
+    const state = await loadCompanyState(user.id);
+    setSuspended(state.suspended);
+    setCompanyId(state.companyId);
   };
 
   const value = {
@@ -124,7 +143,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     loading,
     suspended,
+    companyId,
+    hasCompany: !!companyId,
     refreshSuspended,
+    refreshCompany,
     signIn,
     signUp,
     signOut,

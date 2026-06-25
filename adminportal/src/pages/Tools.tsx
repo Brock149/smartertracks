@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { ToolImageUpload } from '../components/ToolImageUpload'
 import { ToolImageGallery } from '../components/ToolImageGallery'
-import { fetchToolImages, deleteToolImageRecord } from '../lib/uploadImage'
+import {
+  fetchToolImages,
+  deleteToolImageRecord,
+  uploadToolImageToStorage,
+  insertToolImageRecord,
+  removeStorageObject,
+} from '../lib/uploadImage'
+import { logCompanyEvent } from '../lib/companyEvents'
 
 interface Tool {
   id: string
@@ -12,6 +19,7 @@ interface Tool {
   created_at: string
   company_id: string
   current_owner: string | null
+  deleted_owner_name?: string | null
   photo_url?: string
   estimated_cost?: number | null
   owner?: {
@@ -65,6 +73,11 @@ export default function Tools() {
   const itemsPerPage = 10
   const [newToolImages, setNewToolImages] = useState<Array<{ id: string; image_url: string }>>([])
   const [newToolImagesAdded, setNewToolImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
+  // Photos taken during creation, before the tool row exists. Stored in the
+  // bucket and attached to the tool once it's created (or cleaned up on cancel).
+  const [pendingCreateImages, setPendingCreateImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
+  const [uploadingCreateImage, setUploadingCreateImage] = useState(false)
+  const [createImageError, setCreateImageError] = useState<string | null>(null)
   const [editToolImages, setEditToolImages] = useState<Array<{ id: string; image_url: string }>>([])
   const [editImagesToDelete, setEditImagesToDelete] = useState<Array<{ id: string; image_url: string }>>([])
   const [editImagesAdded, setEditImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
@@ -252,6 +265,17 @@ export default function Tools() {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create tool')
       }
+
+      // Attach any photos that were uploaded during creation now that the tool
+      // (and its company_id) exist.
+      const createdToolId = data.id || data.tool?.id
+      const createdCompanyId = data.tool?.company_id
+      if (createdToolId && createdCompanyId && pendingCreateImages.length > 0) {
+        for (const img of pendingCreateImages) {
+          await insertToolImageRecord(createdToolId, createdCompanyId, img.publicUrl, img.filePath)
+        }
+      }
+
       setNewTool({
         number: '',
         name: '',
@@ -261,6 +285,8 @@ export default function Tools() {
       });
       setNewToolImages([]);
       setNewToolImagesAdded([]);
+      setPendingCreateImages([]);
+      setCreateImageError(null);
       setIsCreateModalOpen(false)
       setSortMode('created_at')
       setCurrentPage(1)
@@ -268,6 +294,38 @@ export default function Tools() {
     } catch (error: any) {
       setError(error.message || 'An unexpected error occurred')
     }
+  }
+
+  const handleCreateImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Reset the input so the same file can be re-picked later if needed.
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setCreateImageError('Please choose an image file.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setCreateImageError('Image must be less than 5MB.')
+      return
+    }
+    setCreateImageError(null)
+    setUploadingCreateImage(true)
+    try {
+      const uploaded = await uploadToolImageToStorage(file)
+      if (!uploaded) {
+        setCreateImageError('Failed to upload image. Please try again.')
+        return
+      }
+      setPendingCreateImages((prev) => [...prev, uploaded])
+    } finally {
+      setUploadingCreateImage(false)
+    }
+  }
+
+  const handleRemoveCreateImage = async (filePath: string) => {
+    await removeStorageObject(filePath)
+    setPendingCreateImages((prev) => prev.filter((img) => img.filePath !== filePath))
   }
 
 
@@ -404,6 +462,10 @@ export default function Tools() {
     for (const img of newToolImagesAdded) {
       await deleteToolImageRecord(img.id, img.image_url);
     }
+    // Clean up any photos uploaded during this (cancelled) creation.
+    for (const img of pendingCreateImages) {
+      await removeStorageObject(img.filePath);
+    }
     setNewTool({
       number: '',
       name: '',
@@ -413,6 +475,8 @@ export default function Tools() {
     });
     setNewToolImages([]);
     setNewToolImagesAdded([]);
+    setPendingCreateImages([]);
+    setCreateImageError(null);
   };
 
   const handleDeleteTool = async () => {
@@ -428,6 +492,15 @@ export default function Tools() {
         })
 
       if (error) throw error
+
+      // Record this as a company activity event (the RPC can't log it itself).
+      await logCompanyEvent({
+        event_type: 'tool_deleted',
+        target_type: 'tool',
+        target_id: deleteTool.id,
+        target_label: `#${deleteTool.number} - ${deleteTool.name}`,
+        details: 'Tool deleted',
+      })
 
       setDeleteModalOpen(false)
       fetchTools() // Refresh the tools list
@@ -538,7 +611,7 @@ export default function Tools() {
       const matchesNumber = tool.number.toLowerCase().includes(lowerSearch)
       const matchesName = tool.name.toLowerCase().includes(lowerSearch)
       const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch)
-      const matchesOwner = (tool.owner?.name || '').toLowerCase().includes(lowerSearch)
+      const matchesOwner = (tool.owner?.name || tool.deleted_owner_name || '').toLowerCase().includes(lowerSearch)
       const latestLocation =
         tool.latest_transaction && tool.latest_transaction.length > 0
           ? tool.latest_transaction[0].location || ''
@@ -742,7 +815,7 @@ export default function Tools() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tool.name}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">{tool.description}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {tool.owner?.name || 'None'}
+                        {tool.owner?.name || (tool.deleted_owner_name ? `${tool.deleted_owner_name} (removed)` : 'None')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {tool.latest_transaction && tool.latest_transaction.length > 0 
@@ -820,7 +893,7 @@ export default function Tools() {
                   
                   <div className="flex justify-between">
                     <span className="text-gray-500">Owner:</span>
-                    <span className="text-gray-900">{tool.owner?.name || 'None'}</span>
+                    <span className="text-gray-900">{tool.owner?.name || (tool.deleted_owner_name ? `${tool.deleted_owner_name} (removed)` : 'None')}</span>
                   </div>
                   
                   <div className="flex justify-between">
@@ -997,6 +1070,49 @@ export default function Tools() {
                       placeholder="e.g. 450"
                       className="w-full border rounded-lg pl-8 md:pl-12 pr-3 md:pr-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-2 text-base md:text-lg">Tool Images</label>
+                  <div className="space-y-3">
+                    <div>
+                      <label className={`inline-block cursor-pointer px-4 py-2 rounded-lg transition-colors text-white ${
+                        uploadingCreateImage ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
+                      }`}>
+                        {uploadingCreateImage ? 'Uploading...' : 'Upload Image'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCreateImageUpload}
+                          className="hidden"
+                          disabled={uploadingCreateImage}
+                        />
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Add photos now — they'll be saved with the tool. If you cancel, they're discarded.
+                      </p>
+                    </div>
+                    {createImageError && (
+                      <p className="text-red-500 text-sm">{createImageError}</p>
+                    )}
+                    {pendingCreateImages.length > 0 && (
+                      <div className="flex flex-wrap gap-4">
+                        {pendingCreateImages.map((img) => (
+                          <div key={img.filePath} className="relative w-28 h-28 border rounded-lg overflow-hidden group">
+                            <img src={img.publicUrl} alt="Tool" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-80 group-hover:opacity-100"
+                              onClick={() => handleRemoveCreateImage(img.filePath)}
+                              title="Remove image"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

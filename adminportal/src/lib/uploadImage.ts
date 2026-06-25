@@ -80,6 +80,83 @@ export async function uploadToolImageAndInsert(
   }
 }
 
+// Upload an image to storage ONLY (no DB record yet). Used during tool creation
+// when the tool row doesn't exist yet — mirrors the mobile app's one-step flow.
+// Returns the storage path + public URL so the record can be attached after the
+// tool is created, or the file cleaned up if creation is cancelled.
+export async function uploadToolImageToStorage(
+  file: File
+): Promise<{ filePath: string; publicUrl: string } | null> {
+  try {
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const fileName = `new-${crypto.randomUUID()}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+    const { error: uploadError } = await supabase.storage
+      .from('tool-images')
+      .upload(filePath, file);
+    if (uploadError) {
+      console.error('Error uploading image to storage:', uploadError);
+      return null;
+    }
+    const { data: { publicUrl } } = supabase.storage
+      .from('tool-images')
+      .getPublicUrl(filePath);
+    return { filePath, publicUrl };
+  } catch (error) {
+    console.error('Error in uploadToolImageToStorage:', error);
+    return null;
+  }
+}
+
+// Attach an already-uploaded storage object to a tool as a tool_images record,
+// then kick off thumbnail generation. Used after a tool is created so photos
+// taken during creation get linked in one step.
+export async function insertToolImageRecord(
+  toolId: string,
+  companyId: string,
+  publicUrl: string,
+  filePath: string
+): Promise<{ id: string; image_url: string } | null> {
+  const { data: insertData, error: insertError } = await supabase
+    .from('tool_images')
+    .insert([{ tool_id: toolId, image_url: publicUrl, company_id: companyId }])
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error('Error inserting image record:', insertError);
+    // Clean up the orphaned storage object.
+    await supabase.storage.from('tool-images').remove([filePath]);
+    return null;
+  }
+
+  try {
+    const session = await supabase.auth.getSession();
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-thumbnail`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session.data.session?.access_token ? { 'Authorization': `Bearer ${session.data.session.access_token}` } : {})
+      },
+      body: JSON.stringify({ image_id: insertData.id, file_path: filePath })
+    });
+  } catch (e) {
+    console.warn('generate-thumbnail failed (continuing without thumb):', e);
+  }
+
+  return insertData;
+}
+
+// Remove a raw storage object by its path (used to clean up photos uploaded
+// during a cancelled tool creation).
+export async function removeStorageObject(filePath: string): Promise<void> {
+  try {
+    await supabase.storage.from('tool-images').remove([filePath]);
+  } catch (error) {
+    console.error('Error removing storage object:', error);
+  }
+}
+
 // Fetch all images for a tool
 export async function fetchToolImages(toolId: string): Promise<Array<{ id: string, image_url: string, thumb_url?: string | null }>> {
   const { data, error } = await supabase

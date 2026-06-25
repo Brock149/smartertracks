@@ -51,7 +51,7 @@ serve(async (req) => {
     // Check if the user is an admin and get their company_id
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('role, company_id')
+      .select('role, company_id, name')
       .eq('id', user.id)
       .single()
 
@@ -95,6 +95,22 @@ serve(async (req) => {
         JSON.stringify({ error: dbError.message }),
         { status: 400, headers: corsHeaders }
       )
+    }
+
+    // Best-effort: record this as a company activity event.
+    try {
+      await supabase.from('company_events').insert({
+        company_id: adminCompanyId,
+        event_type: 'user_added',
+        actor_id: user.id,
+        actor_name: userData.name || user.email || 'An admin',
+        target_type: 'user',
+        target_id: userId,
+        target_label: email ? `${name} (${email})` : name,
+        details: `Added to company as ${role}`,
+      })
+    } catch (_e) {
+      // company_events table not present yet — ignore.
     }
 
     return new Response(

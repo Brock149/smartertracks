@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
+import NoCompanyBanner from '../components/NoCompanyBanner';
 
 interface HomeScreenProps {
   navigation: any;
@@ -35,7 +36,7 @@ interface RecentTransfer {
 }
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const { user } = useAuth();
+  const { user, hasCompany } = useAuth();
   const [myToolsCount, setMyToolsCount] = useState(0);
   const [myToolsWithIssuesCount, setMyToolsWithIssuesCount] = useState(0);
   const [companyToolsCount, setCompanyToolsCount] = useState(0);
@@ -271,6 +272,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             <ActivityIndicator size="large" color="#2563eb" />
             <Text style={styles.loadingText}>Loading your dashboard...</Text>
           </View>
+        ) : !hasCompany ? (
+          <NoCompanyBanner feature="company tools, transfers, or groups" />
         ) : (
           <>
             <View style={styles.statsGrid}>

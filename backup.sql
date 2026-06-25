@@ -21,13 +21,6 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
-CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
-
-
-
-
-
-
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
 
 
@@ -921,6 +914,19 @@ $$;
 ALTER FUNCTION "public"."store_deleted_user_name"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."update_app_version_control_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_app_version_control_updated_at"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") RETURNS "json"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -1109,6 +1115,27 @@ ALTER FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias"
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."app_version_control" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "platform" "text" NOT NULL,
+    "minimum_version" "text" NOT NULL,
+    "current_version" "text" NOT NULL,
+    "force_update_enabled" boolean DEFAULT false,
+    "update_message" "text",
+    "store_url" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "app_version_control_platform_check" CHECK (("platform" = ANY (ARRAY['ios'::"text", 'android'::"text"])))
+);
+
+
+ALTER TABLE "public"."app_version_control" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."app_version_control" IS 'Controls minimum app version requirements for force updates';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."checklist_reports" (
@@ -1325,6 +1352,7 @@ CREATE TABLE IF NOT EXISTS "public"."tools" (
     "is_deleted" boolean DEFAULT false,
     "company_id" "uuid" NOT NULL,
     "number_numeric" integer GENERATED ALWAYS AS (COALESCE((("regexp_match"("number", '^\d+'::"text"))[1])::integer, 999999)) STORED,
+    "estimated_cost" integer,
     CONSTRAINT "ck_tools_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
@@ -1361,6 +1389,16 @@ CREATE TABLE IF NOT EXISTS "public"."users" (
 
 
 ALTER TABLE "public"."users" OWNER TO "postgres";
+
+
+ALTER TABLE ONLY "public"."app_version_control"
+    ADD CONSTRAINT "app_version_control_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."app_version_control"
+    ADD CONSTRAINT "app_version_control_platform_key" UNIQUE ("platform");
+
 
 
 ALTER TABLE ONLY "public"."checklist_reports"
@@ -1648,6 +1686,10 @@ CREATE OR REPLACE TRIGGER "trg_tx_active" BEFORE INSERT OR UPDATE ON "public"."t
 
 
 
+CREATE OR REPLACE TRIGGER "update_app_version_control_timestamp" BEFORE UPDATE ON "public"."app_version_control" FOR EACH ROW EXECUTE FUNCTION "public"."update_app_version_control_updated_at"();
+
+
+
 ALTER TABLE ONLY "public"."checklist_reports"
     ADD CONSTRAINT "checklist_reports_checklist_item_id_fkey" FOREIGN KEY ("checklist_item_id") REFERENCES "public"."tool_checklists"("id") ON DELETE CASCADE;
 
@@ -1887,6 +1929,14 @@ CREATE POLICY "Admins can view group activity in their company" ON "public"."gro
 
 
 
+CREATE POLICY "Allow authenticated users to update version control" ON "public"."app_version_control" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Allow public read access to version control" ON "public"."app_version_control" FOR SELECT USING (true);
+
+
+
 CREATE POLICY "Service role can do everything on access codes" ON "public"."company_access_codes" TO "service_role" USING (true) WITH CHECK (true);
 
 
@@ -2053,6 +2103,9 @@ CREATE POLICY "Users can view transactions in their company" ON "public"."tool_t
 
 
 
+ALTER TABLE "public"."app_version_control" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."checklist_reports" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2108,9 +2161,6 @@ REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
-
-
-
 
 
 
@@ -2417,6 +2467,12 @@ GRANT ALL ON FUNCTION "public"."store_deleted_user_name"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") TO "service_role";
@@ -2447,6 +2503,12 @@ GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p
 
 
 
+
+
+
+GRANT ALL ON TABLE "public"."app_version_control" TO "anon";
+GRANT ALL ON TABLE "public"."app_version_control" TO "authenticated";
+GRANT ALL ON TABLE "public"."app_version_control" TO "service_role";
 
 
 

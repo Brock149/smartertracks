@@ -78,12 +78,12 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
             )}
 
             {/* Image */}
-            <div className="mx-auto max-h-[80vh] overflow-hidden">
+            <div className="mx-auto max-h-[80vh] overflow-hidden flex flex-col items-center">
               {!imgError ? (
                 <img
                   src={images[selectedIdx].image_url}
                   alt="Tool Preview"
-                  className="max-h-[80vh] w-auto rounded-lg"
+                  className="max-h-[72vh] w-auto rounded-lg"
                   onError={() => setImgError(true)}
                 />
               ) : (
@@ -91,6 +91,17 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
                   <span className="text-red-500 text-lg">Image failed to load.</span>
                 </div>
               )}
+              <a
+                href={images[selectedIdx].image_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5m0 0v5m0-5L10 14M9 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-3" />
+                </svg>
+                View fullscreen (new tab)
+              </a>
             </div>
 
             {/* Next Arrow */}

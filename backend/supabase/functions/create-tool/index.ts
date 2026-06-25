@@ -46,7 +46,7 @@ serve(async (req) => {
     // Get the user's data to check role and company
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
-      .select('role, company_id')
+      .select('role, company_id, name')
       .eq('id', user.id)
       .single()
 
@@ -116,6 +116,22 @@ serve(async (req) => {
       if (costError) {
         console.error('Failed to set estimated_cost:', costError.message)
       }
+    }
+
+    // Best-effort: record this as a company activity event.
+    try {
+      await supabaseClient.from('company_events').insert({
+        company_id: userData.company_id,
+        event_type: 'tool_created',
+        actor_id: user.id,
+        actor_name: userData.name || user.email || 'An admin',
+        target_type: 'tool',
+        target_id: toolId,
+        target_label: `#${number} - ${name}`,
+        details: 'Tool created',
+      })
+    } catch (_e) {
+      // company_events table not present yet — ignore.
     }
 
     // Get the created tool data to return

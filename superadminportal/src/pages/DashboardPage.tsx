@@ -20,11 +20,26 @@ export default function DashboardPage() {
   const [deleteCompany, setDeleteCompany] = useState<Company|null>(null)
   const [limitsCompany, setLimitsCompany] = useState<Company|null>(null)
   const [activeTab, setActiveTab] = useState<'companies' | 'app-versions'>('companies')
+  const [purging, setPurging] = useState(false)
+  const [purgeMessage, setPurgeMessage] = useState('')
+  // One-off "test the scheduler" controls.
+  const [schedCompanyId, setSchedCompanyId] = useState('')
+  const [schedType, setSchedType] = useState<'personal' | 'company'>('personal')
+  const [schedMinutes, setSchedMinutes] = useState(5)
+  const [scheduling, setScheduling] = useState(false)
+  const [schedMessage, setSchedMessage] = useState('')
 
   useEffect(() => {
     console.log('Dashboard useEffect: fetch companies')
     fetchCompanies()
   }, [])
+
+  // Default the scheduler company picker to the first company once loaded.
+  useEffect(() => {
+    if (!schedCompanyId && companies.length > 0) {
+      setSchedCompanyId(companies[0].id)
+    }
+  }, [companies, schedCompanyId])
 
   const fetchCompanies = async () => {
     try {
@@ -58,6 +73,52 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Toggle status error:', err)
       setError(err instanceof Error ? err.message : 'Failed to update company status')
+    }
+  }
+
+  const handlePurgeDeletedTools = async () => {
+    if (!confirm('Permanently delete all soft-deleted personal tools (and their photos) across every company? This cannot be undone.')) {
+      return
+    }
+    try {
+      setPurging(true)
+      setPurgeMessage('')
+      const { data, error } = await supabase.functions.invoke('purge-deleted-personal-tools')
+      if (error) throw error
+      const purged = data?.purged ?? 0
+      const files = data?.files_removed ?? 0
+      setPurgeMessage(
+        purged === 0
+          ? 'Nothing to purge — already clean.'
+          : `Purged ${purged} tool${purged !== 1 ? 's' : ''} and removed ${files} photo file${files !== 1 ? 's' : ''}.`
+      )
+    } catch (err) {
+      setPurgeMessage(err instanceof Error ? `Error: ${err.message}` : 'Failed to purge')
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  const handleScheduleTestRun = async () => {
+    if (!schedCompanyId) {
+      setSchedMessage('Pick a company first.')
+      return
+    }
+    try {
+      setScheduling(true)
+      setSchedMessage('')
+      const { data, error } = await supabase.functions.invoke('schedule-export-run', {
+        body: { company_id: schedCompanyId, type: schedType, minutes_from_now: schedMinutes },
+      })
+      if (error) throw error
+      const runAt = data?.run_at ? new Date(data.run_at).toLocaleTimeString() : 'soon'
+      setSchedMessage(
+        `Scheduled a ${schedType} report for ${schedMinutes} min from now (around ${runAt}). It will send automatically once due.`
+      )
+    } catch (err) {
+      setSchedMessage(err instanceof Error ? `Error: ${err.message}` : 'Failed to schedule')
+    } finally {
+      setScheduling(false)
     }
   }
 
@@ -149,14 +210,84 @@ export default function DashboardPage() {
                 {error && <p>Error: {error}</p>}
               </div>
 
-          {/* Add Company Button */}
-          <div className="flex justify-end mb-4">
+          {/* Action Buttons */}
+          <div className="flex flex-wrap justify-end items-center gap-3 mb-4">
+            {purgeMessage && (
+              <span className={`text-sm ${purgeMessage.startsWith('Error') ? 'text-red-600' : 'text-gray-600'}`}>
+                {purgeMessage}
+              </span>
+            )}
+            <button
+              onClick={handlePurgeDeletedTools}
+              disabled={purging}
+              title="Permanently remove personal tools that were deleted in the app, freeing storage space"
+              className="inline-flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md"
+            >
+              {purging ? 'Purging…' : '🧹 Purge Deleted Personal Tools'}
+            </button>
             <button
               onClick={() => setIsAddOpen(true)}
               className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md"
             >
               + Add Company
             </button>
+          </div>
+
+          {/* Test the automated-report scheduler (one-off, superadmin only) */}
+          <div className="bg-white shadow rounded-lg p-4 mb-6 border border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">🧪 Test report scheduler</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              Queue a one-off automated report to fire in a few minutes so you can verify the
+              scheduler works — no need to wait for the weekly run. The report goes to that company's
+              configured recipients.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Company</label>
+                <select
+                  value={schedCompanyId}
+                  onChange={(e) => setSchedCompanyId(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Report</label>
+                <select
+                  value={schedType}
+                  onChange={(e) => setSchedType(e.target.value as 'personal' | 'company')}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                >
+                  <option value="personal">Personal tools</option>
+                  <option value="company">Company tools</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Minutes from now</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={schedMinutes}
+                  onChange={(e) => setSchedMinutes(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-28 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+              <button
+                onClick={handleScheduleTestRun}
+                disabled={scheduling}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-md"
+              >
+                {scheduling ? 'Scheduling…' : 'Schedule test report'}
+              </button>
+              {schedMessage && (
+                <span className={`text-sm ${schedMessage.startsWith('Error') ? 'text-red-600' : 'text-gray-600'}`}>
+                  {schedMessage}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Stats */}

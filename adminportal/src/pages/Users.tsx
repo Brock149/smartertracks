@@ -35,6 +35,7 @@ export default function Users() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [editForm, setEditForm] = useState({
@@ -46,14 +47,15 @@ export default function Users() {
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [editSuccess, setEditSuccess] = useState<string | null>(null)
-  const [deleteUser, setDeleteUser] = useState<User | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
+  const [removeUser, setRemoveUser] = useState<User | null>(null)
+  const [removeLoading, setRemoveLoading] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const [removeSuccess, setRemoveSuccess] = useState<string | null>(null)
   const [accessCodes, setAccessCodes] = useState<AccessCode[]>([])
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loadingRole, setLoadingRole] = useState(true)
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [editingAccessCode, setEditingAccessCode] = useState<AccessCode | null>(null)
   const [isEditAccessCodeModalOpen, setIsEditAccessCodeModalOpen] = useState(false)
   const [editAccessCodeLoading, setEditAccessCodeLoading] = useState(false)
@@ -119,6 +121,7 @@ export default function Users() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        setCurrentUserId(user.id)
         const { data } = await supabase
           .from('users')
           .select('role, company_id')
@@ -146,6 +149,7 @@ export default function Users() {
     setForm({ name: '', email: '', password: '', role: 'tech' })
     setError(null)
     setSuccess(null)
+    setShowPassword(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -257,48 +261,48 @@ export default function Users() {
     }
   }
 
-  function handleDeleteOpen(user: User) {
-    setDeleteUser(user)
+  function handleRemoveOpen(user: User) {
+    setRemoveError(null)
+    setRemoveSuccess(null)
+    setRemoveUser(user)
   }
 
-  function handleDeleteClose() {
-    setDeleteUser(null)
+  function handleRemoveClose() {
+    setRemoveUser(null)
   }
 
-  async function handleDeleteSubmit() {
-    setDeleteLoading(true)
-    setDeleteError(null)
-    setDeleteSuccess(null)
+  async function handleRemoveSubmit() {
+    setRemoveLoading(true)
+    setRemoveError(null)
+    setRemoveSuccess(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        setDeleteError('You must be logged in to delete users')
-        setDeleteLoading(false)
+        setRemoveError('You must be logged in to remove users')
+        setRemoveLoading(false)
         return
       }
-      const res = await fetch(`${EDGE_FUNCTION_BASE_URL}/functions/v1/delete-user`, {
+      const res = await fetch(`${EDGE_FUNCTION_BASE_URL}/functions/v1/remove-user-from-company`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({
-          id: deleteUser?.id,
-        }),
+        body: JSON.stringify({ id: removeUser?.id }),
       })
       const result = await res.json()
       if (!res.ok || result.error) {
-        setDeleteError(result.error || 'Failed to delete user')
-        setDeleteLoading(false)
+        setRemoveError(result.error || 'Failed to remove user')
+        setRemoveLoading(false)
         return
       }
-      setDeleteSuccess('User deleted successfully!')
-      setDeleteLoading(false)
-      handleDeleteClose()
+      setRemoveSuccess('User removed from company')
+      setRemoveLoading(false)
+      handleRemoveClose()
       fetchUsers()
     } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete user')
-      setDeleteLoading(false)
+      setRemoveError(err.message || 'Failed to remove user')
+      setRemoveLoading(false)
     }
   }
 
@@ -520,12 +524,12 @@ export default function Users() {
                       >
                         Edit
                       </button>
-                      {userRole === 'admin' && (
+                      {userRole === 'admin' && user.id !== currentUserId && (
                         <button
-                          onClick={() => handleDeleteOpen(user)}
-                          className="text-red-600 hover:text-red-800"
+                          onClick={() => handleRemoveOpen(user)}
+                          className="text-amber-600 hover:text-amber-800"
                         >
-                          Delete
+                          Remove
                         </button>
                       )}
                     </div>
@@ -626,12 +630,12 @@ export default function Users() {
                 >
                   Edit
                 </button>
-                {userRole === 'admin' && (
+                {userRole === 'admin' && user.id !== currentUserId && (
                   <button
-                    onClick={() => handleDeleteOpen(user)}
-                    className="text-red-600 hover:text-red-900 text-sm font-medium"
+                    onClick={() => handleRemoveOpen(user)}
+                    className="text-amber-600 hover:text-amber-900 text-sm font-medium"
                   >
-                    Delete
+                    Remove
                   </button>
                 )}
               </div>
@@ -942,14 +946,35 @@ export default function Users() {
               </div>
               <div>
                 <label className="block font-medium mb-2 text-base md:text-lg">Password</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  required
-                  className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                    className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 pr-12 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                        <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block font-medium mb-2 text-lg">Role</label>
@@ -1076,47 +1101,53 @@ export default function Users() {
         </div>
       )}
 
-      {/* Delete User Modal */}
-      {deleteUser && (
+      {/* Remove From Company Modal */}
+      {removeUser && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={handleDeleteClose}
+              onClick={handleRemoveClose}
               aria-label="Close"
             >
               ×
             </button>
-            <h3 className="text-2xl font-semibold mb-6">Delete User</h3>
-            <p className="text-lg mb-6">
-              Are you sure you want to delete {deleteUser.name}? This action cannot be undone.
+            <h3 className="text-2xl font-semibold mb-4">Remove from company</h3>
+            <p className="text-lg mb-4">
+              Remove <span className="font-semibold">{removeUser.name}</span> from your company?
             </p>
-            {deleteError && (
+            <ul className="text-sm text-gray-600 list-disc pl-5 mb-6 space-y-1">
+              <li>Their account stays active — only their access to your company is removed.</li>
+              <li>Any company tools they hold stay logged under their name, marked “(removed)”.</li>
+              <li>Their personal tools go with them (those belong to their account).</li>
+              <li>This frees up a user seat.</li>
+            </ul>
+            {removeError && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg text-lg mb-6">
-                {deleteError}
+                {removeError}
               </div>
             )}
-            {deleteSuccess && (
+            {removeSuccess && (
               <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg text-lg mb-6">
-                {deleteSuccess}
+                {removeSuccess}
               </div>
             )}
             <div className="flex justify-end gap-3">
               <button
                 type="button"
                 className="px-6 py-3 rounded-lg border text-lg hover:bg-gray-50 transition-colors"
-                onClick={handleDeleteClose}
-                disabled={deleteLoading}
+                onClick={handleRemoveClose}
+                disabled={removeLoading}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="bg-red-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                onClick={handleDeleteSubmit}
-                disabled={deleteLoading}
+                className="bg-amber-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+                onClick={handleRemoveSubmit}
+                disabled={removeLoading}
               >
-                {deleteLoading ? 'Deleting...' : 'Delete User'}
+                {removeLoading ? 'Removing...' : 'Remove from company'}
               </button>
             </div>
           </div>

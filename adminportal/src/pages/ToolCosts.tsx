@@ -112,7 +112,7 @@ export default function ToolCosts() {
 
       const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
-        .select('id, number, name, description, estimated_cost, current_owner')
+        .select('id, number, name, description, estimated_cost, current_owner, deleted_owner_name')
         .eq('is_deleted', false)
 
       if (toolsError) throw toolsError
@@ -142,7 +142,9 @@ export default function ToolCosts() {
         description: t.description || '',
         estimated_cost: t.estimated_cost,
         current_owner: t.current_owner,
-        owner_name: t.current_owner ? usersMap.get(t.current_owner) || 'Unknown' : 'Unassigned',
+        owner_name: t.current_owner
+          ? (usersMap.get(t.current_owner) || 'Unknown')
+          : ((t as any).deleted_owner_name ? `${(t as any).deleted_owner_name} (removed)` : 'Unassigned'),
         location: latestLocation.get(t.id) || 'No Location',
       }))
 

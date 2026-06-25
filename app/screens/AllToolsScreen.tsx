@@ -19,6 +19,7 @@ import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
 import { resize } from '../utils';
 import Constants from 'expo-constants';
+import NoCompanyBanner from '../components/NoCompanyBanner';
 
 interface Tool {
   id: string;
@@ -62,6 +63,7 @@ interface AllToolsScreenProps {
   route?: {
     params?: {
       selectMultiple?: boolean;
+      clearSelection?: boolean;
     };
   };
 }
@@ -76,7 +78,7 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(new Set());
-  const { user } = useAuth();
+  const { user, hasCompany } = useAuth();
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(new Set());
 
@@ -173,6 +175,16 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
     }
   }, [route?.params?.selectMultiple, navigation]);
 
+  // After a successful multi-transfer we get sent back here with this flag so
+  // the screen exits multi-select mode and clears any leftover selection.
+  useEffect(() => {
+    if (route?.params?.clearSelection) {
+      setIsSelecting(false);
+      setSelectedToolIds(new Set());
+      navigation.setParams({ clearSelection: false });
+    }
+  }, [route?.params?.clearSelection, navigation]);
+
   useEffect(() => {
     filterTools();
   }, [tools]);
@@ -181,23 +193,40 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
     try {
       // Get paginated tools for the user's company with owner information
       const currentOffset = reset ? 0 : offset;
+      // NOTE: owner names are resolved with a separate query (below) rather than
+      // a PostgREST embed. The embed (users!tools_current_owner_fkey) could fail
+      // the whole request after an admin-override transfer reassigned ownership,
+      // which surfaced as "Failed to load tools" on refresh.
       const { data: toolsData, error: toolsError, count } = await supabase
         .from('tools')
-        .select(`
-          *,
-          owner:users!tools_current_owner_fkey(name)
-        `, { count: 'exact' })
+        .select('*', { count: 'exact' })
         .order('number_numeric', { ascending: true })
         .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
       if (toolsError) {
         console.error('Error fetching tools:', toolsError);
-        Alert.alert('Error', 'Failed to load tools');
+        Alert.alert('Error', `Failed to load tools${toolsError.message ? `: ${toolsError.message}` : ''}`);
         return;
       }
 
       // Fetch images for this page of tools
       const toolIds = toolsData?.map(tool => tool.id) || [];
+
+      // Resolve current owner names in one separate query.
+      const ownerIds = Array.from(
+        new Set((toolsData || []).map((t: any) => t.current_owner).filter(Boolean))
+      );
+      const ownersById: Record<string, string> = {};
+      if (ownerIds.length > 0) {
+        const { data: ownersData, error: ownersError } = await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', ownerIds);
+        if (ownersError) {
+          console.error('Error fetching owner names:', ownersError);
+        }
+        (ownersData || []).forEach((u: any) => { ownersById[u.id] = u.name; });
+      }
       
       const [imagesResponse, countsResponse] = await Promise.all([
         supabase
@@ -264,7 +293,8 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
       // Transform the data to include owner name, images, location, stored_at, and checklist items
       const transformedTools = toolsData?.map(tool => ({
         ...tool,
-        owner_name: tool.owner?.name || null,
+        owner_name: (tool.current_owner ? ownersById[tool.current_owner] : null)
+          || (tool.deleted_owner_name ? `${tool.deleted_owner_name} (removed)` : null),
         images: imagesByTool[tool.id] || [],
         current_location: transactionsByTool[tool.id]?.location || 'Unknown',
         current_stored_at: transactionsByTool[tool.id]?.stored_at || 'Unknown',
@@ -299,9 +329,9 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
         setChecklistCounts(prev => ({ ...prev, ...pageCounts }));
         if (count !== null && count !== undefined) setTotalToolsCount(count);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching tools:', error);
-      Alert.alert('Error', 'Failed to load tools');
+      Alert.alert('Error', `Failed to load tools${error?.message ? `: ${error.message}` : ''}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -429,7 +459,8 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchTools();
+    // Reset to the first page so a pull-to-refresh reloads from the top.
+    fetchTools(true);
   };
 
   const handleAccountPress = () => {
@@ -629,6 +660,22 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
           <ActivityIndicator size="large" color="#2563eb" />
           <Text style={styles.loadingText}>Loading tools...</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasCompany) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>All Tools</Text>
+          </View>
+          <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>
+            <Ionicons name="person-circle-outline" size={28} color="#1f2937" />
+          </TouchableOpacity>
+        </View>
+        <NoCompanyBanner feature="company tools" />
       </SafeAreaView>
     );
   }

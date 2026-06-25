@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { getMyCompanySettings, updateCompanySettings, type CompanySettings } from '../lib/companySettingsApi'
+import { getMyCompanySettings, updateCompanySettings, updateCompanyExportSettings, updateCompanyToolsExportSettings, sendInventoryExportNow, type CompanySettings, type ExportFrequency } from '../lib/companySettingsApi'
 import { getCompanyAliases, createLocationAlias, deleteLocationAlias, type LocationAlias } from '../lib/locationAliasApi'
 
 interface User {
@@ -27,6 +27,28 @@ export default function Settings() {
   })
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null)
+
+  // Automated inventory export state
+  const [exportForm, setExportForm] = useState<{
+    enabled: boolean
+    frequency: ExportFrequency
+    recipients: string[]
+  }>({ enabled: false, frequency: 'weekly', recipients: [''] })
+  const [exportSaving, setExportSaving] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null)
+  const [sendingTest, setSendingTest] = useState(false)
+
+  // Automated company-tool export state
+  const [companyExportForm, setCompanyExportForm] = useState<{
+    enabled: boolean
+    frequency: ExportFrequency
+    recipients: string[]
+  }>({ enabled: false, frequency: 'weekly', recipients: [''] })
+  const [companyExportSaving, setCompanyExportSaving] = useState(false)
+  const [companyExportError, setCompanyExportError] = useState<string | null>(null)
+  const [companyExportSuccess, setCompanyExportSuccess] = useState<string | null>(null)
+  const [sendingCompanyTest, setSendingCompanyTest] = useState(false)
   
   // Location Aliases State
   const [aliases, setAliases] = useState<LocationAlias[]>([])
@@ -105,6 +127,22 @@ export default function Settings() {
           default_owner_id: settings.default_owner_id || '',
           use_default_location: settings.use_default_location,
           use_default_owner: settings.use_default_owner
+        })
+        const recipients = settings.auto_export_recipients && settings.auto_export_recipients.length > 0
+          ? settings.auto_export_recipients
+          : ['']
+        setExportForm({
+          enabled: settings.auto_export_enabled ?? false,
+          frequency: settings.auto_export_frequency ?? 'weekly',
+          recipients
+        })
+        const companyRecipients = settings.company_export_recipients && settings.company_export_recipients.length > 0
+          ? settings.company_export_recipients
+          : ['']
+        setCompanyExportForm({
+          enabled: settings.company_export_enabled ?? false,
+          frequency: settings.company_export_frequency ?? 'weekly',
+          recipients: companyRecipients
         })
       } else {
         setFormData({
@@ -272,6 +310,179 @@ export default function Settings() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  function updateRecipientField(index: number, value: string) {
+    const next = [...exportForm.recipients]
+    next[index] = value
+    setExportForm({ ...exportForm, recipients: next })
+  }
+
+  function addRecipientField() {
+    setExportForm({ ...exportForm, recipients: [...exportForm.recipients, ''] })
+  }
+
+  function removeRecipientField(index: number) {
+    if (exportForm.recipients.length > 1) {
+      setExportForm({ ...exportForm, recipients: exportForm.recipients.filter((_, i) => i !== index) })
+    } else {
+      setExportForm({ ...exportForm, recipients: [''] })
+    }
+  }
+
+  function cleanRecipients(list: string[]): string[] {
+    const seen = new Set<string>()
+    const cleaned: string[] = []
+    for (const raw of list) {
+      const email = raw.trim().toLowerCase()
+      if (email && !seen.has(email)) {
+        seen.add(email)
+        cleaned.push(email)
+      }
+    }
+    return cleaned
+  }
+
+  async function handleSaveExport(e: React.FormEvent) {
+    e.preventDefault()
+    setExportSaving(true)
+    setExportError(null)
+    setExportSuccess(null)
+
+    try {
+      if (!userCompanyId) throw new Error('Company ID not found')
+
+      const recipients = cleanRecipients(exportForm.recipients)
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const invalid = recipients.find((r) => !emailPattern.test(r))
+      if (invalid) throw new Error(`"${invalid}" is not a valid email address`)
+      if (exportForm.enabled && recipients.length === 0) {
+        throw new Error('Add at least one recipient email before turning automatic reports on')
+      }
+
+      const updated = await updateCompanyExportSettings(userCompanyId, {
+        enabled: exportForm.enabled,
+        recipients,
+        frequency: exportForm.frequency,
+      })
+
+      setSettings(updated)
+      setExportForm({
+        enabled: updated.auto_export_enabled ?? false,
+        frequency: updated.auto_export_frequency ?? 'weekly',
+        recipients: updated.auto_export_recipients && updated.auto_export_recipients.length > 0
+          ? updated.auto_export_recipients
+          : [''],
+      })
+      setExportSuccess('Automatic report settings saved.')
+    } catch (error: any) {
+      setExportError(error.message || 'Failed to save export settings')
+    } finally {
+      setExportSaving(false)
+    }
+  }
+
+  async function handleSendTest() {
+    setSendingTest(true)
+    setExportError(null)
+    setExportSuccess(null)
+
+    try {
+      const recipients = cleanRecipients(exportForm.recipients)
+      if (recipients.length === 0) {
+        throw new Error('Add at least one recipient email first, then Save, then send a test')
+      }
+      const result = await sendInventoryExportNow('personal')
+      if (result.status === 'sent') {
+        setExportSuccess('Test report sent to your saved recipients. Check inboxes (and spam) in a minute.')
+      } else {
+        setExportSuccess(`Done: ${result.status}${result.detail ? ` (${result.detail})` : ''}`)
+      }
+    } catch (error: any) {
+      setExportError(error.message || 'Failed to send test report')
+    } finally {
+      setSendingTest(false)
+    }
+  }
+
+  function updateCompanyRecipientField(index: number, value: string) {
+    const next = [...companyExportForm.recipients]
+    next[index] = value
+    setCompanyExportForm({ ...companyExportForm, recipients: next })
+  }
+
+  function addCompanyRecipientField() {
+    setCompanyExportForm({ ...companyExportForm, recipients: [...companyExportForm.recipients, ''] })
+  }
+
+  function removeCompanyRecipientField(index: number) {
+    if (companyExportForm.recipients.length > 1) {
+      setCompanyExportForm({ ...companyExportForm, recipients: companyExportForm.recipients.filter((_, i) => i !== index) })
+    } else {
+      setCompanyExportForm({ ...companyExportForm, recipients: [''] })
+    }
+  }
+
+  async function handleSaveCompanyExport(e: React.FormEvent) {
+    e.preventDefault()
+    setCompanyExportSaving(true)
+    setCompanyExportError(null)
+    setCompanyExportSuccess(null)
+
+    try {
+      if (!userCompanyId) throw new Error('Company ID not found')
+
+      const recipients = cleanRecipients(companyExportForm.recipients)
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const invalid = recipients.find((r) => !emailPattern.test(r))
+      if (invalid) throw new Error(`"${invalid}" is not a valid email address`)
+      if (companyExportForm.enabled && recipients.length === 0) {
+        throw new Error('Add at least one recipient email before turning automatic reports on')
+      }
+
+      const updated = await updateCompanyToolsExportSettings(userCompanyId, {
+        enabled: companyExportForm.enabled,
+        recipients,
+        frequency: companyExportForm.frequency,
+      })
+
+      setSettings(updated)
+      setCompanyExportForm({
+        enabled: updated.company_export_enabled ?? false,
+        frequency: updated.company_export_frequency ?? 'weekly',
+        recipients: updated.company_export_recipients && updated.company_export_recipients.length > 0
+          ? updated.company_export_recipients
+          : [''],
+      })
+      setCompanyExportSuccess('Automatic company-tool report settings saved.')
+    } catch (error: any) {
+      setCompanyExportError(error.message || 'Failed to save export settings')
+    } finally {
+      setCompanyExportSaving(false)
+    }
+  }
+
+  async function handleSendCompanyTest() {
+    setSendingCompanyTest(true)
+    setCompanyExportError(null)
+    setCompanyExportSuccess(null)
+
+    try {
+      const recipients = cleanRecipients(companyExportForm.recipients)
+      if (recipients.length === 0) {
+        throw new Error('Add at least one recipient email first, then Save, then send a test')
+      }
+      const result = await sendInventoryExportNow('company')
+      if (result.status === 'sent') {
+        setCompanyExportSuccess('Test report sent to your saved recipients. Check inboxes (and spam) in a minute.')
+      } else {
+        setCompanyExportSuccess(`Done: ${result.status}${result.detail ? ` (${result.detail})` : ''}`)
+      }
+    } catch (error: any) {
+      setCompanyExportError(error.message || 'Failed to send test report')
+    } finally {
+      setSendingCompanyTest(false)
+    }
   }
 
   // Only allow admins to access this page
@@ -488,6 +699,302 @@ export default function Settings() {
               className="px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Automated Inventory Export Section */}
+      <div className="bg-white rounded-lg shadow p-8 mt-8">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-2xl font-bold">Automated Inventory Reports</h3>
+            <p className="text-lg text-gray-500 mt-1">
+              Email an itemized spreadsheet of every employee's personal tools to chosen recipients on a schedule
+            </p>
+          </div>
+        </div>
+
+        {exportError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-6 text-lg">
+            {exportError}
+          </div>
+        )}
+
+        {exportSuccess && (
+          <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg mb-6 text-lg">
+            {exportSuccess}
+          </div>
+        )}
+
+        <form onSubmit={handleSaveExport} className="space-y-6">
+          {/* Enable toggle */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <label className="text-base font-medium text-gray-700">
+                  Send reports automatically
+                </label>
+                <p className="text-sm text-gray-500">
+                  When on, recipients below receive the report on your chosen schedule
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer ml-4">
+                <input
+                  type="checkbox"
+                  checked={exportForm.enabled}
+                  onChange={(e) => setExportForm({ ...exportForm, enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* Frequency */}
+          <div>
+            <label className="block text-lg font-medium text-gray-700 mb-2">Frequency</label>
+            <select
+              value={exportForm.frequency}
+              onChange={(e) => setExportForm({ ...exportForm, frequency: e.target.value as ExportFrequency })}
+              className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="weekly">Weekly (Monday morning)</option>
+              <option value="monthly">Monthly (1st of the month)</option>
+            </select>
+          </div>
+
+          {/* Recipients */}
+          <div>
+            <label className="block text-lg font-medium text-gray-700 mb-2">Recipient emails</label>
+            <p className="text-sm text-gray-500 mb-3">
+              Who should receive the report (e.g. the owner, office manager, union business manager).
+            </p>
+            <div className="space-y-2">
+              {exportForm.recipients.map((email, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => updateRecipientField(index, e.target.value)}
+                    placeholder="name@example.com"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {(exportForm.recipients.length > 1 || email.trim() !== '') && (
+                    <button
+                      type="button"
+                      onClick={() => removeRecipientField(index)}
+                      className="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded-lg text-sm"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addRecipientField}
+              className="mt-2 px-3 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md text-sm"
+            >
+              + Add Another Recipient
+            </button>
+          </div>
+
+          {/* Last sent */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <span className="text-sm font-medium text-gray-600">Last automatic report sent:</span>
+            <p className="text-gray-900">
+              {settings?.auto_export_last_sent_at
+                ? new Date(settings.auto_export_last_sent_at).toLocaleString()
+                : 'Not sent yet'}
+            </p>
+          </div>
+
+          {/* Info panel */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <span className="text-blue-500 text-xl">ℹ️</span>
+              </div>
+              <div className="ml-3">
+                <h4 className="text-lg font-medium text-blue-800">How automatic reports work</h4>
+                <div className="mt-2 text-blue-700">
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>The report is an Excel spreadsheet (.xlsx) with built-in sort &amp; filter, listing every employee's personal tools, status, and photo links</li>
+                    <li>Weekly reports go out Monday morning; monthly reports on the 1st</li>
+                    <li>Use "Send test now" to email a copy to your saved recipients immediately</li>
+                    <li>Reports arrive from your company's email address once your sending domain is set up</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col sm:flex-row justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleSendTest}
+              disabled={sendingTest || exportSaving}
+              className="px-6 py-3 border border-blue-300 text-blue-700 rounded-lg text-lg font-medium bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendingTest ? 'Sending...' : 'Send test now'}
+            </button>
+            <button
+              type="submit"
+              disabled={exportSaving}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exportSaving ? 'Saving...' : 'Save report settings'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Automated Company Tool Export Section */}
+      <div className="bg-white rounded-lg shadow p-8 mt-8">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-2xl font-bold">Automated Company Tool Reports</h3>
+            <p className="text-lg text-gray-500 mt-1">
+              Email an itemized spreadsheet of all company tools (sorted by location) to chosen recipients on a schedule
+            </p>
+          </div>
+        </div>
+
+        {companyExportError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-3 rounded-lg mb-6 text-lg">
+            {companyExportError}
+          </div>
+        )}
+
+        {companyExportSuccess && (
+          <div className="bg-green-50 border border-green-200 text-green-600 px-5 py-3 rounded-lg mb-6 text-lg">
+            {companyExportSuccess}
+          </div>
+        )}
+
+        <form onSubmit={handleSaveCompanyExport} className="space-y-6">
+          {/* Enable toggle */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <label className="text-base font-medium text-gray-700">
+                  Send reports automatically
+                </label>
+                <p className="text-sm text-gray-500">
+                  When on, recipients below receive the company tool report on your chosen schedule
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer ml-4">
+                <input
+                  type="checkbox"
+                  checked={companyExportForm.enabled}
+                  onChange={(e) => setCompanyExportForm({ ...companyExportForm, enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* Frequency */}
+          <div>
+            <label className="block text-lg font-medium text-gray-700 mb-2">Frequency</label>
+            <select
+              value={companyExportForm.frequency}
+              onChange={(e) => setCompanyExportForm({ ...companyExportForm, frequency: e.target.value as ExportFrequency })}
+              className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="weekly">Weekly (Monday morning)</option>
+              <option value="monthly">Monthly (1st of the month)</option>
+            </select>
+          </div>
+
+          {/* Recipients */}
+          <div>
+            <label className="block text-lg font-medium text-gray-700 mb-2">Recipient emails</label>
+            <p className="text-sm text-gray-500 mb-3">
+              Who should receive the company tool report (e.g. the owner, operations manager, insurer).
+            </p>
+            <div className="space-y-2">
+              {companyExportForm.recipients.map((email, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => updateCompanyRecipientField(index, e.target.value)}
+                    placeholder="name@example.com"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {(companyExportForm.recipients.length > 1 || email.trim() !== '') && (
+                    <button
+                      type="button"
+                      onClick={() => removeCompanyRecipientField(index)}
+                      className="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded-lg text-sm"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addCompanyRecipientField}
+              className="mt-2 px-3 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md text-sm"
+            >
+              + Add Another Recipient
+            </button>
+          </div>
+
+          {/* Last sent */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <span className="text-sm font-medium text-gray-600">Last automatic report sent:</span>
+            <p className="text-gray-900">
+              {settings?.company_export_last_sent_at
+                ? new Date(settings.company_export_last_sent_at).toLocaleString()
+                : 'Not sent yet'}
+            </p>
+          </div>
+
+          {/* Info panel */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <span className="text-blue-500 text-xl">ℹ️</span>
+              </div>
+              <div className="ml-3">
+                <h4 className="text-lg font-medium text-blue-800">How company tool reports work</h4>
+                <div className="mt-2 text-blue-700">
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>The report is an Excel spreadsheet (.xlsx) of every company tool, sorted by location, with built-in sort &amp; filter</li>
+                    <li>Columns include location, tool #, name, description, current owner, estimated cost, and a separate clickable column per photo</li>
+                    <li>Weekly reports go out Monday morning; monthly reports on the 1st</li>
+                    <li>Use "Send test now" to email a copy to your saved recipients immediately</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col sm:flex-row justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleSendCompanyTest}
+              disabled={sendingCompanyTest || companyExportSaving}
+              className="px-6 py-3 border border-blue-300 text-blue-700 rounded-lg text-lg font-medium bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendingCompanyTest ? 'Sending...' : 'Send test now'}
+            </button>
+            <button
+              type="submit"
+              disabled={companyExportSaving}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg text-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {companyExportSaving ? 'Saving...' : 'Save report settings'}
             </button>
           </div>
         </form>

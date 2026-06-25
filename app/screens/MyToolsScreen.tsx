@@ -19,6 +19,12 @@ import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
 import { Image as ExpoImage } from 'expo-image';
 import { resize } from '../utils';
+import {
+  fetchPersonalTools,
+  exportPersonalInventory,
+  fetchLastPersonalExport,
+  PersonalTool,
+} from '../services/personalTools';
 
 interface Tool {
   id: string;
@@ -78,6 +84,11 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   const [notifications, setNotifications] = useState<ToolNotification[]>([]);
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const [personalTools, setPersonalTools] = useState<PersonalTool[]>([]);
+  const [companyExpanded, setCompanyExpanded] = useState(false);
+  const [personalExpanded, setPersonalExpanded] = useState(false);
+  const [lastExport, setLastExport] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const { user } = useAuth();
 
   // Map tool.id -> thumbnail URL for quick lookup
@@ -121,6 +132,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   useEffect(() => {
     fetchMyTools();
     fetchNotifications();
+    fetchMyPersonalTools();
     loadDismissedNotifications();
   }, []);
 
@@ -129,6 +141,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     React.useCallback(() => {
       fetchMyTools();
       fetchNotifications();
+      fetchMyPersonalTools();
     }, [])
   );
 
@@ -263,6 +276,20 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     }
   };
 
+  const fetchMyPersonalTools = async () => {
+    if (!user?.id) return;
+    try {
+      const [data, last] = await Promise.all([
+        fetchPersonalTools(user.id),
+        fetchLastPersonalExport(user.id),
+      ]);
+      setPersonalTools(data);
+      setLastExport(last);
+    } catch (error) {
+      console.error('Error fetching personal tools:', error);
+    }
+  };
+
   const fetchNotifications = async () => {
     if (!user?.id) return;
 
@@ -362,7 +389,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
             tool_id: transfer.tool_id || '',
             tool_number: tool?.number || 'Unknown',
             tool_name: tool?.name || 'Unknown Tool',
-            from_user_name: fromUser?.name || transfer.deleted_from_user_name || 'Unknown User',
+            from_user_name: fromUser?.name
+              || (transfer.deleted_from_user_name ? `${transfer.deleted_from_user_name} (removed)` : 'Unknown User'),
             timestamp: transfer.timestamp,
             location: transfer.location,
             stored_at: transfer.stored_at,
@@ -416,6 +444,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     setRefreshing(true);
     fetchMyTools();
     fetchNotifications();
+    fetchMyPersonalTools();
   };
 
   const handleAccountPress = () => {
@@ -431,13 +460,148 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     navigation.navigate('ToolDetail', { tool });
   };
 
+  const handlePersonalToolPress = (toolId: string) => {
+    navigation.navigate('PersonalToolDetail', { toolId });
+  };
+
+  const handleAddPersonalTool = () => {
+    navigation.navigate('AddPersonalTool');
+  };
+
+  const handleExportInventory = async () => {
+    if (!user?.id || exporting) return;
+    if (personalTools.length === 0) {
+      Alert.alert('Nothing to export', 'Add a personal tool first.');
+      return;
+    }
+    try {
+      setExporting(true);
+
+      // Prefer the saved display name; fall back to email.
+      let ownerName = user.email || 'My';
+      const { data: profile } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.name) ownerName = profile.name;
+
+      await exportPersonalInventory(user.id, ownerName, personalTools);
+      // Refresh the "last exported" stamp.
+      const last = await fetchLastPersonalExport(user.id);
+      setLastExport(last);
+    } catch (error) {
+      console.error('Error exporting personal inventory:', error);
+      Alert.alert('Export failed', 'Could not generate your inventory PDF. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const formatExportDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Filter the personal tools by the active search term.
+  const filteredPersonalTools = useMemo(() => {
+    if (!searchQuery.trim()) return personalTools;
+    const q = searchQuery.toLowerCase();
+    return personalTools.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        String(t.number).toLowerCase().includes(q) ||
+        (t.lent_to_name || '').toLowerCase().includes(q)
+    );
+  }, [personalTools, searchQuery]);
+
+  const companyIssueCount = useMemo(
+    () => notifications.filter((n) => n.hasIssues).length,
+    [notifications]
+  );
+  const personalLentCount = useMemo(
+    () => personalTools.filter((t) => t.holder_type === 'lent').length,
+    [personalTools]
+  );
+
+  const renderPersonalToolItem = ({ item }: { item: PersonalTool }) => {
+    const primary = item.images && item.images.length > 0 ? item.images[0] : null;
+    const thumbUrl = primary
+      ? primary.thumb_url || resize(primary.image_url, 200, 80)
+      : item.photo_url
+        ? resize(item.photo_url, 200, 80)
+        : null;
+    const isLent = item.holder_type === 'lent';
+
+    return (
+      <TouchableOpacity style={styles.toolCard} onPress={() => handlePersonalToolPress(item.id)}>
+        <View style={styles.toolContent}>
+          <View style={styles.imageContainer}>
+            {thumbUrl ? (
+              <ExpoImage
+                source={{ uri: thumbUrl }}
+                style={styles.toolImage}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <View style={styles.placeholderImage}>
+                <Ionicons name="camera-outline" size={32} color="#d1d5db" />
+              </View>
+            )}
+            {item.images && item.images.length > 1 && (
+              <View style={styles.imageCount}>
+                <Text style={styles.imageCountText}>+{item.images.length - 1}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.toolInfo}>
+            <View style={styles.toolHeader}>
+              <View style={styles.toolTitleContainer}>
+                <Text style={styles.toolNumber}>#{item.number}</Text>
+                <Text style={styles.toolName}>{item.name}</Text>
+              </View>
+              {isLent ? (
+                <View style={styles.lentBadge}>
+                  <Ionicons name="arrow-redo-outline" size={16} color="#b45309" />
+                  <Text style={styles.lentText}>Lent</Text>
+                </View>
+              ) : (
+                <View style={styles.ownedBadge}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  <Text style={styles.ownedText}>Mine</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.toolDetails}>
+              {isLent ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Lent to:</Text>
+                  <Text style={styles.detailText}>
+                    {item.lent_to_name}
+                    {item.lent_location ? ` · ${item.lent_location}` : ''}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Status:</Text>
+                  <Text style={styles.detailText}>In your possession</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderToolItem = ({ item }: { item: Tool }) => {
-    // Check if this tool has a notification and hasn't been dismissed
-    const notification = notifications.find(n => {
-      if (n.tool_id !== item.id) return false;
-      if (n.hasIssues) return true;
-      return !dismissedNotifications.has(n.id);
-    });
+    // Only show a banner for tools that have open reported issues.
+    // The plain "new tool received" banner has been removed.
+    const notification = notifications.find(n => n.tool_id === item.id && n.hasIssues);
     const isExpanded = expandedNotifications.has(item.id);
 
     return (
@@ -453,17 +617,12 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
             ]}>
             <View style={styles.notificationHeader}>
               <Ionicons 
-                name={notification.hasIssues ? "warning" : "gift"} 
+                name="warning" 
                 size={16} 
-                color={notification.hasIssues ? "#f59e0b" : "#059669"} 
+                color="#f59e0b" 
               />
               <Text style={styles.notificationHeaderText}>
-                New tool from {notification.from_user_name}
-                {notification.hasIssues && (
-                  <Text style={styles.notificationIssues}>
-                    {' • '}{notification.issueCount} issue{notification.issueCount !== 1 ? 's' : ''} reported
-                  </Text>
-                )}
+                {notification.issueCount} open issue{notification.issueCount !== 1 ? 's' : ''} reported by {notification.from_user_name}
               </Text>
               {notification.hasIssues && notification.reports.length > 0 && (
                 <TouchableOpacity
@@ -510,42 +669,6 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
               </View>
             )}
 
-            <View style={styles.notificationActions}>
-              {!notification.hasIssues && (
-                <>
-                  <TouchableOpacity 
-                    style={[styles.notificationActionButton, styles.acceptButton]}
-                    onPress={async () => {
-                      // Accept notification - dismiss ALL notifications for this tool
-                      await dismissNotificationsByTool(notification.tool_id);
-                      setExpandedNotifications(prev => {
-                        const newSet = new Set(prev);
-                        newSet.delete(item.id);
-                        return newSet;
-                      });
-                    }}
-                  >
-                    <Ionicons name="checkmark" size={16} color="#059669" />
-                    <Text style={styles.acceptButtonText}>Accept</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.notificationActionButton}
-                    onPress={async () => {
-                      // Dismiss notification - remove ALL notifications for this tool
-                      await dismissNotificationsByTool(notification.tool_id);
-                      setExpandedNotifications(prev => {
-                        const newSet = new Set(prev);
-                        newSet.delete(item.id);
-                        return newSet;
-                      });
-                    }}
-                  >
-                    <Ionicons name="close" size={16} color="#9ca3af" />
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
           </View>
         )}
 
@@ -629,6 +752,161 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     );
   };
 
+  // When searching, surface results even if a section was left collapsed.
+  const hasSearch = searchQuery.trim().length > 0;
+  const showCompany = companyExpanded || hasSearch;
+  const showPersonal = personalExpanded || hasSearch;
+  // Both headers are "big" only when neither section is open. As soon as either
+  // section opens, both headers shrink to the compact size so the open content
+  // gets the space.
+  const bothClosed = !showCompany && !showPersonal;
+
+  const renderCompanySectionHeader = () => {
+    const collapsed = bothClosed;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.sectionHeader,
+          collapsed && styles.sectionHeaderCollapsed,
+          showCompany && styles.sectionHeaderActive,
+        ]}
+        onPress={() => setCompanyExpanded((v) => !v)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <Ionicons name="business-outline" size={collapsed ? 24 : 20} color="#2563eb" />
+          <Text style={[styles.sectionHeaderTitle, collapsed && styles.sectionHeaderTitleCollapsed]}>
+            Company tools
+          </Text>
+        </View>
+        <View style={styles.sectionHeaderRight}>
+          <Text style={styles.sectionHeaderCount}>
+            {tools.length} tool{tools.length !== 1 ? 's' : ''}
+            {companyIssueCount > 0 ? ` · ${companyIssueCount} issue${companyIssueCount !== 1 ? 's' : ''}` : ''}
+          </Text>
+          <Ionicons name={showCompany ? 'chevron-up' : 'chevron-down'} size={collapsed ? 24 : 20} color="#6b7280" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderPersonalSectionHeader = () => {
+    const collapsed = bothClosed;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.sectionHeader,
+          collapsed && styles.sectionHeaderCollapsed,
+          showPersonal && styles.sectionHeaderActive,
+        ]}
+        onPress={() => setPersonalExpanded((v) => !v)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <Ionicons name="construct-outline" size={collapsed ? 24 : 20} color="#7c3aed" />
+          <Text style={[styles.sectionHeaderTitle, collapsed && styles.sectionHeaderTitleCollapsed]}>
+            Personal tools
+          </Text>
+        </View>
+        <View style={styles.sectionHeaderRight}>
+          <Text style={styles.sectionHeaderCount}>
+            {personalTools.length} tool{personalTools.length !== 1 ? 's' : ''}
+            {personalLentCount > 0 ? ` · ${personalLentCount} lent` : ''}
+          </Text>
+          <Ionicons name={showPersonal ? 'chevron-up' : 'chevron-down'} size={collapsed ? 24 : 20} color="#6b7280" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Build one flat list so each section can collapse/expand independently while
+  // staying virtualized. Headers are full-width bars; tool rows are padded.
+  const listRows = useMemo(() => {
+    const rows: Array<{ key: string; type: string; tool?: any }> = [];
+    rows.push({ key: 'company-header', type: 'company-header' });
+    if (showCompany) {
+      if (filteredTools.length === 0) rows.push({ key: 'company-empty', type: 'company-empty' });
+      else filteredTools.forEach((t) => rows.push({ key: `c-${t.id}`, type: 'company', tool: t }));
+    }
+    rows.push({ key: 'personal-header', type: 'personal-header' });
+    if (showPersonal) {
+      rows.push({ key: 'personal-add', type: 'personal-add' });
+      if (filteredPersonalTools.length === 0) rows.push({ key: 'personal-empty', type: 'personal-empty' });
+      else filteredPersonalTools.forEach((t) => rows.push({ key: `p-${t.id}`, type: 'personal', tool: t }));
+      if (personalTools.length > 0) rows.push({ key: 'personal-export', type: 'personal-export' });
+    }
+    return rows;
+  }, [showCompany, showPersonal, filteredTools, filteredPersonalTools, personalTools.length]);
+
+  const renderRow = ({ item }: { item: { key: string; type: string; tool?: any } }) => {
+    switch (item.type) {
+      case 'company-header':
+        return renderCompanySectionHeader();
+      case 'personal-header':
+        return renderPersonalSectionHeader();
+      case 'company':
+        return <View style={styles.rowPad}>{renderToolItem({ item: item.tool })}</View>;
+      case 'personal':
+        return <View style={[styles.rowPad, styles.personalCardGap]}>{renderPersonalToolItem({ item: item.tool })}</View>;
+      case 'personal-add':
+        return (
+          <View style={styles.rowPad}>
+            <TouchableOpacity style={styles.addPersonalButton} onPress={handleAddPersonalTool}>
+              <Ionicons name="add-circle" size={22} color="#7c3aed" />
+              <Text style={styles.addPersonalButtonText}>Add personal tool</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      case 'company-empty':
+        return (
+          <View style={styles.rowPad}>
+            <View style={styles.sectionEmpty}>
+              <Ionicons name="business-outline" size={40} color="#d1d5db" />
+              <Text style={styles.emptySubtitle}>
+                {hasSearch ? 'No company tools match your search' : "You don't have any company tools assigned yet"}
+              </Text>
+            </View>
+          </View>
+        );
+      case 'personal-empty':
+        return (
+          <View style={styles.rowPad}>
+            <View style={styles.sectionEmpty}>
+              <Ionicons name="construct-outline" size={40} color="#d1d5db" />
+              <Text style={styles.emptySubtitle}>
+                {hasSearch ? 'No personal tools match your search' : 'Add your own tools to keep your personal inventory'}
+              </Text>
+            </View>
+          </View>
+        );
+      case 'personal-export':
+        return (
+          <View style={[styles.rowPad, styles.exportRow]}>
+            <TouchableOpacity
+              style={[styles.exportButton, exporting && styles.exportButtonDisabled]}
+              onPress={handleExportInventory}
+              disabled={exporting}
+              activeOpacity={0.7}
+            >
+              {exporting ? (
+                <ActivityIndicator size="small" color="#7c3aed" />
+              ) : (
+                <Ionicons name="share-outline" size={20} color="#7c3aed" />
+              )}
+              <Text style={styles.exportButtonText}>
+                {exporting ? 'Preparing PDF...' : 'Export inventory (PDF)'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.exportHint}>
+              {lastExport ? `Last exported ${formatExportDate(lastExport)}` : 'Not exported yet'}
+            </Text>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -646,7 +924,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         <View>
           <Text style={styles.title}>My Tools</Text>
           <Text style={styles.subtitle}>
-            {filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''} assigned to you
+            {tools.length} company · {personalTools.length} personal
           </Text>
         </View>
         <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>
@@ -654,53 +932,30 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         </TouchableOpacity>
       </View>
 
-
-
-      {tools.length > 0 && (
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search your tools..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearButton}
-            >
-              <Ionicons name="close-circle" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search your tools..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+            <Ionicons name="close-circle" size={20} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       <FlatList
-        data={filteredTools}
-        renderItem={renderToolItem}
-        keyExtractor={(item) => item.id}
+        data={listRows}
+        renderItem={renderRow}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="person-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyTitle}>No tools assigned</Text>
-            <Text style={styles.emptySubtitle}>
-              {searchQuery 
-                ? 'No tools match your search'
-                : 'You don\'t have any tools assigned to you yet'
-              }
-            </Text>
-          </View>
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         removeClippedSubviews={true}
-        viewabilityConfig={viewabilityConfig}
-        onViewableItemsChanged={onViewableItemsChanged}
       />
     </SafeAreaView>
   );
@@ -768,14 +1023,29 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   listContainer: {
-    paddingHorizontal: 16,
     flexGrow: 1,
+    paddingBottom: 24,
+  },
+  rowPad: {
+    paddingHorizontal: 16,
+  },
+  personalCardGap: {
+    marginBottom: 10,
+  },
+  sectionContentTop: {
+    marginTop: 12,
+  },
+  sectionEmpty: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    gap: 8,
   },
   toolCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 0,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
@@ -916,7 +1186,7 @@ const styles = StyleSheet.create({
   },
   // Tool-specific notification styles
   toolContainer: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   toolWithNotification: {
     borderWidth: 2,
@@ -1022,5 +1292,111 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontWeight: '600',
     marginLeft: 4,
+  },
+  sectionsContainer: {
+    flex: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  sectionHeaderActive: {
+    backgroundColor: '#f8fafc',
+    marginBottom: 12,
+  },
+  sectionHeaderCollapsed: {
+    paddingVertical: 20,
+  },
+  sectionHeaderTitleCollapsed: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  sectionHeaderCount: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  addPersonalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  addPersonalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#7c3aed',
+  },
+  lentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  lentText: {
+    fontSize: 12,
+    color: '#b45309',
+    fontWeight: '600',
+  },
+  exportRow: {
+    marginTop: 12,
+    alignItems: 'center',
+    gap: 6,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+  },
+  exportButtonDisabled: {
+    opacity: 0.6,
+  },
+  exportButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#7c3aed',
+  },
+  exportHint: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
 }); 

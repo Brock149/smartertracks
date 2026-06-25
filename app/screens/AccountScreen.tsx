@@ -7,9 +7,13 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase/client';
@@ -30,10 +34,19 @@ interface Company {
 }
 
 export default function AccountScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshCompany } = useAuth();
+  const navigation = useNavigation<any>();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const hasCompany = !!userProfile?.company_id;
 
   useEffect(() => {
     fetchUserProfile();
@@ -100,30 +113,105 @@ export default function AccountScreen() {
   };
 
   const handleDeleteAccount = () => {
+    setDeletePassword('');
+    setDeleteVisible(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletePassword.trim()) {
+      Alert.alert('Password required', 'Please enter your password to confirm.');
+      return;
+    }
+    if (!userProfile?.email) {
+      Alert.alert('Error', 'Could not verify your account. Please try again.');
+      return;
+    }
+    setDeleting(true);
+    try {
+      // Re-authenticate to confirm it's really them before erasing everything.
+      const { error: pwError } = await supabase.auth.signInWithPassword({
+        email: userProfile.email,
+        password: deletePassword,
+      });
+      if (pwError) {
+        setDeleting(false);
+        Alert.alert('Incorrect password', 'That password is incorrect. Please try again.');
+        return;
+      }
+
+      const { error } = await supabase.functions.invoke('delete-account');
+      if (error) {
+        setDeleting(false);
+        Alert.alert('Error', error.message || 'Failed to delete account');
+        return;
+      }
+      setDeleting(false);
+      setDeleteVisible(false);
+      Alert.alert('Account Deleted', 'Your account has been deleted.');
+      signOut();
+    } catch (err: any) {
+      setDeleting(false);
+      Alert.alert('Error', err.message || 'Failed to delete account');
+    }
+  };
+
+  const handleLeaveCompany = () => {
     Alert.alert(
-      'Delete Account',
-      'Are you sure you want to permanently delete your Smarter Tracks account? This action cannot be undone.',
+      'Leave company?',
+      'You will lose access to this company\'s tools and info. Your account stays active and your personal tools — photos, history, everything — stay with you. Any company tools you currently hold will stay logged under your name, marked "(removed)".',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Leave company',
           style: 'destructive',
           onPress: async () => {
+            setLeaving(true);
             try {
-              const { error } = await supabase.functions.invoke('delete-account');
-              if (error) {
-                Alert.alert('Error', error.message || 'Failed to delete account');
+              const { data, error } = await supabase.functions.invoke('leave-company');
+              if (error || !data?.success) {
+                Alert.alert('Could not leave', (error?.message as string) || data?.error || 'Please try again.');
+                setLeaving(false);
                 return;
               }
-              Alert.alert('Account Deleted', 'Your account has been deleted.');
-              signOut();
+              setLeaving(false);
+              Alert.alert('Left company', 'You are no longer part of this company.');
+              fetchUserProfile();
+              refreshCompany();
             } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete account');
+              setLeaving(false);
+              Alert.alert('Error', err.message || 'Failed to leave company.');
             }
           },
         },
       ]
     );
+  };
+
+  const handleJoinCompany = async () => {
+    const code = joinCode.trim();
+    if (!code) {
+      Alert.alert('Code required', 'Enter the access code your new company gave you.');
+      return;
+    }
+    setJoining(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('join-company-with-code', {
+        body: { accessCode: code },
+      });
+      if (error || !data?.success) {
+        Alert.alert('Could not join', (error?.message as string) || data?.error || 'Invalid access code.');
+        setJoining(false);
+        return;
+      }
+      setJoinCode('');
+      setJoining(false);
+      Alert.alert('Joined', 'You are now part of your new company.');
+      fetchUserProfile();
+      refreshCompany();
+    } catch (err: any) {
+      setJoining(false);
+      Alert.alert('Error', err.message || 'Failed to join company.');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -150,7 +238,15 @@ export default function AccountScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Account</Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs'))}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={24} color="#1f2937" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Account</Text>
+          </View>
           <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
             <Ionicons name="log-out-outline" size={24} color="#dc2626" />
           </TouchableOpacity>
@@ -222,29 +318,84 @@ export default function AccountScreen() {
         {/* Company Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Company Information</Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons name="business-outline" size={20} color="#6b7280" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Company Name</Text>
-                <Text style={styles.infoValue}>{company?.name || 'N/A'}</Text>
-              </View>
-            </View>
+          {hasCompany ? (
+            <>
+              <View style={styles.infoCard}>
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIcon}>
+                    <Ionicons name="business-outline" size={20} color="#6b7280" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Company Name</Text>
+                    <Text style={styles.infoValue}>{company?.name || 'N/A'}</Text>
+                  </View>
+                </View>
 
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+                <View style={styles.infoRow}>
+                  <View style={styles.infoIcon}>
+                    <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Company Since</Text>
+                    <Text style={styles.infoValue}>
+                      {company?.created_at ? formatDate(company.created_at) : 'N/A'}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Company Since</Text>
-                <Text style={styles.infoValue}>
-                  {company?.created_at ? formatDate(company.created_at) : 'N/A'}
-                </Text>
+
+              {/* Self-serve: leave the company (in case the employer forgets to
+                  remove you and you want to join a new one). */}
+              <TouchableOpacity
+                style={[styles.leaveButton, leaving && styles.joinButtonDisabled]}
+                onPress={handleLeaveCompany}
+                disabled={leaving}
+              >
+                {leaving ? (
+                  <ActivityIndicator color="#b45309" />
+                ) : (
+                  <>
+                    <Ionicons name="exit-outline" size={20} color="#b45309" />
+                    <Text style={styles.leaveButtonText}>Leave company</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.joinCard}>
+              <View style={styles.joinHeaderRow}>
+                <Ionicons name="business-outline" size={22} color="#7c3aed" />
+                <Text style={styles.joinTitle}>You're not part of a company</Text>
               </View>
+              <Text style={styles.joinSubtitle}>
+                You won't see any company tools, transfers, or groups until you join one. Your
+                personal tools stay with you — photos, lending history, everything — so when you join
+                a new company your whole inventory comes with you for a frictionless transition to
+                getting covered under your new employer or union agreement. Enter the access code your
+                employer gave you to join.
+              </Text>
+              <TextInput
+                style={styles.joinInput}
+                placeholder="Enter company access code"
+                value={joinCode}
+                onChangeText={setJoinCode}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!joining}
+              />
+              <TouchableOpacity
+                style={[styles.joinButton, joining && styles.joinButtonDisabled]}
+                onPress={handleJoinCompany}
+                disabled={joining}
+              >
+                {joining ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.joinButtonText}>Join Company</Text>
+                )}
+              </TouchableOpacity>
             </View>
-          </View>
+          )}
         </View>
 
         {/* App Information */}
@@ -294,6 +445,57 @@ export default function AccountScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Delete account confirmation (password required) */}
+      <Modal
+        visible={deleteVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setDeleteVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete your account</Text>
+            <Text style={styles.modalBody}>
+              This permanently deletes your account and your personal tool inventory. This cannot be
+              undone. Enter your password to confirm.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Your password"
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!deleting}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => setDeleteVisible(false)}
+                disabled={deleting}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalDelete, deleting && styles.joinButtonDisabled]}
+                onPress={handleConfirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.modalDeleteText}>Delete Forever</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -326,6 +528,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backButton: {
+    padding: 4,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -333,6 +543,23 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     padding: 8,
+  },
+  leaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  leaveButtonText: {
+    color: '#b45309',
+    fontSize: 16,
+    fontWeight: '600',
   },
   section: {
     paddingHorizontal: 24,
@@ -448,5 +675,117 @@ const styles = StyleSheet.create({
     color: '#b91c1c',
     fontWeight: '600',
     marginLeft: 12,
+  },
+  joinCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+  },
+  joinHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  joinTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  joinSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  joinInput: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  joinButton: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  joinButtonDisabled: {
+    opacity: 0.6,
+  },
+  joinButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 10,
+  },
+  modalBody: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalCancel: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  modalCancelText: {
+    color: '#6b7280',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalDelete: {
+    backgroundColor: '#b91c1c',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    minWidth: 130,
+    alignItems: 'center',
+  },
+  modalDeleteText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

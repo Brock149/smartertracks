@@ -11,6 +11,7 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Tools from './pages/Tools'
 import ToolGroups from './pages/ToolGroups'
+import PersonalTools from './pages/PersonalTools'
 import Users from './pages/Users'
 import Transactions from './pages/Transactions'
 import Reports from './pages/Reports'
@@ -126,6 +127,7 @@ export default function AppRoutes() {
         <Route path="tools" element={<Tools />} />
         <Route path="tool-costs" element={<AdminOnlyRoute><ToolCosts /></AdminOnlyRoute>} />
         <Route path="groups" element={<ToolGroups />} />
+        <Route path="personal-tools" element={<AdminOnlyRoute><PersonalTools /></AdminOnlyRoute>} />
         <Route path="users" element={<Users />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="reports" element={<Reports />} />

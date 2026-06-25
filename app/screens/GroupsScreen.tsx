@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
+import { useAuth } from '../context/AuthContext';
+import NoCompanyBanner from '../components/NoCompanyBanner';
 
 interface ToolGroup {
   id: string;
@@ -29,6 +31,7 @@ type GroupsScreenProps = {
 };
 
 export default function GroupsScreen({ navigation }: GroupsScreenProps) {
+  const { hasCompany } = useAuth();
   const [groups, setGroups] = useState<ToolGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +139,8 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
           <ActivityIndicator size="large" color="#2563eb" />
           <Text style={styles.loadingText}>Loading groups...</Text>
         </View>
+      ) : !hasCompany ? (
+        <NoCompanyBanner feature="groups" />
       ) : error ? (
         <View style={styles.errorCard}>
           <Text style={styles.errorText}>{error}</Text>

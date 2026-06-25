@@ -73,7 +73,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
 
       const { data: members, error: memberError } = await supabase
         .from('tool_group_members')
-        .select('tool_id, tools ( id, number, name, description, current_owner, company_id, users!tools_current_owner_fkey(name) )')
+        .select('tool_id, tools ( id, number, name, description, current_owner, company_id, deleted_owner_name, users!tools_current_owner_fkey(name) )')
         .eq('group_id', groupId);
 
       if (memberError) throw memberError;
@@ -86,7 +86,8 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
           const ownerName =
             tool.users && typeof tool.users === 'object' && 'name' in tool.users
               ? String(tool.users.name)
-              : null;
+              // Former owner who was removed from the company: keep their name.
+              : (tool.deleted_owner_name ? `${tool.deleted_owner_name} (removed)` : null);
           ownerMap.set(tool.id, ownerName);
         }
       });

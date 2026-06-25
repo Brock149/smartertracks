@@ -2,7 +2,7 @@
   "expo": {
     "name": "SmarterTracks",
     "slug": "smartertracks",
-    "version": "2.05",
+    "version": "2.09",
     "privacy": "public",
     "privacyPolicyUrl": "https://www.smartertracks.com/privacy-policy",
     "orientation": "portrait",
@@ -16,15 +16,17 @@
     },
     "ios": {
       "bundleIdentifier": "com.bactech.smartertracks",
-      "buildNumber": "29",
+      "buildNumber": "33",
       "supportsTablet": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "SmarterTracks uses your camera to photograph tools you add to your personal inventory.",
+        "NSPhotoLibraryUsageDescription": "SmarterTracks lets you attach photos from your library to tools in your personal inventory."
       }
     },
     "android": {
       "package": "com.bactech.smartertracks",
-      "versionCode": 29,
+      "versionCode": 33,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -34,6 +36,15 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SmarterTracks lets you attach photos from your library to tools in your personal inventory.",
+          "cameraPermission": "SmarterTracks uses your camera to photograph tools you add to your personal inventory."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "7d3d38c1-4cf3-4711-8bcf-5659c7ef24f7"

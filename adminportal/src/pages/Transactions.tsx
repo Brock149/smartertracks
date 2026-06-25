@@ -1,5 +1,31 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { fetchCompanyEvents } from '../lib/companyEvents'
+import type { CompanyEvent } from '../lib/companyEvents'
+
+// A unified feed row: either a tool transaction or a company activity event.
+type FeedItem =
+  | { kind: 'tx'; id: string; ts: string; tx: Transaction }
+  | { kind: 'event'; id: string; ts: string; ev: CompanyEvent }
+
+function eventMeta(eventType: string): { title: string; badge: string } {
+  switch (eventType) {
+    case 'tool_created':
+      return { title: 'Tool created', badge: 'text-green-700 bg-green-50' }
+    case 'tool_deleted':
+      return { title: 'Tool deleted', badge: 'text-red-700 bg-red-50' }
+    case 'user_added':
+      return { title: 'User added', badge: 'text-green-700 bg-green-50' }
+    case 'user_joined':
+      return { title: 'User joined', badge: 'text-green-700 bg-green-50' }
+    case 'user_removed':
+      return { title: 'User removed', badge: 'text-amber-700 bg-amber-50' }
+    case 'user_left':
+      return { title: 'User left', badge: 'text-amber-700 bg-amber-50' }
+    default:
+      return { title: eventType, badge: 'text-gray-700 bg-gray-50' }
+  }
+}
 
 interface Transaction {
   id: string
@@ -9,6 +35,7 @@ interface Transaction {
   location: string
   stored_at: string
   notes: string | null
+  attribution?: string | null
   timestamp: string
   created_at: string
   deleted_from_user_name?: string
@@ -51,6 +78,7 @@ interface ChecklistItem {
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [companyEvents, setCompanyEvents] = useState<CompanyEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -91,6 +119,7 @@ export default function Transactions() {
     fetchTransactions()
     fetchTools()
     fetchUsers()
+    fetchCompanyEvents().then(setCompanyEvents)
   }, [])
 
   async function fetchTransactions() {
@@ -354,30 +383,61 @@ export default function Transactions() {
     }
   }
 
-  // Filter transactions based on search term
-  const filteredTransactions = useMemo(
-    () =>
-      transactions.filter(transaction =>
-        transaction.tool?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.tool?.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.from_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.to_user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.stored_at?.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    [transactions, searchTerm]
-  )
+  // Merge tool transactions + company activity events into one chronological feed.
+  const feed = useMemo<FeedItem[]>(() => {
+    const txItems: FeedItem[] = transactions.map((t) => ({
+      kind: 'tx',
+      id: `tx-${t.id}`,
+      ts: t.timestamp || t.created_at,
+      tx: t,
+    }))
+    const eventItems: FeedItem[] = companyEvents.map((e) => ({
+      kind: 'event',
+      id: `ev-${e.id}`,
+      ts: e.created_at,
+      ev: e,
+    }))
+    return [...txItems, ...eventItems].sort(
+      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()
+    )
+  }, [transactions, companyEvents])
+
+  // Filter the combined feed based on the search term.
+  const filteredFeed = useMemo(() => {
+    const term = searchTerm.toLowerCase()
+    if (!term) return feed
+    return feed.filter((item) => {
+      if (item.kind === 'tx') {
+        const t = item.tx
+        return (
+          t.tool?.name?.toLowerCase().includes(term) ||
+          t.tool?.number?.toLowerCase().includes(term) ||
+          t.from_user?.name?.toLowerCase().includes(term) ||
+          t.to_user?.name?.toLowerCase().includes(term) ||
+          t.location?.toLowerCase().includes(term) ||
+          t.stored_at?.toLowerCase().includes(term)
+        )
+      }
+      const e = item.ev
+      return (
+        (e.actor_name || '').toLowerCase().includes(term) ||
+        (e.target_label || '').toLowerCase().includes(term) ||
+        (e.details || '').toLowerCase().includes(term) ||
+        eventMeta(e.event_type).title.toLowerCase().includes(term)
+      )
+    })
+  }, [feed, searchTerm])
 
   const totalPages = useMemo(
-    () => Math.max(Math.ceil(filteredTransactions.length / itemsPerPage), 1),
-    [filteredTransactions.length]
+    () => Math.max(Math.ceil(filteredFeed.length / itemsPerPage), 1),
+    [filteredFeed.length]
   )
 
   // Add pagination function
-  const getPaginatedTransactions = () => {
+  const getPaginatedFeed = () => {
     const startIndex = (currentPage - 1) * itemsPerPage
     const endIndex = startIndex + itemsPerPage
-    return filteredTransactions.slice(startIndex, endIndex)
+    return filteredFeed.slice(startIndex, endIndex)
   }
 
   // Keep page in range when results change
@@ -431,7 +491,9 @@ export default function Transactions() {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold">Tool Transactions</h2>
-          <p className="text-base md:text-lg text-gray-500 mt-1">View all tool transfers and movements</p>
+          <p className="text-base md:text-lg text-gray-500 mt-1">
+            All tool transfers, plus company activity (tools and users added, removed, or deleted)
+          </p>
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
@@ -462,7 +524,7 @@ export default function Transactions() {
       <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-lg">Loading transactions...</div>
-        ) : getPaginatedTransactions().length === 0 ? (
+        ) : getPaginatedFeed().length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-lg">No transactions found</div>
         ) : (
           <div className="overflow-x-auto">
@@ -488,50 +550,98 @@ export default function Transactions() {
                     Date/Time
                   </th>
                   <th className="w-[20%] px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
-                    Notes
+                    Method / Notes
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {getPaginatedTransactions().map((transaction) => (
-                  <tr key={transaction.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="text-lg font-medium text-gray-900 break-words">
-                        {transaction.tool_id ? (
-                          <>#{transaction.tool?.number} - {transaction.tool?.name}</>
-                        ) : (
-                          <>#{transaction.deleted_tool_number} - {transaction.deleted_tool_name} (Deleted)</>
+                {getPaginatedFeed().map((item) => {
+                  if (item.kind === 'event') {
+                    const ev = item.ev
+                    const meta = eventMeta(ev.event_type)
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 bg-gray-50/40">
+                        <td className="px-6 py-4">
+                          <div className="text-lg font-medium text-gray-900 break-words">
+                            {ev.target_label || meta.title}
+                          </div>
+                          <span className={`inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded ${meta.badge}`}>
+                            {meta.title}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-lg text-gray-900 break-words">{ev.actor_name || 'System'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-lg text-gray-400 break-words">—</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-lg text-gray-400 break-words">—</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-lg text-gray-400 break-words">—</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-lg text-gray-900 break-words">
+                            {new Date(ev.created_at).toLocaleString()}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-lg text-gray-900 break-words">{ev.details || meta.title}</div>
+                        </td>
+                      </tr>
+                    )
+                  }
+                  const transaction = item.tx
+                  return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="text-lg font-medium text-gray-900 break-words">
+                          {transaction.tool_id ? (
+                            <>#{transaction.tool?.number} - {transaction.tool?.name}</>
+                          ) : (
+                            <>#{transaction.deleted_tool_number} - {transaction.deleted_tool_name} (Deleted)</>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-lg text-gray-900 break-words">
+                          {transaction.deleted_from_user_name
+                            ? `${transaction.deleted_from_user_name} (removed)`
+                            : transaction.from_user?.name || 'System'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-lg text-gray-900 break-words">
+                          {transaction.deleted_to_user_name
+                            ? `${transaction.deleted_to_user_name} (removed)`
+                            : transaction.to_user?.name}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-lg text-gray-900 break-words">{transaction.location}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-lg text-gray-900 break-words">{transaction.stored_at}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-lg text-gray-900 break-words">
+                          {new Date(transaction.timestamp).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {transaction.attribution && (
+                          <div className="text-sm text-gray-500 italic break-words mb-1">
+                            {transaction.attribution}
+                          </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900 break-words">
-                        {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900 break-words">
-                        {transaction.deleted_to_user_name || transaction.to_user?.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900 break-words">{transaction.location}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900 break-words">{transaction.stored_at}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900 break-words">
-                        {new Date(transaction.timestamp).toLocaleString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-lg text-gray-900 break-words">
-                        {transaction.notes || '-'}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        <div className="text-lg text-gray-900 break-words">
+                          {transaction.notes || '-'}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -542,12 +652,44 @@ export default function Transactions() {
       <div className="md:hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-base">Loading transactions...</div>
-        ) : getPaginatedTransactions().length === 0 ? (
+        ) : getPaginatedFeed().length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-base">No transactions found</div>
         ) : (
           <div className="space-y-4">
-            {getPaginatedTransactions().map((transaction) => (
-              <div key={transaction.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
+            {getPaginatedFeed().map((item) => {
+              if (item.kind === 'event') {
+                const ev = item.ev
+                const meta = eventMeta(ev.event_type)
+                return (
+                  <div key={item.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-lg text-gray-900">{ev.target_label || meta.title}</h3>
+                    </div>
+                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded ${meta.badge}`}>
+                      {meta.title}
+                    </span>
+                    <div className="space-y-2 text-sm mt-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">By:</span>
+                        <span className="text-gray-900">{ev.actor_name || 'System'}</span>
+                      </div>
+                      {ev.details && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Details:</span>
+                          <span className="text-gray-900 text-right max-w-48 break-words">{ev.details}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">When:</span>
+                        <span className="text-gray-900">{new Date(ev.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+              const transaction = item.tx
+              return (
+              <div key={item.id} className="bg-white shadow rounded-lg p-4 border border-gray-200">
                 <div className="mb-3">
                   <h3 className="font-semibold text-lg text-gray-900">
                     {transaction.tool_id ? (
@@ -565,14 +707,18 @@ export default function Transactions() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">From:</span>
                     <span className="text-gray-900">
-                      {transaction.deleted_from_user_name || transaction.from_user?.name || 'System'}
+                      {transaction.deleted_from_user_name
+                        ? `${transaction.deleted_from_user_name} (removed)`
+                        : transaction.from_user?.name || 'System'}
                     </span>
                   </div>
                   
                   <div className="flex justify-between">
                     <span className="text-gray-500">To:</span>
                     <span className="text-gray-900">
-                      {transaction.deleted_to_user_name || transaction.to_user?.name}
+                      {transaction.deleted_to_user_name
+                        ? `${transaction.deleted_to_user_name} (removed)`
+                        : transaction.to_user?.name}
                     </span>
                   </div>
                   
@@ -586,6 +732,15 @@ export default function Transactions() {
                     <span className="text-gray-900">{transaction.stored_at}</span>
                   </div>
                   
+                  {transaction.attribution && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Method:</span>
+                      <span className="text-gray-600 italic text-right max-w-48 break-words" title={transaction.attribution}>
+                        {transaction.attribution}
+                      </span>
+                    </div>
+                  )}
+
                   {transaction.notes && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Notes:</span>
@@ -596,7 +751,8 @@ export default function Transactions() {
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -624,9 +780,9 @@ export default function Transactions() {
             <p className="text-sm text-gray-700">
               Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
               <span className="font-medium">
-                {Math.min(currentPage * itemsPerPage, filteredTransactions.length)}
+                {Math.min(currentPage * itemsPerPage, filteredFeed.length)}
               </span>{' '}
-              of <span className="font-medium">{filteredTransactions.length}</span> transactions
+              of <span className="font-medium">{filteredFeed.length}</span> entries
             </p>
           </div>
           <div>
