@@ -10,6 +10,7 @@ import {
   removeStorageObject,
 } from '../lib/uploadImage'
 import { logCompanyEvent } from '../lib/companyEvents'
+import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 
 interface Tool {
   id: string
@@ -44,6 +45,7 @@ interface ChecklistItem {
 }
 
 export default function Tools() {
+  const { features } = useCompanyFeatures()
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1054,6 +1056,7 @@ export default function Tools() {
                   />
                 </div>
 
+                {features.toolCostingEnabled && (
                 <div>
                   <label className="block font-medium mb-2 text-base md:text-lg">Estimated Cost (optional)</label>
                   <div className="relative">
@@ -1072,6 +1075,7 @@ export default function Tools() {
                     />
                   </div>
                 </div>
+                )}
 
                 <div>
                   <label className="block font-medium mb-2 text-base md:text-lg">Tool Images</label>
@@ -1243,6 +1247,7 @@ export default function Tools() {
                   />
                 </div>
 
+                {features.toolCostingEnabled && (
                 <div>
                   <label className="block font-medium mb-2 text-lg">Estimated Cost (optional)</label>
                   <div className="relative">
@@ -1261,6 +1266,7 @@ export default function Tools() {
                     />
                   </div>
                 </div>
+                )}
 
                 <div>
                   <label className="block font-medium mb-2 text-lg">Tool Images</label>

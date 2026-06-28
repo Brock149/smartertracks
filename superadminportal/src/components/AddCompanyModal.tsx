@@ -35,7 +35,16 @@ export default function AddCompanyModal({ isOpen, onClose, onSuccess }: Props) {
         : {}
       const { error } = await supabase
         .from('companies')
-        .insert({ name: name.trim(), notes, ...defaults })
+        .insert({
+          name: name.trim(),
+          notes,
+          ...defaults,
+          // New companies start with optional features OFF; the superadmin opts
+          // each company in deliberately via the Features modal.
+          personal_tools_enabled: false,
+          trackers_enabled: false,
+          tool_costing_enabled: false,
+        })
       if (error) throw error
       onSuccess()
       setName('')

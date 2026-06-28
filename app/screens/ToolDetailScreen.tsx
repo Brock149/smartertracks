@@ -13,9 +13,22 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
   Keyboard,
+  Linking,
 } from 'react-native';
+import {
+  fetchToolTracker,
+  fetchToolLocation,
+  fetchCompanyTrackerPool,
+  attachTracker,
+  detachTracker,
+  trackerDisplayName,
+  type ToolTracker,
+  type ToolLocation,
+  type PoolTracker,
+  type MountType,
+} from '../services/trackers';
+import TrackerMap from '../components/TrackerMap';
 import { Image as ExpoImage } from 'expo-image';
 import ImageViewing from 'react-native-image-viewing';
 import { resize } from '../utils';
@@ -73,9 +86,20 @@ interface ToolDetailScreenProps {
   navigation: any;
 }
 
+function relativeTime(d: string): string {
+  const ms = Date.now() - new Date(d).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 export default function ToolDetailScreen({ route, navigation }: ToolDetailScreenProps) {
   const { tool } = route.params;
-  const { user } = useAuth();
+  const { user, features } = useAuth();
+  const trackersEnabled = features.trackersEnabled;
   const insets = useSafeAreaInsets();
   const [images, setImages] = useState<ToolImage[]>([]);
   const [latestTransaction, setLatestTransaction] = useState<LatestTransaction | null>(null);
@@ -104,11 +128,93 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   const [warningModalVisible, setWarningModalVisible] = useState(false);
   const [openIssues, setOpenIssues] = useState<any[]>([]);
 
+  // GPS tracker state
+  const [toolTracker, setToolTracker] = useState<ToolTracker | null>(null);
+  const [toolLocation, setToolLocation] = useState<ToolLocation | null>(null);
+  const [trackerPool, setTrackerPool] = useState<PoolTracker[]>([]);
+  const [trackerBusy, setTrackerBusy] = useState(false);
+  const [trackerRequired, setTrackerRequired] = useState(false);
+  // Attach-during-claim selection (chosen in the claim form, applied on submit).
+  const [claimTrackerSerial, setClaimTrackerSerial] = useState<string | null>(null);
+  const [claimTrackerMount, setClaimTrackerMount] = useState<MountType>('temporary');
+
+  const isOwner = tool.current_owner === user?.id;
+
   const storedAtOptions = ['On Truck', 'On Job Site', 'N/A'];
 
   useEffect(() => {
     fetchToolDetails();
+    if (trackersEnabled) loadTrackerInfo();
   }, []);
+
+  const loadTrackerInfo = async () => {
+    try {
+      const [active, loc, reqRes] = await Promise.all([
+        fetchToolTracker(tool.id),
+        fetchToolLocation(tool.id),
+        supabase.from('tools').select('tracker_required').eq('id', tool.id).maybeSingle(),
+      ]);
+      setToolTracker(active);
+      setToolLocation(loc);
+      setTrackerRequired(!!reqRes.data?.tracker_required);
+      // Fetch the company pool whenever nothing is attached — needed both for
+      // the owner's attach control and for the attach-during-claim flow.
+      if (!active) {
+        try {
+          setTrackerPool(await fetchCompanyTrackerPool());
+        } catch {
+          setTrackerPool([]);
+        }
+      } else {
+        setTrackerPool([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load tracker info:', e);
+    }
+  };
+
+  const handleAttachTracker = async (serial: string, mountType: MountType) => {
+    try {
+      setTrackerBusy(true);
+      await attachTracker(serial, tool.id, mountType);
+      await loadTrackerInfo();
+    } catch (e: any) {
+      Alert.alert('Could not attach tracker', e?.message || 'Please try again.');
+    } finally {
+      setTrackerBusy(false);
+    }
+  };
+
+  const handleDetachTracker = async () => {
+    Alert.alert('Detach tracker?', 'This returns the tracker to your company pool.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Detach',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setTrackerBusy(true);
+            await detachTracker(tool.id);
+            await loadTrackerInfo();
+          } catch (e: any) {
+            Alert.alert('Could not detach tracker', e?.message || 'Please try again.');
+          } finally {
+            setTrackerBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const openLocationInMaps = () => {
+    if (toolLocation?.latitude == null || toolLocation?.longitude == null) return;
+    const { latitude, longitude } = toolLocation;
+    const url = Platform.select({
+      ios: `http://maps.apple.com/?daddr=${latitude},${longitude}`,
+      default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
+    });
+    if (url) Linking.openURL(url);
+  };
 
   const fetchToolDetails = async () => {
     try {
@@ -261,6 +367,8 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     setAcknowledged(false);
     setAttemptedClaim(false);
     setClaimErrors([]);
+    setClaimTrackerSerial(null);
+    setClaimTrackerMount('temporary');
     
     // Reset checklist items to default 'ok' status
     setChecklistItems(prev => prev.map(item => ({
@@ -286,6 +394,26 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     }
     setClaimErrors([]);
 
+    // Req 8: "tracker required" soft gate. Only meaningful for temporary-mount
+    // tools (permanent mounts always have their tracker). Currently a soft
+    // warning; to make this a hard block later, drop the "Sign out anyway"
+    // option below.
+    if (trackerRequired && !toolTracker && !claimTrackerSerial) {
+      Alert.alert(
+        'No tracker attached',
+        'This tool is flagged to always have a GPS tracker when signed out. Pick one in the "GPS Tracker" section above, or you can attach one after claiming.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign out anyway', style: 'destructive', onPress: () => void doClaim() },
+        ]
+      );
+      return;
+    }
+
+    void doClaim();
+  };
+
+  const doClaim = async () => {
     setClaiming(true);
 
     try {
@@ -396,6 +524,20 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
 
       if (toolError) {
         throw toolError;
+      }
+
+      // If the tech picked a tracker in the claim form, attach it now that they
+      // own the tool. Best-effort: a claim shouldn't fail because of this.
+      if (claimTrackerSerial && !toolTracker) {
+        try {
+          await attachTracker(claimTrackerSerial, tool.id, claimTrackerMount);
+        } catch (e: any) {
+          console.warn('Attach-on-claim failed:', e?.message || e);
+          Alert.alert(
+            'Tool claimed, but tracker not attached',
+            e?.message || 'You can attach the tracker from the tool screen.'
+          );
+        }
       }
 
       Alert.alert(
@@ -843,6 +985,138 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           </View>
         </View>
 
+        {/* GPS Tracker */}
+        {trackersEnabled && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>GPS Tracker</Text>
+          <View style={styles.statusCard}>
+            {toolTracker ? (
+              <>
+                <View style={styles.statusRow}>
+                  <View style={styles.statusIcon}>
+                    <Ionicons name="hardware-chip-outline" size={20} color="#6b7280" />
+                  </View>
+                  <View style={styles.statusContent}>
+                    <Text style={styles.statusLabel}>Tracker</Text>
+                    <Text style={styles.statusValue}>
+                      {trackerDisplayName(toolTracker)}
+                      {'  '}
+                      <Text
+                        style={
+                          toolTracker.mount_type === 'permanent'
+                            ? styles.mountPermanent
+                            : styles.mountTemporary
+                        }
+                      >
+                        {toolTracker.mount_type === 'permanent' ? 'Permanent' : 'Temporary'}
+                      </Text>
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.statusRow, { borderBottomWidth: 0 }]}>
+                  <View style={styles.statusIcon}>
+                    <Ionicons name="navigate-outline" size={20} color="#6b7280" />
+                  </View>
+                  <View style={styles.statusContent}>
+                    <Text style={styles.statusLabel}>GPS Position</Text>
+                    {!!(toolLocation?.recorded_at || toolLocation?.updated_at) ? (
+                      <Text style={styles.locationMeta}>
+                        Last fix {relativeTime((toolLocation!.recorded_at || toolLocation!.updated_at) as string)}
+                        {'  ·  '}
+                        {new Date(
+                          (toolLocation!.recorded_at || toolLocation!.updated_at) as string
+                        ).toLocaleString()}
+                      </Text>
+                    ) : (
+                      <Text style={styles.statusValue}>No GPS fix yet</Text>
+                    )}
+                    {toolLocation?.battery != null && (
+                      <Text style={styles.locationMeta}>
+                        🔋 Battery {toolLocation.battery.toFixed(2)}V
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                {toolLocation?.latitude != null && toolLocation?.longitude != null && (
+                  <View style={styles.mapWrap}>
+                    <TrackerMap
+                      latitude={toolLocation.latitude}
+                      longitude={toolLocation.longitude}
+                      thumbUrl={tool.photo_url}
+                    />
+                    <TouchableOpacity style={styles.directionsButton} onPress={openLocationInMaps}>
+                      <Ionicons name="navigate" size={16} color="#2563eb" />
+                      <Text style={styles.directionsText}>Get directions</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Temporary mounts can be detached here; permanent mounts are
+                    physically affixed, so we intentionally show no detach UI. */}
+                {isOwner && toolTracker.mount_type === 'temporary' && (
+                  <TouchableOpacity
+                    style={styles.detachButton}
+                    onPress={handleDetachTracker}
+                    disabled={trackerBusy}
+                  >
+                    <Ionicons name="unlink-outline" size={18} color="#dc2626" />
+                    <Text style={styles.detachButtonText}>Detach tracker</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : isOwner ? (
+              trackerPool.length > 0 ? (
+                <View style={{ padding: 12 }}>
+                  <Text style={styles.statusLabel}>Attach a tracker from your pool</Text>
+                  <View style={styles.poolChips}>
+                    {trackerPool.map((p) => (
+                      <TouchableOpacity
+                        key={p.serial}
+                        style={styles.poolChip}
+                        disabled={trackerBusy}
+                        onPress={() =>
+                          Alert.alert(
+                            `Attach ${trackerDisplayName(p)}`,
+                            'How is this tracker mounted to the tool?',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Temporary (pooled)',
+                                onPress: () => handleAttachTracker(p.serial, 'temporary'),
+                              },
+                              {
+                                text: 'Permanent (affixed)',
+                                onPress: () => handleAttachTracker(p.serial, 'permanent'),
+                              },
+                            ]
+                          )
+                        }
+                      >
+                        <Ionicons name="add-circle-outline" size={16} color="#2563eb" />
+                        <Text style={styles.poolChipText}>{trackerDisplayName(p)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <View style={{ padding: 12 }}>
+                  <Text style={styles.statusValue}>No tracker attached</Text>
+                  <Text style={styles.locationMeta}>
+                    No trackers available in your company pool.
+                  </Text>
+                </View>
+              )
+            ) : (
+              <View style={{ padding: 12 }}>
+                <Text style={styles.statusValue}>No tracker attached</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        )}
+
         {/* Latest Transaction Notes */}
         {(latestTransaction?.notes || latestTransaction?.attribution) && (
           <View style={styles.section}>
@@ -918,7 +1192,6 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         onRequestClose={() => setClaimModalVisible(false)}
       >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={80}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <SafeAreaView
               edges={['left', 'right', 'bottom']}
               style={[
@@ -940,7 +1213,11 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                 <View style={styles.placeholder} />
               </View>
 
-              <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                style={styles.modalContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+              >
             {/* Tool Info */}
             <View style={styles.modalToolInfo}>
               <Text style={styles.modalToolNumber}>#{tool.number}</Text>
@@ -1018,6 +1295,62 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
               )}
             </View>
 
+            {/* Attach a GPS tracker during claim (temporary or permanent).
+                Only shown when nothing is already attached and the company has
+                trackers available in its pool. */}
+            {trackersEnabled && !toolTracker && trackerPool.length > 0 && (
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>
+                  GPS Tracker {trackerRequired ? '(required for this tool)' : '(optional)'}
+                </Text>
+                <View style={styles.poolChips}>
+                  {trackerPool.map((p) => {
+                    const selected = claimTrackerSerial === p.serial;
+                    return (
+                      <TouchableOpacity
+                        key={p.serial}
+                        style={[styles.poolChip, selected && styles.poolChipSelected]}
+                        onPress={() =>
+                          setClaimTrackerSerial(selected ? null : p.serial)
+                        }
+                      >
+                        <Ionicons
+                          name={selected ? 'checkmark-circle' : 'add-circle-outline'}
+                          size={16}
+                          color={selected ? '#16a34a' : '#2563eb'}
+                        />
+                        <Text style={styles.poolChipText}>{trackerDisplayName(p)}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {!!claimTrackerSerial && (
+                  <View style={styles.mountToggleRow}>
+                    {(['temporary', 'permanent'] as MountType[]).map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[
+                          styles.mountToggle,
+                          claimTrackerMount === m && styles.mountToggleActive,
+                        ]}
+                        onPress={() => setClaimTrackerMount(m)}
+                      >
+                        <Text
+                          style={[
+                            styles.mountToggleText,
+                            claimTrackerMount === m && styles.mountToggleTextActive,
+                          ]}
+                        >
+                          {m === 'temporary' ? 'Temporary (pooled)' : 'Permanent (affixed)'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Checklist Section */}
             {renderChecklistSection()}
 
@@ -1092,7 +1425,6 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
             </View>
               </ScrollView>
             </SafeAreaView>
-          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1367,6 +1699,109 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 20,
     marginBottom: 6,
+  },
+  mountTemporary: {
+    fontSize: 13,
+    color: '#b45309',
+    fontWeight: '600',
+  },
+  mountPermanent: {
+    fontSize: 13,
+    color: '#7c3aed',
+    fontWeight: '600',
+  },
+  locationLink: {
+    color: '#2563eb',
+    textDecorationLine: 'underline',
+  },
+  mapWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  directionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 8,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+  },
+  directionsText: {
+    color: '#2563eb',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  locationMeta: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  detachButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  detachButtonText: {
+    color: '#dc2626',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  poolChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  poolChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  poolChipText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  poolChipSelected: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+  },
+  mountToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  mountToggle: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+  },
+  mountToggleActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  mountToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  mountToggleTextActive: {
+    color: '#2563eb',
   },
   ackRow: {
     flexDirection: 'row',

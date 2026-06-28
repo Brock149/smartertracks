@@ -41,6 +41,16 @@ function toNumber(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+// Digital Matter nests telemetry in an "analogues" array of {id, val}. The
+// standard analogue IDs for the Yabby Edge / G-series put battery voltage (mV)
+// on id 1. Pull a given analogue id's value out of that array.
+function analogue(rec: Record<string, unknown>, id: number): number | null {
+  const arr = (rec as any).analogues
+  if (!Array.isArray(arr)) return null
+  const found = arr.find((a) => a && typeof a === 'object' && Number((a as any).id) === id)
+  return found ? toNumber((found as any).val) : null
+}
+
 function toIso(v: unknown): string | null {
   if (v === undefined || v === null || v === '') return null
   // Unix seconds or millis
@@ -104,11 +114,24 @@ function parseRecord(rec: Record<string, unknown>) {
     altitude: toNumber(pick(merged, ['alt', 'altitude', 'Altitude'])),
     speed: toNumber(pick(merged, ['spd', 'speed', 'Speed', 'speedKmh'])),
     heading: toNumber(pick(merged, ['head', 'heading', 'Heading', 'course', 'bearing'])),
-    accuracy: toNumber(pick(merged, ['accuracy', 'hdop', 'Accuracy', 'horizontalAccuracy'])),
-    battery: toNumber(pick(merged, ['battery', 'batteryVoltage', 'batt', 'vbatt'])),
+    // DM sends horizontal accuracy as "posAcc" (metres).
+    accuracy: toNumber(pick(merged, ['accuracy', 'hdop', 'Accuracy', 'horizontalAccuracy', 'posAcc'])),
+    // Battery: prefer a flat key if present, else DM analogue id 1 (mV) -> volts.
+    battery: ((): number | null => {
+      const flat = toNumber(pick(merged, ['battery', 'batteryVoltage', 'batt', 'vbatt']))
+      if (flat !== null) return flat
+      const mv = analogue(rec, 1)
+      return mv === null ? null : Math.round((mv / 1000) * 100) / 100
+    })(),
     fix_type: ((): string | null => {
       const f = pick(merged, ['fixType', 'fix_type', 'fix', 'lookupType', 'positionType'])
-      return f === undefined ? null : String(f)
+      if (f !== undefined) return String(f)
+      // DM Location Engine puts the resolution source under posInfo.Src.
+      const posInfo = (rec as any).posInfo
+      if (posInfo && typeof posInfo === 'object' && (posInfo as any).Src !== undefined) {
+        return `src:${(posInfo as any).Src}`
+      }
+      return null
     })(),
     recorded_at: toIso(
       pick(merged, ['date', 'timestamp', 'Timestamp', 'recordedAt', 'recorded_at', 'dateUTC', 'gpsTime', 'time'])

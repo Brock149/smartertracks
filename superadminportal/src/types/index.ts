@@ -24,6 +24,9 @@ export interface Company {
   billing_cycle: 'monthly' | 'annual' | null
   plan_id: string | null
   trial_expires_at: string | null
+  personal_tools_enabled: boolean
+  trackers_enabled: boolean
+  tool_costing_enabled: boolean
 }
 
 export interface CompanyAccessCode {

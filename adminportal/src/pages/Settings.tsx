@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getMyCompanySettings, updateCompanySettings, updateCompanyExportSettings, updateCompanyToolsExportSettings, sendInventoryExportNow, type CompanySettings, type ExportFrequency } from '../lib/companySettingsApi'
 import { getCompanyAliases, createLocationAlias, deleteLocationAlias, type LocationAlias } from '../lib/locationAliasApi'
+import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 
 interface User {
   id: string
@@ -13,6 +14,7 @@ interface User {
 }
 
 export default function Settings() {
+  const { features } = useCompanyFeatures()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -704,7 +706,8 @@ export default function Settings() {
         </form>
       </div>
 
-      {/* Automated Inventory Export Section */}
+      {/* Automated Inventory Export Section (personal tools) */}
+      {features.personalToolsEnabled && (
       <div className="bg-white rounded-lg shadow p-8 mt-8">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -851,6 +854,7 @@ export default function Settings() {
           </div>
         </form>
       </div>
+      )}
 
       {/* Automated Company Tool Export Section */}
       <div className="bg-white rounded-lg shadow p-8 mt-8">

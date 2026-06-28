@@ -7,7 +7,9 @@ import ViewAccessCodesModal from '../components/ViewAccessCodesModal'
 import RenameCompanyModal from '../components/RenameCompanyModal'
 import DeleteCompanyModal from '../components/DeleteCompanyModal'
 import EditLimitsModal from '../components/EditLimitsModal'
+import EditFeaturesModal from '../components/EditFeaturesModal'
 import AppVersionsPage from './AppVersionsPage'
+import TrackersPage from './TrackersPage'
 
 export default function DashboardPage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -19,7 +21,8 @@ export default function DashboardPage() {
   const [renameCompany, setRenameCompany] = useState<Company|null>(null)
   const [deleteCompany, setDeleteCompany] = useState<Company|null>(null)
   const [limitsCompany, setLimitsCompany] = useState<Company|null>(null)
-  const [activeTab, setActiveTab] = useState<'companies' | 'app-versions'>('companies')
+  const [featuresCompany, setFeaturesCompany] = useState<Company|null>(null)
+  const [activeTab, setActiveTab] = useState<'companies' | 'app-versions' | 'trackers'>('companies')
   const [purging, setPurging] = useState(false)
   const [purgeMessage, setPurgeMessage] = useState('')
   // One-off "test the scheduler" controls.
@@ -186,6 +189,16 @@ export default function DashboardPage() {
             >
               📱 App Versions
             </button>
+            <button
+              onClick={() => setActiveTab('trackers')}
+              className={`${
+                activeTab === 'trackers'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              📍 Trackers
+            </button>
           </nav>
         </div>
       </div>
@@ -195,6 +208,8 @@ export default function DashboardPage() {
         <div className="px-4 py-6 sm:px-0">
           {activeTab === 'app-versions' ? (
             <AppVersionsPage />
+          ) : activeTab === 'trackers' ? (
+            <TrackersPage />
           ) : (
             <>
               {error && (
@@ -420,6 +435,12 @@ export default function DashboardPage() {
                           Limits
                         </button>
                         <button
+                          onClick={() => setFeaturesCompany(company)}
+                          className="mr-2 px-3 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200"
+                        >
+                          Features
+                        </button>
+                        <button
                           onClick={() => toggleCompanyStatus(company.id, company.is_active)}
                           className={`mr-2 px-3 py-1 rounded text-xs font-medium ${
                             company.is_active
@@ -491,6 +512,13 @@ export default function DashboardPage() {
         company={limitsCompany}
         isOpen={!!limitsCompany}
         onClose={() => setLimitsCompany(null)}
+        onSuccess={fetchCompanies}
+      />
+
+      <EditFeaturesModal
+        company={featuresCompany}
+        isOpen={!!featuresCompany}
+        onClose={() => setFeaturesCompany(null)}
         onSuccess={fetchCompanies}
       />
     </div>

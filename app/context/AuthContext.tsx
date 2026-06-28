@@ -2,6 +2,20 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase/client';
 
+export interface CompanyFeatures {
+  personalToolsEnabled: boolean;
+  trackersEnabled: boolean;
+  toolCostingEnabled: boolean;
+}
+
+// Users with no company keep the legacy behavior (personal tools available);
+// once a user belongs to a company the per-company flags take over.
+const DEFAULT_FEATURES: CompanyFeatures = {
+  personalToolsEnabled: true,
+  trackersEnabled: true,
+  toolCostingEnabled: true,
+};
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -9,6 +23,7 @@ interface AuthContextType {
   suspended: boolean;
   companyId: string | null;
   hasCompany: boolean;
+  features: CompanyFeatures;
   refreshSuspended: () => Promise<void>;
   refreshCompany: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
@@ -36,9 +51,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [suspended, setSuspended] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [features, setFeatures] = useState<CompanyFeatures>(DEFAULT_FEATURES);
 
-  // Loads the user's company id + whether that company is suspended in one go.
-  async function loadCompanyState(uid: string): Promise<{ companyId: string | null; suspended: boolean }> {
+  // Loads the user's company id, suspension status, and feature flags in one go.
+  async function loadCompanyState(
+    uid: string
+  ): Promise<{ companyId: string | null; suspended: boolean; features: CompanyFeatures }> {
     try {
       const { data: userRow, error: userErr } = await supabase
         .from('users')
@@ -46,19 +64,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .eq('id', uid)
         .single();
 
-      if (userErr || !userRow?.company_id) return { companyId: null, suspended: false };
+      if (userErr || !userRow?.company_id)
+        return { companyId: null, suspended: false, features: DEFAULT_FEATURES };
 
       const { data: companyRow, error: compErr } = await supabase
         .from('companies')
-        .select('is_active')
+        .select('is_active, personal_tools_enabled, trackers_enabled, tool_costing_enabled')
         .eq('id', userRow.company_id)
         .single();
 
-      if (compErr || companyRow == null) return { companyId: userRow.company_id, suspended: false };
+      if (compErr || companyRow == null)
+        return { companyId: userRow.company_id, suspended: false, features: DEFAULT_FEATURES };
 
-      return { companyId: userRow.company_id, suspended: companyRow.is_active === false };
+      return {
+        companyId: userRow.company_id,
+        suspended: companyRow.is_active === false,
+        features: {
+          personalToolsEnabled: companyRow.personal_tools_enabled ?? false,
+          trackersEnabled: companyRow.trackers_enabled ?? false,
+          toolCostingEnabled: companyRow.tool_costing_enabled ?? false,
+        },
+      };
     } catch (e) {
-      return { companyId: null, suspended: false };
+      return { companyId: null, suspended: false, features: DEFAULT_FEATURES };
     }
   }
 
@@ -72,6 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const state = await loadCompanyState(session.user.id);
         setSuspended(state.suspended);
         setCompanyId(state.companyId);
+        setFeatures(state.features);
       }
       setLoading(false);
     })();
@@ -87,8 +116,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const state = await loadCompanyState(session.user.id);
           setSuspended(state.suspended);
           setCompanyId(state.companyId);
+          setFeatures(state.features);
         } else {
           setCompanyId(null);
+          setFeatures(DEFAULT_FEATURES);
         }
         setLoading(false);
       })();
@@ -126,16 +157,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const state = await loadCompanyState(user.id);
     setSuspended(state.suspended);
     setCompanyId(state.companyId);
+    setFeatures(state.features);
   };
 
   const refreshCompany = async () => {
     if (!user) {
       setCompanyId(null);
+      setFeatures(DEFAULT_FEATURES);
       return;
     }
     const state = await loadCompanyState(user.id);
     setSuspended(state.suspended);
     setCompanyId(state.companyId);
+    setFeatures(state.features);
   };
 
   const value = {
@@ -145,6 +179,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     suspended,
     companyId,
     hasCompany: !!companyId,
+    features,
     refreshSuspended,
     refreshCompany,
     signIn,

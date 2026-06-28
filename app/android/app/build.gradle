@@ -2,7 +2,14 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+import groovy.json.JsonSlurper
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+
+// Read version info directly from app.json so bumping app.json is the only thing needed
+def appJson = new JsonSlurper().parse(new File(projectRoot + "/app.json"))
+def appVersionName = appJson.expo.version
+def appVersionCode = appJson.expo.android.versionCode
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -92,8 +99,8 @@ android {
         applicationId 'com.bactech.smartertracks'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 28
-        versionName "2.0.4"
+        versionCode appVersionCode
+        versionName appVersionName
     }
     signingConfigs {
         debug {

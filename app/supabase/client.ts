@@ -64,6 +64,10 @@ export interface Database {
           id: string;
           name: string;
           created_at: string;
+          is_active: boolean;
+          personal_tools_enabled: boolean;
+          trackers_enabled: boolean;
+          tool_costing_enabled: boolean;
         };
       };
       company_access_codes: {

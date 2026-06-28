@@ -1,12 +1,23 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
+import type { CompanyFeatures } from '../hooks/useCompanyFeatures'
 
-const allNavLinks = [
+type FeatureKey = keyof CompanyFeatures
+
+const allNavLinks: Array<{
+  to: string
+  label: string
+  icon: string
+  adminOnly: boolean
+  feature?: FeatureKey
+}> = [
   { to: '/admin/tools', label: 'Tools', icon: '🧰', adminOnly: false },
-  { to: '/admin/tool-costs', label: 'Tool Costs', icon: '💰', adminOnly: true },
+  { to: '/admin/tool-costs', label: 'Tool Costs', icon: '💰', adminOnly: true, feature: 'toolCostingEnabled' },
+  { to: '/admin/trackers', label: 'Trackers', icon: '📍', adminOnly: true, feature: 'trackersEnabled' },
   { to: '/admin/groups', label: 'Groups', icon: '🧩', adminOnly: false },
-  { to: '/admin/personal-tools', label: 'Personal Tools', icon: '🧑‍🔧', adminOnly: true },
+  { to: '/admin/personal-tools', label: 'Personal Tools', icon: '🧑‍🔧', adminOnly: true, feature: 'personalToolsEnabled' },
   { to: '/admin/users', label: 'Users', icon: '👥', adminOnly: false },
   { to: '/admin/transactions', label: 'Transactions', icon: '🔄', adminOnly: false },
   { to: '/admin/reports', label: 'Reports', icon: '📊', adminOnly: false },
@@ -28,6 +39,7 @@ export default function Layout() {
   } | null>(null)
   const [companyLoading, setCompanyLoading] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const { features } = useCompanyFeatures()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef<HTMLDivElement | null>(null)
@@ -180,6 +192,7 @@ export default function Layout() {
           <ul className="space-y-2">
             {allNavLinks
               .filter(link => !link.adminOnly || userRole === 'admin' || userRole === 'superadmin')
+              .filter(link => !link.feature || features[link.feature])
               .map(link => (
               <li key={link.to}>
                 <Link

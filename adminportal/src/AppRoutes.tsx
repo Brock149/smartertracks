@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabaseClient'
 import Layout from './components/Layout'
+import { useCompanyFeatures } from './hooks/useCompanyFeatures'
+import type { CompanyFeatures } from './hooks/useCompanyFeatures'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -10,6 +12,7 @@ import GetStartedSuccess from './pages/GetStartedSuccess'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Tools from './pages/Tools'
+import Trackers from './pages/Trackers'
 import ToolGroups from './pages/ToolGroups'
 import PersonalTools from './pages/PersonalTools'
 import Users from './pages/Users'
@@ -97,6 +100,27 @@ function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Guards a route behind a per-company feature flag. While flags load we show a
+// spinner; if the feature is off we send the user back to the admin home so a
+// disabled feature can't be reached via a direct link.
+function FeatureRoute({ feature, children }: { feature: keyof CompanyFeatures; children: React.ReactNode }) {
+  const { features, loading } = useCompanyFeatures()
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
+
+  if (!features[feature]) {
+    return <Navigate to="/admin" replace />
+  }
+
+  return <>{children}</>
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -125,9 +149,10 @@ export default function AppRoutes() {
       >
         <Route index element={<div>Welcome to Smarter Tracks - Tool Tracking System</div>} />
         <Route path="tools" element={<Tools />} />
-        <Route path="tool-costs" element={<AdminOnlyRoute><ToolCosts /></AdminOnlyRoute>} />
+        <Route path="trackers" element={<AdminOnlyRoute><FeatureRoute feature="trackersEnabled"><Trackers /></FeatureRoute></AdminOnlyRoute>} />
+        <Route path="tool-costs" element={<AdminOnlyRoute><FeatureRoute feature="toolCostingEnabled"><ToolCosts /></FeatureRoute></AdminOnlyRoute>} />
         <Route path="groups" element={<ToolGroups />} />
-        <Route path="personal-tools" element={<AdminOnlyRoute><PersonalTools /></AdminOnlyRoute>} />
+        <Route path="personal-tools" element={<AdminOnlyRoute><FeatureRoute feature="personalToolsEnabled"><PersonalTools /></FeatureRoute></AdminOnlyRoute>} />
         <Route path="users" element={<Users />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="reports" element={<Reports />} />

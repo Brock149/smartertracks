@@ -89,7 +89,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   const [personalExpanded, setPersonalExpanded] = useState(false);
   const [lastExport, setLastExport] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const { user } = useAuth();
+  const { user, features } = useAuth();
+  const personalToolsEnabled = features.personalToolsEnabled;
 
   // Map tool.id -> thumbnail URL for quick lookup
   const firstImageUrlMap = useMemo(() => {
@@ -132,7 +133,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   useEffect(() => {
     fetchMyTools();
     fetchNotifications();
-    fetchMyPersonalTools();
+    if (personalToolsEnabled) fetchMyPersonalTools();
     loadDismissedNotifications();
   }, []);
 
@@ -141,8 +142,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     React.useCallback(() => {
       fetchMyTools();
       fetchNotifications();
-      fetchMyPersonalTools();
-    }, [])
+      if (personalToolsEnabled) fetchMyPersonalTools();
+    }, [personalToolsEnabled])
   );
 
   useEffect(() => {
@@ -828,15 +829,17 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
       if (filteredTools.length === 0) rows.push({ key: 'company-empty', type: 'company-empty' });
       else filteredTools.forEach((t) => rows.push({ key: `c-${t.id}`, type: 'company', tool: t }));
     }
-    rows.push({ key: 'personal-header', type: 'personal-header' });
-    if (showPersonal) {
-      rows.push({ key: 'personal-add', type: 'personal-add' });
-      if (filteredPersonalTools.length === 0) rows.push({ key: 'personal-empty', type: 'personal-empty' });
-      else filteredPersonalTools.forEach((t) => rows.push({ key: `p-${t.id}`, type: 'personal', tool: t }));
-      if (personalTools.length > 0) rows.push({ key: 'personal-export', type: 'personal-export' });
+    if (personalToolsEnabled) {
+      rows.push({ key: 'personal-header', type: 'personal-header' });
+      if (showPersonal) {
+        rows.push({ key: 'personal-add', type: 'personal-add' });
+        if (filteredPersonalTools.length === 0) rows.push({ key: 'personal-empty', type: 'personal-empty' });
+        else filteredPersonalTools.forEach((t) => rows.push({ key: `p-${t.id}`, type: 'personal', tool: t }));
+        if (personalTools.length > 0) rows.push({ key: 'personal-export', type: 'personal-export' });
+      }
     }
     return rows;
-  }, [showCompany, showPersonal, filteredTools, filteredPersonalTools, personalTools.length]);
+  }, [showCompany, showPersonal, filteredTools, filteredPersonalTools, personalTools.length, personalToolsEnabled]);
 
   const renderRow = ({ item }: { item: { key: string; type: string; tool?: any } }) => {
     switch (item.type) {
@@ -924,7 +927,7 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
         <View>
           <Text style={styles.title}>My Tools</Text>
           <Text style={styles.subtitle}>
-            {tools.length} company · {personalTools.length} personal
+            {tools.length} company{personalToolsEnabled ? ` · ${personalTools.length} personal` : ''}
           </Text>
         </View>
         <TouchableOpacity style={styles.accountButton} onPress={handleAccountPress}>

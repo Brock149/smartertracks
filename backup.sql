@@ -12,12 +12,26 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
+CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
+
+
+
+
+
+
 
 
 ALTER SCHEMA "public" OWNER TO "postgres";
 
 
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "public";
+
+
+
 
 
 
@@ -54,6 +68,128 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+
+
+CREATE OR REPLACE FUNCTION "public"."assign_personal_tool_number"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  IF NEW.number IS NULL OR NEW.number = '' THEN
+    SELECT (COALESCE(MAX(number_numeric), 0) + 1)::text
+    INTO NEW.number
+    FROM public.personal_tools
+    WHERE owner_id = NEW.owner_id AND number_numeric < 999999;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."assign_personal_tool_number"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if not public.is_superadmin(auth.uid()) then
+    raise exception 'Only a superadmin can assign trackers to companies';
+  end if;
+
+  insert into public.trackers (serial) values (p_serial)
+  on conflict (serial) do nothing;
+
+  if exists (
+    select 1 from public.tracker_company_assignments
+    where serial = p_serial and released_at is null
+  ) then
+    raise exception 'Tracker % is already assigned to a company', p_serial;
+  end if;
+
+  insert into public.tracker_company_assignments (serial, company_id, assigned_by, notes)
+  values (p_serial, p_company_id, auth.uid(), p_notes);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."attach_tracker_to_tool"("p_serial" "text", "p_tool_id" "uuid", "p_mount_type" "text" DEFAULT 'temporary'::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_company_id uuid := public.get_user_company_id(auth.uid());
+  v_actor_name text;
+  v_tool_number text;
+  v_tool_name text;
+  v_tracker_label text;
+begin
+  if v_company_id is null then
+    raise exception 'No company for current user';
+  end if;
+
+  if p_mount_type is null or p_mount_type not in ('temporary', 'permanent') then
+    raise exception 'mount_type must be temporary or permanent';
+  end if;
+
+  if not exists (
+    select 1 from public.tracker_company_assignments
+    where serial = p_serial and company_id = v_company_id and released_at is null
+  ) then
+    raise exception 'Tracker % is not assigned to your company', p_serial;
+  end if;
+
+  if not exists (
+    select 1 from public.tools where id = p_tool_id and company_id = v_company_id
+  ) then
+    raise exception 'Tool does not belong to your company';
+  end if;
+
+  if exists (
+    select 1 from public.tracker_tool_assignments
+    where serial = p_serial and detached_at is null
+  ) then
+    raise exception 'Tracker % is already attached to a tool', p_serial;
+  end if;
+
+  insert into public.tracker_tool_assignments
+    (serial, tool_id, company_id, mount_type, attached_by)
+  values (p_serial, p_tool_id, v_company_id, p_mount_type, auth.uid());
+
+  -- Show a position right away if any in-window fix already exists.
+  perform public.refresh_tool_current_location(p_tool_id);
+
+  -- History line item.
+  select coalesce(u.name, 'Someone') into v_actor_name
+    from public.users u where u.id = auth.uid();
+  select t.number, t.name into v_tool_number, v_tool_name
+    from public.tools t where t.id = p_tool_id;
+  select coalesce(tr.label, p_serial) into v_tracker_label
+    from public.trackers tr where tr.serial = p_serial;
+  if v_tracker_label is null then
+    v_tracker_label := p_serial;
+  end if;
+
+  insert into public.company_events
+    (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
+  values (
+    v_company_id,
+    'tracker_attached',
+    auth.uid(),
+    coalesce(v_actor_name, 'Someone'),
+    'tool',
+    p_tool_id,
+    '#' || coalesce(v_tool_number, '?') || ' - ' || coalesce(v_tool_name, 'Tool'),
+    'Tracker ' || v_tracker_label || ' attached (' || p_mount_type || ')'
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."attach_tracker_to_tool"("p_serial" "text", "p_tool_id" "uuid", "p_mount_type" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") RETURNS TABLE("ok" boolean, "message" "text")
@@ -98,6 +234,65 @@ $$;
 
 
 ALTER FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."company_tracked_tools_map"() RETURNS TABLE("tool_id" "uuid", "number" "text", "name" "text", "latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone, "serial" "text", "mount_type" "text", "battery" double precision, "thumb_url" "text")
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select t.id,
+         t.number,
+         t.name,
+         t.last_latitude,
+         t.last_longitude,
+         t.last_location_recorded_at,
+         t.last_location_serial,
+         tta.mount_type,
+         t.last_battery,
+         coalesce(
+           (select ti.thumb_url
+              from public.tool_images ti
+             where ti.tool_id = t.id
+             order by ti.is_primary desc, ti.uploaded_at asc
+             limit 1),
+           (select ti.image_url
+              from public.tool_images ti
+             where ti.tool_id = t.id
+             order by ti.is_primary desc, ti.uploaded_at asc
+             limit 1),
+           t.photo_url
+         ) as thumb_url
+  from public.tools t
+  left join public.tracker_tool_assignments tta
+    on tta.tool_id = t.id and tta.detached_at is null
+  where t.company_id = public.get_user_company_id(auth.uid())
+    and t.is_deleted = false
+    and t.last_latitude is not null
+    and t.last_longitude is not null;
+$$;
+
+
+ALTER FUNCTION "public"."company_tracked_tools_map"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."company_tracker_pool"() RETURNS TABLE("serial" "text", "label" "text", "assigned_at" timestamp with time zone, "last_seen_at" timestamp with time zone)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tca.serial, tr.label, tca.assigned_at, tr.last_seen_at
+  from public.tracker_company_assignments tca
+  left join public.trackers tr on tr.serial = tca.serial
+  where tca.company_id = public.get_user_company_id(auth.uid())
+    and tca.released_at is null
+    and not exists (
+      select 1 from public.tracker_tool_assignments tta
+      where tta.serial = tca.serial and tta.detached_at is null
+    )
+  order by tca.assigned_at desc;
+$$;
+
+
+ALTER FUNCTION "public"."company_tracker_pool"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") RETURNS "uuid"
@@ -315,6 +510,75 @@ $$;
 ALTER FUNCTION "public"."delete_user"("user_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."detach_tracker_from_tool"("p_tool_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_company_id uuid := public.get_user_company_id(auth.uid());
+  v_serial text;
+  v_actor_name text;
+  v_tool_number text;
+  v_tool_name text;
+  v_tracker_label text;
+begin
+  -- Remember which tracker was on the tool so we can describe the event.
+  select tta.serial into v_serial
+    from public.tracker_tool_assignments tta
+   where tta.tool_id = p_tool_id
+     and tta.company_id = v_company_id
+     and tta.detached_at is null
+   limit 1;
+
+  update public.tracker_tool_assignments
+     set detached_at = now(), detached_by = auth.uid()
+   where tool_id = p_tool_id
+     and company_id = v_company_id
+     and detached_at is null;
+
+  update public.tools
+     set last_latitude = null,
+         last_longitude = null,
+         last_location_recorded_at = null,
+         last_location_updated_at = now(),
+         last_location_serial = null
+   where id = p_tool_id
+     and company_id = v_company_id;
+
+  -- Only log if something was actually detached.
+  if v_serial is null then
+    return;
+  end if;
+
+  select coalesce(u.name, 'Someone') into v_actor_name
+    from public.users u where u.id = auth.uid();
+  select t.number, t.name into v_tool_number, v_tool_name
+    from public.tools t where t.id = p_tool_id;
+  select coalesce(tr.label, v_serial) into v_tracker_label
+    from public.trackers tr where tr.serial = v_serial;
+  if v_tracker_label is null then
+    v_tracker_label := v_serial;
+  end if;
+
+  insert into public.company_events
+    (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
+  values (
+    v_company_id,
+    'tracker_detached',
+    auth.uid(),
+    coalesce(v_actor_name, 'Someone'),
+    'tool',
+    p_tool_id,
+    '#' || coalesce(v_tool_number, '?') || ' - ' || coalesce(v_tool_name, 'Tool'),
+    'Tracker ' || v_tracker_label || ' detached'
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."detach_tracker_from_tool"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."enforce_company_active"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -444,7 +708,7 @@ $$;
 ALTER FUNCTION "public"."extract_tool_number"("text_number" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_companies_overview"() RETURNS TABLE("id" "uuid", "name" "text", "is_active" boolean, "created_at" timestamp with time zone, "suspended_at" timestamp with time zone, "notes" "text", "user_count" bigint, "tool_count" bigint, "last_activity" timestamp with time zone, "user_limit" integer, "tool_limit" integer, "enforcement_mode" "text", "tier_name" "text", "billing_cycle" "text", "plan_id" "text", "trial_expires_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."get_companies_overview"() RETURNS TABLE("id" "uuid", "name" "text", "is_active" boolean, "created_at" timestamp with time zone, "suspended_at" timestamp with time zone, "notes" "text", "user_count" bigint, "tool_count" bigint, "last_activity" timestamp with time zone, "user_limit" integer, "tool_limit" integer, "enforcement_mode" "text", "tier_name" "text", "billing_cycle" "text", "plan_id" "text", "trial_expires_at" timestamp with time zone, "personal_tools_enabled" boolean, "trackers_enabled" boolean, "tool_costing_enabled" boolean)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -466,7 +730,10 @@ CREATE OR REPLACE FUNCTION "public"."get_companies_overview"() RETURNS TABLE("id
       c.tier_name,
       c.billing_cycle,
       c.plan_id,
-      c.trial_expires_at
+      c.trial_expires_at,
+      c.personal_tools_enabled,
+      c.trackers_enabled,
+      c.tool_costing_enabled
     from companies c
     left join (
       select company_id, count(*)::bigint as user_count
@@ -541,36 +808,38 @@ CREATE OR REPLACE FUNCTION "public"."get_my_company_settings"() RETURNS "json"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
-    v_company_id uuid;
-    v_result json;
+  v_company_id uuid;
+  v_result json;
 BEGIN
-    -- Get the user's company ID
-    SELECT company_id INTO v_company_id 
-    FROM users 
-    WHERE id = auth.uid();
+  SELECT company_id INTO v_company_id FROM users WHERE id = auth.uid();
+  IF v_company_id IS NULL THEN
+    RETURN json_build_object('error', 'User not found or not associated with a company');
+  END IF;
 
-    IF v_company_id IS NULL THEN
-        RETURN json_build_object('error', 'User not found or not associated with a company');
-    END IF;
+  SELECT json_build_object(
+    'id', cs.id,
+    'company_id', cs.company_id,
+    'default_location', cs.default_location,
+    'default_owner_id', cs.default_owner_id,
+    'default_owner_name', u.name,
+    'use_default_location', cs.use_default_location,
+    'use_default_owner', cs.use_default_owner,
+    'auto_export_enabled', cs.auto_export_enabled,
+    'auto_export_frequency', cs.auto_export_frequency,
+    'auto_export_recipients', cs.auto_export_recipients,
+    'auto_export_last_sent_at', cs.auto_export_last_sent_at,
+    'company_export_enabled', cs.company_export_enabled,
+    'company_export_frequency', cs.company_export_frequency,
+    'company_export_recipients', cs.company_export_recipients,
+    'company_export_last_sent_at', cs.company_export_last_sent_at,
+    'created_at', cs.created_at,
+    'updated_at', cs.updated_at
+  ) INTO v_result
+  FROM company_settings cs
+  LEFT JOIN users u ON cs.default_owner_id = u.id
+  WHERE cs.company_id = v_company_id;
 
-    -- Get the settings
-    SELECT json_build_object(
-        'id', cs.id,
-        'company_id', cs.company_id,
-        'default_location', cs.default_location,
-        'default_owner_id', cs.default_owner_id,
-        'default_owner_name', u.name,
-        'use_default_location', cs.use_default_location,
-        'use_default_owner', cs.use_default_owner,
-        'created_at', cs.created_at,
-        'updated_at', cs.updated_at
-    ) INTO v_result
-    FROM company_settings cs
-    LEFT JOIN users u ON cs.default_owner_id = u.id
-    WHERE cs.company_id = v_company_id;
-
-    -- Return null if no settings found (not an error)
-    RETURN COALESCE(v_result, json_build_object('settings', null));
+  RETURN COALESCE(v_result, json_build_object('settings', null));
 END;
 $$;
 
@@ -731,6 +1000,29 @@ $$;
 ALTER FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if not public.is_superadmin(auth.uid()) then
+    raise exception 'Only a superadmin can reclaim trackers';
+  end if;
+
+  update public.tracker_tool_assignments
+     set detached_at = now(), detached_by = auth.uid()
+   where serial = p_serial and detached_at is null;
+
+  update public.tracker_company_assignments
+     set released_at = now(), released_by = auth.uid()
+   where serial = p_serial and released_at is null;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."recompute_company_active_on_delete"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -781,22 +1073,105 @@ $$;
 ALTER FUNCTION "public"."recompute_company_active_on_delete"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."refresh_tool_current_location"("p_tool_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_serial text;
+  v_fix    record;
+begin
+  select serial into v_serial
+  from public.tracker_tool_assignments
+  where tool_id = p_tool_id and detached_at is null
+  limit 1;
+
+  if v_serial is null then
+    return;
+  end if;
+
+  select * into v_fix from public.tracker_latest_fix(v_serial);
+
+  if v_fix.latitude is null then
+    return;
+  end if;
+
+  update public.tools t
+     set last_latitude = v_fix.latitude,
+         last_longitude = v_fix.longitude,
+         last_location_recorded_at = v_fix.recorded_at,
+         last_location_updated_at = now(),
+         last_location_serial = v_serial,
+         last_battery = coalesce(v_fix.battery, t.last_battery)
+   where t.id = p_tool_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."refresh_tool_current_location"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."remove_user_from_company"("p_user_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+  v_role       text;
+  v_name       text;
+  v_admins     int;
+BEGIN
+  SELECT company_id, role, name INTO v_company_id, v_role, v_name
+    FROM users WHERE id = p_user_id;
+
+  IF v_company_id IS NULL THEN
+    RETURN;  -- already detached / no-op
+  END IF;
+
+  -- Never strand a company without an admin.
+  IF v_role = 'admin' THEN
+    SELECT COUNT(*) INTO v_admins FROM users
+     WHERE company_id = v_company_id AND role = 'admin';
+    IF v_admins <= 1 THEN
+      RAISE EXCEPTION 'Cannot remove the last admin from the company';
+    END IF;
+  END IF;
+
+  -- Preserve their name on this company's transaction history.
+  UPDATE tool_transactions
+     SET deleted_from_user_name = v_name, from_user_id = NULL
+   WHERE from_user_id = p_user_id;
+  UPDATE tool_transactions
+     SET deleted_to_user_name = v_name, to_user_id = NULL
+   WHERE to_user_id = p_user_id;
+
+  -- Keep the tools under their name ("Name (removed)") instead of unassigning.
+  UPDATE tools
+     SET current_owner = NULL, deleted_owner_name = v_name
+   WHERE current_owner = p_user_id;
+
+  -- Clear them as the company default owner, if set.
+  UPDATE company_settings SET default_owner_id = NULL WHERE default_owner_id = p_user_id;
+
+  -- Detach the account. Account + personal tools survive.
+  UPDATE users SET company_id = NULL, role = 'tech' WHERE id = p_user_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."remove_user_from_company"("p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text")
     LANGUAGE "sql"
     AS $$
   with latest_tx as (
     select distinct on (tool_id) tool_id, location
-    from tool_transactions
-    where company_id = p_company_id
+    from tool_transactions where company_id = p_company_id
     order by tool_id, timestamp desc
   )
-  select
-    t.id,
-    t.number,
-    t.name,
-    t.description,
-    t.photo_url,
-    u.name as owner_name,
+  select t.id, t.number, t.name, t.description, t.photo_url,
+    coalesce(u.name, case when t.deleted_owner_name is not null then t.deleted_owner_name || ' (removed)' end) as owner_name,
     coalesce(l.location, '') as location
   from tools t
   left join users u on u.id = t.current_owner
@@ -807,7 +1182,7 @@ CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_ter
       or lower(t.name) like '%' || lower(p_term) || '%'
       or lower(coalesce(t.description, '')) like '%' || lower(p_term) || '%'
       or lower(coalesce(l.location, '')) like '%' || lower(p_term) || '%'
-      or lower(coalesce(u.name, '')) like '%' || lower(p_term) || '%'
+      or lower(coalesce(u.name, t.deleted_owner_name, '')) like '%' || lower(p_term) || '%'
     )
   order by t.number
   limit least(p_limit, 100);
@@ -822,25 +1197,17 @@ CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_ter
     AS $$
   with latest_tx as (
     select distinct on (tool_id) tool_id, location
-    from tool_transactions
-    where company_id = p_company_id
+    from tool_transactions where company_id = p_company_id
     order by tool_id, timestamp desc
   ),
   primary_img as (
     select ti.tool_id, ti.thumb_url, ti.image_url
-    from tool_images ti
-    where ti.is_primary = true
+    from tool_images ti where ti.is_primary = true
   )
-  select
-    t.id,
-    t.number,
-    t.name,
-    t.description,
-    t.photo_url,
-    u.name as owner_name,
+  select t.id, t.number, t.name, t.description, t.photo_url,
+    coalesce(u.name, case when t.deleted_owner_name is not null then t.deleted_owner_name || ' (removed)' end) as owner_name,
     coalesce(l.location, '') as location,
-    pi.thumb_url as primary_thumb_url,
-    pi.image_url as primary_image_url
+    pi.thumb_url as primary_thumb_url, pi.image_url as primary_image_url
   from tools t
   left join users u on u.id = t.current_owner
   left join latest_tx l on l.tool_id = t.id
@@ -851,7 +1218,7 @@ CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_ter
       or lower(t.name) like '%' || lower(p_term) || '%'
       or lower(coalesce(t.description, '')) like '%' || lower(p_term) || '%'
       or lower(coalesce(l.location, '')) like '%' || lower(p_term) || '%'
-      or lower(coalesce(u.name, '')) like '%' || lower(p_term) || '%'
+      or lower(coalesce(u.name, t.deleted_owner_name, '')) like '%' || lower(p_term) || '%'
     )
   order by t.number
   limit least(p_limit, 100)
@@ -885,33 +1252,228 @@ CREATE OR REPLACE FUNCTION "public"."store_deleted_user_name"() RETURNS "trigger
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
-    -- First update transactions where this user was the from_user
-    UPDATE tool_transactions
-    SET deleted_from_user_name = OLD.name
-    WHERE from_user_id = OLD.id;
-    
-    -- Then update transactions where this user was the to_user
-    UPDATE tool_transactions
-    SET deleted_to_user_name = OLD.name
-    WHERE to_user_id = OLD.id;
-    
-    -- Finally, update any tools where this user is the current owner
-    UPDATE tools
-    SET current_owner = NULL
-    WHERE current_owner = OLD.id;
-    
+    UPDATE tool_transactions SET deleted_from_user_name = OLD.name WHERE from_user_id = OLD.id;
+    UPDATE tool_transactions SET deleted_to_user_name   = OLD.name WHERE to_user_id   = OLD.id;
+    UPDATE tools SET current_owner = NULL, deleted_owner_name = OLD.name WHERE current_owner = OLD.id;
     RETURN OLD;
 EXCEPTION
     WHEN OTHERS THEN
-        -- Log the error (you can check the logs in Supabase)
         RAISE NOTICE 'Error in store_deleted_user_name: %', SQLERRM;
-        -- Still allow the deletion to proceed
         RETURN OLD;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."store_deleted_user_name"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") RETURNS TABLE("serial" "text", "label" "text", "assigned_at" timestamp with time zone, "released_at" timestamp with time zone, "is_active" boolean)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tca.serial,
+         tr.label,
+         tca.assigned_at,
+         tca.released_at,
+         (tca.released_at is null) as is_active
+  from public.tracker_company_assignments tca
+  left join public.trackers tr on tr.serial = tca.serial
+  where public.is_superadmin(auth.uid())
+    and tca.company_id = p_company_id
+  order by tca.assigned_at desc;
+$$;
+
+
+ALTER FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."superadmin_company_trackers"() RETURNS TABLE("serial" "text", "label" "text", "company_id" "uuid", "company_name" "text", "assigned_at" timestamp with time zone, "last_seen_at" timestamp with time zone, "tool_id" "uuid", "tool_name" "text")
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tca.serial,
+         tr.label,
+         tca.company_id,
+         c.name,
+         tca.assigned_at,
+         tr.last_seen_at,
+         tta.tool_id,
+         t.name
+  from public.tracker_company_assignments tca
+  join public.companies c on c.id = tca.company_id
+  left join public.trackers tr on tr.serial = tca.serial
+  left join public.tracker_tool_assignments tta
+    on tta.serial = tca.serial and tta.detached_at is null
+  left join public.tools t on t.id = tta.tool_id
+  where public.is_superadmin(auth.uid())
+    and tca.released_at is null
+  order by c.name, tca.serial;
+$$;
+
+
+ALTER FUNCTION "public"."superadmin_company_trackers"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."superadmin_global_tracker_pool"() RETURNS TABLE("serial" "text", "label" "text", "last_seen_at" timestamp with time zone, "first_seen_at" timestamp with time zone)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tr.serial, tr.label, tr.last_seen_at, tr.first_seen_at
+  from public.trackers tr
+  where public.is_superadmin(auth.uid())
+    and tr.is_synthetic = false
+    and not exists (
+      select 1 from public.tracker_company_assignments tca
+      where tca.serial = tr.serial and tca.released_at is null
+    )
+  order by tr.last_seen_at desc nulls last, tr.serial;
+$$;
+
+
+ALTER FUNCTION "public"."superadmin_global_tracker_pool"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE("serial" "text", "latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tl.serial, tl.latitude, tl.longitude,
+         coalesce(tl.recorded_at, tl.received_at) as recorded_at
+  from public.tracker_tool_assignments tta
+  join public.tracker_locations tl
+    on tl.serial = tta.serial
+   and tl.latitude is not null
+   and tl.longitude is not null
+   and coalesce(tl.recorded_at, tl.received_at) >= tta.attached_at
+   and (tta.detached_at is null
+        or coalesce(tl.recorded_at, tl.received_at) <= tta.detached_at)
+  where tta.tool_id = p_tool_id
+    and (
+      tta.company_id = public.get_user_company_id(auth.uid())
+      or public.is_superadmin(auth.uid())
+    )
+    and (p_since is null or coalesce(tl.recorded_at, tl.received_at) >= p_since)
+  order by recorded_at asc;
+$$;
+
+
+ALTER FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") RETURNS TABLE("serial" "text", "latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone, "battery" double precision)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tl.serial, tl.latitude, tl.longitude, tl.recorded_at, tl.battery
+  from public.tracker_tool_assignments tta
+  join public.tracker_locations tl
+    on tl.serial = tta.serial
+   and tl.latitude is not null
+   and tl.longitude is not null
+   and coalesce(tl.recorded_at, tl.received_at) >= tta.attached_at
+   and (tta.detached_at is null
+        or coalesce(tl.recorded_at, tl.received_at) <= tta.detached_at)
+  where tta.tool_id = p_tool_id
+    and tta.detached_at is null
+  order by coalesce(tl.recorded_at, tl.received_at) desc
+  limit 1;
+$$;
+
+
+ALTER FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") RETURNS TABLE("serial" "text", "mount_type" "text", "attached_at" timestamp with time zone, "detached_at" timestamp with time zone, "is_active" boolean)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tta.serial,
+         tta.mount_type,
+         tta.attached_at,
+         tta.detached_at,
+         (tta.detached_at is null) as is_active
+  from public.tracker_tool_assignments tta
+  where tta.tool_id = p_tool_id
+    and (
+      tta.company_id = public.get_user_company_id(auth.uid())
+      or public.is_superadmin(auth.uid())
+    )
+  order by tta.attached_at desc;
+$$;
+
+
+ALTER FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tracker_latest_fix"("p_serial" "text") RETURNS TABLE("latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone, "battery" double precision)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select tl.latitude, tl.longitude,
+         coalesce(tl.recorded_at, tl.received_at) as recorded_at,
+         tl.battery
+  from public.tracker_locations tl
+  where tl.serial = p_serial
+    and tl.latitude is not null
+    and tl.longitude is not null
+  order by coalesce(tl.recorded_at, tl.received_at) desc
+  limit 1;
+$$;
+
+
+ALTER FUNCTION "public"."tracker_latest_fix"("p_serial" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tracker_locations_sync_current"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_tool_id    uuid;
+  v_fix_at     timestamptz;
+begin
+  if new.serial is null then
+    return new;
+  end if;
+
+  insert into public.trackers (serial, first_seen_at, last_seen_at)
+  values (new.serial, new.received_at, new.received_at)
+  on conflict (serial) do update
+    set last_seen_at = greatest(public.trackers.last_seen_at, excluded.last_seen_at);
+
+  if new.latitude is null or new.longitude is null then
+    return new;
+  end if;
+
+  v_fix_at := coalesce(new.recorded_at, new.received_at);
+
+  select tta.tool_id into v_tool_id
+  from public.tracker_tool_assignments tta
+  where tta.serial = new.serial
+    and tta.detached_at is null
+  limit 1;
+
+  if v_tool_id is null then
+    return new;
+  end if;
+
+  update public.tools t
+     set last_latitude = new.latitude,
+         last_longitude = new.longitude,
+         last_location_recorded_at = v_fix_at,
+         last_location_updated_at = now(),
+         last_location_serial = new.serial,
+         last_battery = coalesce(new.battery, t.last_battery)
+   where t.id = v_tool_id
+     and (t.last_location_recorded_at is null
+          or v_fix_at >= t.last_location_recorded_at);
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."tracker_locations_sync_current"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_app_version_control_updated_at"() RETURNS "trigger"
@@ -925,6 +1487,68 @@ $$;
 
 
 ALTER FUNCTION "public"."update_app_version_control_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."upsert_company_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  v_settings_id uuid;
+  v_result json;
+BEGIN
+  IF NOT is_admin(auth.uid()) OR get_user_company_id(auth.uid()) != p_company_id THEN
+    RAISE EXCEPTION 'Access denied. Only company admins can update settings.';
+  END IF;
+
+  IF p_frequency NOT IN ('weekly','monthly') THEN
+    RAISE EXCEPTION 'Frequency must be weekly or monthly';
+  END IF;
+
+  -- If no settings row exists yet, create one WITHOUT turning on the
+  -- location/owner defaults (so this can't accidentally affect new tools).
+  INSERT INTO company_settings (
+    company_id, default_location, use_default_location, use_default_owner,
+    auto_export_enabled, auto_export_recipients, auto_export_frequency
+  )
+  VALUES (
+    p_company_id, '', false, false,
+    p_enabled, COALESCE(p_recipients, '{}'::text[]), p_frequency
+  )
+  ON CONFLICT (company_id) DO UPDATE SET
+    auto_export_enabled    = EXCLUDED.auto_export_enabled,
+    auto_export_recipients = EXCLUDED.auto_export_recipients,
+    auto_export_frequency  = EXCLUDED.auto_export_frequency,
+    updated_at = now()
+  RETURNING id INTO v_settings_id;
+
+  SELECT json_build_object(
+    'id', cs.id,
+    'company_id', cs.company_id,
+    'default_location', cs.default_location,
+    'default_owner_id', cs.default_owner_id,
+    'default_owner_name', u.name,
+    'use_default_location', cs.use_default_location,
+    'use_default_owner', cs.use_default_owner,
+    'auto_export_enabled', cs.auto_export_enabled,
+    'auto_export_frequency', cs.auto_export_frequency,
+    'auto_export_recipients', cs.auto_export_recipients,
+    'auto_export_last_sent_at', cs.auto_export_last_sent_at,
+    'success', true,
+    'message', 'Export settings updated successfully'
+  ) INTO v_result
+  FROM company_settings cs
+  LEFT JOIN users u ON cs.default_owner_id = u.id
+  WHERE cs.id = v_settings_id;
+
+  RETURN v_result;
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_company_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid") RETURNS "json"
@@ -1067,6 +1691,70 @@ $$;
 ALTER FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", "p_default_location" "text", "p_default_owner_id" "uuid", "p_use_default_location" boolean, "p_use_default_owner" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."upsert_company_tools_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  v_settings_id uuid;
+  v_result json;
+BEGIN
+  IF NOT is_admin(auth.uid()) OR get_user_company_id(auth.uid()) != p_company_id THEN
+    RAISE EXCEPTION 'Access denied. Only company admins can update settings.';
+  END IF;
+
+  IF p_frequency NOT IN ('weekly','monthly') THEN
+    RAISE EXCEPTION 'Frequency must be weekly or monthly';
+  END IF;
+
+  INSERT INTO company_settings (
+    company_id, default_location, use_default_location, use_default_owner,
+    company_export_enabled, company_export_recipients, company_export_frequency
+  )
+  VALUES (
+    p_company_id, '', false, false,
+    p_enabled, COALESCE(p_recipients, '{}'::text[]), p_frequency
+  )
+  ON CONFLICT (company_id) DO UPDATE SET
+    company_export_enabled    = EXCLUDED.company_export_enabled,
+    company_export_recipients = EXCLUDED.company_export_recipients,
+    company_export_frequency  = EXCLUDED.company_export_frequency,
+    updated_at = now()
+  RETURNING id INTO v_settings_id;
+
+  SELECT json_build_object(
+    'id', cs.id,
+    'company_id', cs.company_id,
+    'default_location', cs.default_location,
+    'default_owner_id', cs.default_owner_id,
+    'default_owner_name', u.name,
+    'use_default_location', cs.use_default_location,
+    'use_default_owner', cs.use_default_owner,
+    'auto_export_enabled', cs.auto_export_enabled,
+    'auto_export_frequency', cs.auto_export_frequency,
+    'auto_export_recipients', cs.auto_export_recipients,
+    'auto_export_last_sent_at', cs.auto_export_last_sent_at,
+    'company_export_enabled', cs.company_export_enabled,
+    'company_export_frequency', cs.company_export_frequency,
+    'company_export_recipients', cs.company_export_recipients,
+    'company_export_last_sent_at', cs.company_export_last_sent_at,
+    'success', true,
+    'message', 'Company export settings updated successfully'
+  ) INTO v_result
+  FROM company_settings cs
+  LEFT JOIN users u ON cs.default_owner_id = u.id
+  WHERE cs.id = v_settings_id;
+
+  RETURN v_result;
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_company_tools_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") RETURNS "json"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -1175,6 +1863,9 @@ CREATE TABLE IF NOT EXISTS "public"."companies" (
     "billing_cycle" "text",
     "plan_id" "text",
     "trial_expires_at" timestamp with time zone,
+    "personal_tools_enabled" boolean DEFAULT true NOT NULL,
+    "trackers_enabled" boolean DEFAULT true NOT NULL,
+    "tool_costing_enabled" boolean DEFAULT true NOT NULL,
     CONSTRAINT "companies_billing_cycle_chk" CHECK (("billing_cycle" = ANY (ARRAY['monthly'::"text", 'annual'::"text"]))),
     CONSTRAINT "companies_enforcement_mode_chk" CHECK (("enforcement_mode" = ANY (ARRAY['off'::"text", 'observe'::"text", 'enforce'::"text"])))
 );
@@ -1217,6 +1908,23 @@ CREATE TABLE IF NOT EXISTS "public"."company_access_codes" (
 ALTER TABLE "public"."company_access_codes" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."company_events" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "event_type" "text" NOT NULL,
+    "actor_id" "uuid",
+    "actor_name" "text",
+    "target_type" "text",
+    "target_id" "uuid",
+    "target_label" "text",
+    "details" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."company_events" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."company_settings" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "company_id" "uuid" NOT NULL,
@@ -1226,7 +1934,17 @@ CREATE TABLE IF NOT EXISTS "public"."company_settings" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "use_default_location" boolean DEFAULT true,
     "use_default_owner" boolean DEFAULT true,
-    CONSTRAINT "ck_settings_company_active" CHECK ("public"."is_company_active"("company_id"))
+    "auto_export_enabled" boolean DEFAULT false NOT NULL,
+    "auto_export_frequency" "text" DEFAULT 'weekly'::"text" NOT NULL,
+    "auto_export_recipients" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "auto_export_last_sent_at" timestamp with time zone,
+    "company_export_enabled" boolean DEFAULT false NOT NULL,
+    "company_export_frequency" "text" DEFAULT 'weekly'::"text" NOT NULL,
+    "company_export_recipients" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "company_export_last_sent_at" timestamp with time zone,
+    CONSTRAINT "ck_settings_company_active" CHECK ("public"."is_company_active"("company_id")),
+    CONSTRAINT "company_settings_auto_export_frequency_check" CHECK (("auto_export_frequency" = ANY (ARRAY['weekly'::"text", 'monthly'::"text"]))),
+    CONSTRAINT "company_settings_company_export_frequency_check" CHECK (("company_export_frequency" = ANY (ARRAY['weekly'::"text", 'monthly'::"text"])))
 );
 
 
@@ -1261,6 +1979,89 @@ CREATE TABLE IF NOT EXISTS "public"."location_aliases" (
 
 
 ALTER TABLE "public"."location_aliases" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."personal_inventory_exports" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "owner_id" "uuid" NOT NULL,
+    "exported_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "recipient" "text"
+);
+
+
+ALTER TABLE "public"."personal_inventory_exports" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."personal_tool_images" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "personal_tool_id" "uuid" NOT NULL,
+    "owner_id" "uuid" NOT NULL,
+    "image_url" "text" NOT NULL,
+    "thumb_url" "text",
+    "is_primary" boolean DEFAULT false NOT NULL,
+    "uploaded_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."personal_tool_images" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."personal_tool_transactions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "personal_tool_id" "uuid" NOT NULL,
+    "owner_id" "uuid" NOT NULL,
+    "action" "text" NOT NULL,
+    "to_name" "text",
+    "to_user_id" "uuid",
+    "location" "text",
+    "notes" "text",
+    "timestamp" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "to_email" "text",
+    CONSTRAINT "personal_tool_tx_action_check" CHECK (("action" = ANY (ARRAY['created'::"text", 'lent'::"text", 'returned'::"text"])))
+);
+
+
+ALTER TABLE "public"."personal_tool_transactions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."personal_tools" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "owner_id" "uuid" NOT NULL,
+    "number" "text",
+    "number_numeric" integer GENERATED ALWAYS AS (COALESCE((("regexp_match"("number", '^\d+'::"text"))[1])::integer, 999999)) STORED,
+    "name" "text" NOT NULL,
+    "photo_url" "text",
+    "holder_type" "text" DEFAULT 'self'::"text" NOT NULL,
+    "lent_to_name" "text",
+    "lent_to_user_id" "uuid",
+    "lent_location" "text",
+    "lent_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "is_deleted" boolean DEFAULT false NOT NULL,
+    "lent_to_email" "text",
+    CONSTRAINT "personal_tools_holder_type_check" CHECK (("holder_type" = ANY (ARRAY['self'::"text", 'lent'::"text"])))
+);
+
+
+ALTER TABLE "public"."personal_tools" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."scheduled_export_runs" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "export_type" "text" NOT NULL,
+    "run_at" timestamp with time zone NOT NULL,
+    "status" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "result" "text",
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "processed_at" timestamp with time zone,
+    CONSTRAINT "scheduled_export_runs_export_type_check" CHECK (("export_type" = ANY (ARRAY['personal'::"text", 'company'::"text"])))
+);
+
+
+ALTER TABLE "public"."scheduled_export_runs" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."tool_checklists" (
@@ -1333,11 +2134,16 @@ CREATE TABLE IF NOT EXISTS "public"."tool_transactions" (
     "deleted_tool_name" "text",
     "company_id" "uuid" NOT NULL,
     "batch_id" "uuid",
+    "attribution" "text",
     CONSTRAINT "ck_tx_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
 
 ALTER TABLE "public"."tool_transactions" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."tool_transactions"."attribution" IS 'System-generated, non-editable record of how a transaction happened (tech self-claim with responsibility acknowledgment, admin override, or tech-to-tech transfer). Kept separate from the user-editable notes field.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."tools" (
@@ -1353,11 +2159,96 @@ CREATE TABLE IF NOT EXISTS "public"."tools" (
     "company_id" "uuid" NOT NULL,
     "number_numeric" integer GENERATED ALWAYS AS (COALESCE((("regexp_match"("number", '^\d+'::"text"))[1])::integer, 999999)) STORED,
     "estimated_cost" integer,
+    "tracker_required" boolean DEFAULT false NOT NULL,
+    "last_latitude" double precision,
+    "last_longitude" double precision,
+    "last_location_recorded_at" timestamp with time zone,
+    "last_location_updated_at" timestamp with time zone,
+    "last_location_serial" "text",
+    "last_battery" double precision,
     CONSTRAINT "ck_tools_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
 
 ALTER TABLE "public"."tools" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."tracker_company_assignments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "serial" "text" NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "assigned_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "assigned_by" "uuid",
+    "released_at" timestamp with time zone,
+    "released_by" "uuid",
+    "notes" "text"
+);
+
+
+ALTER TABLE "public"."tracker_company_assignments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."tracker_locations" (
+    "id" bigint NOT NULL,
+    "serial" "text",
+    "latitude" double precision,
+    "longitude" double precision,
+    "altitude" double precision,
+    "speed" double precision,
+    "heading" double precision,
+    "accuracy" double precision,
+    "battery" double precision,
+    "fix_type" "text",
+    "recorded_at" timestamp with time zone,
+    "received_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "raw" "jsonb" NOT NULL
+);
+
+
+ALTER TABLE "public"."tracker_locations" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."tracker_locations" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."tracker_locations_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."tracker_tool_assignments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "serial" "text" NOT NULL,
+    "tool_id" "uuid" NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "mount_type" "text" DEFAULT 'temporary'::"text" NOT NULL,
+    "attached_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "attached_by" "uuid",
+    "detached_at" timestamp with time zone,
+    "detached_by" "uuid",
+    "notes" "text",
+    CONSTRAINT "tracker_tool_mount_type_chk" CHECK (("mount_type" = ANY (ARRAY['temporary'::"text", 'permanent'::"text"])))
+);
+
+
+ALTER TABLE "public"."tracker_tool_assignments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trackers" (
+    "serial" "text" NOT NULL,
+    "label" "text",
+    "is_synthetic" boolean DEFAULT false NOT NULL,
+    "notes" "text",
+    "first_seen_at" timestamp with time zone,
+    "last_seen_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."trackers" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."transaction_batches" (
@@ -1431,6 +2322,11 @@ ALTER TABLE ONLY "public"."company_access_codes"
 
 
 
+ALTER TABLE ONLY "public"."company_events"
+    ADD CONSTRAINT "company_events_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."company_settings"
     ADD CONSTRAINT "company_settings_company_id_key" UNIQUE ("company_id");
 
@@ -1448,6 +2344,31 @@ ALTER TABLE ONLY "public"."group_activity_log"
 
 ALTER TABLE ONLY "public"."location_aliases"
     ADD CONSTRAINT "location_aliases_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."personal_inventory_exports"
+    ADD CONSTRAINT "personal_inventory_exports_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_images"
+    ADD CONSTRAINT "personal_tool_images_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_transactions"
+    ADD CONSTRAINT "personal_tool_transactions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."personal_tools"
+    ADD CONSTRAINT "personal_tools_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."scheduled_export_runs"
+    ADD CONSTRAINT "scheduled_export_runs_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1491,6 +2412,26 @@ ALTER TABLE ONLY "public"."tools"
 
 
 
+ALTER TABLE ONLY "public"."tracker_company_assignments"
+    ADD CONSTRAINT "tracker_company_assignments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."tracker_locations"
+    ADD CONSTRAINT "tracker_locations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."tracker_tool_assignments"
+    ADD CONSTRAINT "tracker_tool_assignments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trackers"
+    ADD CONSTRAINT "trackers_pkey" PRIMARY KEY ("serial");
+
+
+
 ALTER TABLE ONLY "public"."transaction_batches"
     ADD CONSTRAINT "transaction_batches_pkey" PRIMARY KEY ("id");
 
@@ -1503,6 +2444,10 @@ ALTER TABLE ONLY "public"."users"
 
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "company_events_company_created_idx" ON "public"."company_events" USING "btree" ("company_id", "created_at" DESC);
 
 
 
@@ -1523,6 +2468,42 @@ CREATE INDEX "idx_location_aliases_company_id" ON "public"."location_aliases" US
 
 
 CREATE UNIQUE INDEX "idx_location_aliases_unique_alias" ON "public"."location_aliases" USING "btree" ("company_id", "lower"("alias"));
+
+
+
+CREATE INDEX "idx_personal_exports_owner" ON "public"."personal_inventory_exports" USING "btree" ("owner_id", "exported_at" DESC);
+
+
+
+CREATE INDEX "idx_personal_tool_images_owner" ON "public"."personal_tool_images" USING "btree" ("owner_id");
+
+
+
+CREATE INDEX "idx_personal_tool_images_tool" ON "public"."personal_tool_images" USING "btree" ("personal_tool_id");
+
+
+
+CREATE INDEX "idx_personal_tool_tx_owner" ON "public"."personal_tool_transactions" USING "btree" ("owner_id");
+
+
+
+CREATE INDEX "idx_personal_tool_tx_tool" ON "public"."personal_tool_transactions" USING "btree" ("personal_tool_id", "timestamp" DESC);
+
+
+
+CREATE INDEX "idx_personal_tools_lent_trgm" ON "public"."personal_tools" USING "gin" ("lower"(COALESCE("lent_to_name", ''::"text")) "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_personal_tools_name_trgm" ON "public"."personal_tools" USING "gin" ("lower"("name") "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_personal_tools_owner" ON "public"."personal_tools" USING "btree" ("owner_id");
+
+
+
+CREATE INDEX "idx_personal_tools_owner_num" ON "public"."personal_tools" USING "btree" ("owner_id", "number_numeric");
 
 
 
@@ -1602,7 +2583,51 @@ CREATE INDEX "idx_users_name_trgm" ON "public"."users" USING "gin" ("lower"("nam
 
 
 
+CREATE INDEX "scheduled_export_runs_due_idx" ON "public"."scheduled_export_runs" USING "btree" ("status", "run_at");
+
+
+
 CREATE UNIQUE INDEX "tool_images_one_primary_per_tool" ON "public"."tool_images" USING "btree" ("tool_id") WHERE ("is_primary" = true);
+
+
+
+CREATE INDEX "tracker_company_company_idx" ON "public"."tracker_company_assignments" USING "btree" ("company_id");
+
+
+
+CREATE UNIQUE INDEX "tracker_company_one_active_idx" ON "public"."tracker_company_assignments" USING "btree" ("serial") WHERE ("released_at" IS NULL);
+
+
+
+CREATE INDEX "tracker_company_serial_idx" ON "public"."tracker_company_assignments" USING "btree" ("serial");
+
+
+
+CREATE INDEX "tracker_locations_received_at_idx" ON "public"."tracker_locations" USING "btree" ("received_at" DESC);
+
+
+
+CREATE INDEX "tracker_locations_serial_idx" ON "public"."tracker_locations" USING "btree" ("serial");
+
+
+
+CREATE INDEX "tracker_tool_company_idx" ON "public"."tracker_tool_assignments" USING "btree" ("company_id");
+
+
+
+CREATE UNIQUE INDEX "tracker_tool_one_active_per_serial_idx" ON "public"."tracker_tool_assignments" USING "btree" ("serial") WHERE ("detached_at" IS NULL);
+
+
+
+CREATE UNIQUE INDEX "tracker_tool_one_active_per_tool_idx" ON "public"."tracker_tool_assignments" USING "btree" ("tool_id") WHERE ("detached_at" IS NULL);
+
+
+
+CREATE INDEX "tracker_tool_serial_idx" ON "public"."tracker_tool_assignments" USING "btree" ("serial");
+
+
+
+CREATE UNIQUE INDEX "uq_personal_tool_primary_image" ON "public"."personal_tool_images" USING "btree" ("personal_tool_id") WHERE "is_primary";
 
 
 
@@ -1619,6 +2644,10 @@ CREATE OR REPLACE TRIGGER "on_user_updated" AFTER UPDATE ON "public"."users" FOR
 
 
 CREATE OR REPLACE TRIGGER "trg_alias_active" BEFORE INSERT OR UPDATE ON "public"."location_aliases" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_assign_personal_tool_number" BEFORE INSERT ON "public"."personal_tools" FOR EACH ROW EXECUTE FUNCTION "public"."assign_personal_tool_number"();
 
 
 
@@ -1682,6 +2711,10 @@ CREATE OR REPLACE TRIGGER "trg_tools_active" BEFORE INSERT OR UPDATE ON "public"
 
 
 
+CREATE OR REPLACE TRIGGER "trg_tracker_locations_sync_current" AFTER INSERT ON "public"."tracker_locations" FOR EACH ROW EXECUTE FUNCTION "public"."tracker_locations_sync_current"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_tx_active" BEFORE INSERT OR UPDATE ON "public"."tool_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
@@ -1715,6 +2748,16 @@ ALTER TABLE ONLY "public"."company_access_codes"
 
 
 
+ALTER TABLE ONLY "public"."company_events"
+    ADD CONSTRAINT "company_events_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."company_events"
+    ADD CONSTRAINT "company_events_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."company_settings"
     ADD CONSTRAINT "company_settings_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
 
@@ -1742,6 +2785,56 @@ ALTER TABLE ONLY "public"."location_aliases"
 
 ALTER TABLE ONLY "public"."location_aliases"
     ADD CONSTRAINT "location_aliases_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."personal_inventory_exports"
+    ADD CONSTRAINT "personal_inventory_exports_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_images"
+    ADD CONSTRAINT "personal_tool_images_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_images"
+    ADD CONSTRAINT "personal_tool_images_personal_tool_id_fkey" FOREIGN KEY ("personal_tool_id") REFERENCES "public"."personal_tools"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_transactions"
+    ADD CONSTRAINT "personal_tool_transactions_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_transactions"
+    ADD CONSTRAINT "personal_tool_transactions_personal_tool_id_fkey" FOREIGN KEY ("personal_tool_id") REFERENCES "public"."personal_tools"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."personal_tool_transactions"
+    ADD CONSTRAINT "personal_tool_transactions_to_user_id_fkey" FOREIGN KEY ("to_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."personal_tools"
+    ADD CONSTRAINT "personal_tools_lent_to_user_id_fkey" FOREIGN KEY ("lent_to_user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."personal_tools"
+    ADD CONSTRAINT "personal_tools_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."scheduled_export_runs"
+    ADD CONSTRAINT "scheduled_export_runs_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."scheduled_export_runs"
+    ADD CONSTRAINT "scheduled_export_runs_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1812,6 +2905,31 @@ ALTER TABLE ONLY "public"."tools"
 
 ALTER TABLE ONLY "public"."tools"
     ADD CONSTRAINT "tools_current_owner_fkey" FOREIGN KEY ("current_owner") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."tracker_company_assignments"
+    ADD CONSTRAINT "tracker_company_assignments_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tracker_company_assignments"
+    ADD CONSTRAINT "tracker_company_assignments_serial_fkey" FOREIGN KEY ("serial") REFERENCES "public"."trackers"("serial") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tracker_tool_assignments"
+    ADD CONSTRAINT "tracker_tool_assignments_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tracker_tool_assignments"
+    ADD CONSTRAINT "tracker_tool_assignments_serial_fkey" FOREIGN KEY ("serial") REFERENCES "public"."trackers"("serial") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tracker_tool_assignments"
+    ADD CONSTRAINT "tracker_tool_assignments_tool_id_fkey" FOREIGN KEY ("tool_id") REFERENCES "public"."tools"("id") ON DELETE CASCADE;
 
 
 
@@ -1929,11 +3047,69 @@ CREATE POLICY "Admins can view group activity in their company" ON "public"."gro
 
 
 
+CREATE POLICY "Admins view company personal images" ON "public"."personal_tool_images" FOR SELECT TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND (EXISTS ( SELECT 1
+   FROM "public"."users" "u"
+  WHERE (("u"."id" = "personal_tool_images"."owner_id") AND ("u"."company_id" = "public"."get_user_company_id"("auth"."uid"())))))));
+
+
+
+CREATE POLICY "Admins view company personal tools" ON "public"."personal_tools" FOR SELECT TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND (EXISTS ( SELECT 1
+   FROM "public"."users" "u"
+  WHERE (("u"."id" = "personal_tools"."owner_id") AND ("u"."company_id" = "public"."get_user_company_id"("auth"."uid"())))))));
+
+
+
+CREATE POLICY "Admins view company personal tx" ON "public"."personal_tool_transactions" FOR SELECT TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND (EXISTS ( SELECT 1
+   FROM "public"."users" "u"
+  WHERE (("u"."id" = "personal_tool_transactions"."owner_id") AND ("u"."company_id" = "public"."get_user_company_id"("auth"."uid"())))))));
+
+
+
 CREATE POLICY "Allow authenticated users to update version control" ON "public"."app_version_control" TO "authenticated" USING (true) WITH CHECK (true);
 
 
 
 CREATE POLICY "Allow public read access to version control" ON "public"."app_version_control" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Company users manage their tool assignments" ON "public"."tracker_tool_assignments" TO "authenticated" USING ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id"))) WITH CHECK ((("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id")));
+
+
+
+CREATE POLICY "Company users view their tool assignments" ON "public"."tracker_tool_assignments" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
+CREATE POLICY "Company users view their tracker company assignments" ON "public"."tracker_company_assignments" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
+CREATE POLICY "Owners can delete their personal tool images" ON "public"."personal_tool_images" FOR DELETE TO "authenticated" USING (("owner_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Owners can delete their personal tool transactions" ON "public"."personal_tool_transactions" FOR DELETE TO "authenticated" USING (("owner_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Owners can delete their personal tools" ON "public"."personal_tools" FOR DELETE TO "authenticated" USING (("owner_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Owners manage personal exports" ON "public"."personal_inventory_exports" TO "authenticated" USING (("owner_id" = "auth"."uid"())) WITH CHECK (("owner_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Owners manage personal tool images" ON "public"."personal_tool_images" TO "authenticated" USING (("owner_id" = "auth"."uid"())) WITH CHECK (("owner_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Owners manage personal tool tx" ON "public"."personal_tool_transactions" TO "authenticated" USING (("owner_id" = "auth"."uid"())) WITH CHECK (("owner_id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "Owners manage personal tools" ON "public"."personal_tools" TO "authenticated" USING (("owner_id" = "auth"."uid"())) WITH CHECK (("owner_id" = "auth"."uid"()));
 
 
 
@@ -1981,6 +3157,34 @@ CREATE POLICY "Service role can do everything on users" ON "public"."users" TO "
 
 
 
+CREATE POLICY "Service role manages tracker company assignments" ON "public"."tracker_company_assignments" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role manages tracker tool assignments" ON "public"."tracker_tool_assignments" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role manages trackers" ON "public"."trackers" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role personal exports" ON "public"."personal_inventory_exports" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role personal images" ON "public"."personal_tool_images" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role personal tools" ON "public"."personal_tools" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Service role personal tx" ON "public"."personal_tool_transactions" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Superadmins can create access codes" ON "public"."company_access_codes" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_superadmin"("auth"."uid"()));
 
 
@@ -2006,6 +3210,18 @@ CREATE POLICY "Superadmins can view all transactions" ON "public"."tool_transact
 
 
 CREATE POLICY "Superadmins can view all users" ON "public"."users" FOR SELECT TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"()));
+
+
+
+CREATE POLICY "Superadmins manage company assignments" ON "public"."tracker_company_assignments" TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"())) WITH CHECK ("public"."is_superadmin"("auth"."uid"()));
+
+
+
+CREATE POLICY "Superadmins manage trackers" ON "public"."trackers" TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"())) WITH CHECK ("public"."is_superadmin"("auth"."uid"()));
+
+
+
+CREATE POLICY "Superadmins view all tool assignments" ON "public"."tracker_tool_assignments" FOR SELECT TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"()));
 
 
 
@@ -2115,6 +3331,21 @@ ALTER TABLE "public"."companies" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."company_access_codes" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."company_events" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "company_events_insert" ON "public"."company_events" FOR INSERT WITH CHECK (("company_id" IN ( SELECT "users"."company_id"
+   FROM "public"."users"
+  WHERE (("users"."id" = "auth"."uid"()) AND ("users"."role" = 'admin'::"text")))));
+
+
+
+CREATE POLICY "company_events_select" ON "public"."company_events" FOR SELECT USING (("company_id" IN ( SELECT "users"."company_id"
+   FROM "public"."users"
+  WHERE ("users"."id" = "auth"."uid"()))));
+
+
+
 ALTER TABLE "public"."company_settings" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2122,6 +3353,21 @@ ALTER TABLE "public"."group_activity_log" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."location_aliases" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."personal_inventory_exports" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."personal_tool_images" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."personal_tool_transactions" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."personal_tools" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."scheduled_export_runs" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tool_checklists" ENABLE ROW LEVEL SECURITY;
@@ -2142,6 +3388,18 @@ ALTER TABLE "public"."tool_transactions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."tools" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."tracker_company_assignments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."tracker_locations" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."tracker_tool_assignments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trackers" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."transaction_batches" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2151,6 +3409,9 @@ ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
+
+
+
 
 
 
@@ -2311,9 +3572,63 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+GRANT ALL ON FUNCTION "public"."assign_personal_tool_number"() TO "anon";
+GRANT ALL ON FUNCTION "public"."assign_personal_tool_number"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."assign_personal_tool_number"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."attach_tracker_to_tool"("p_serial" "text", "p_tool_id" "uuid", "p_mount_type" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."attach_tracker_to_tool"("p_serial" "text", "p_tool_id" "uuid", "p_mount_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."attach_tracker_to_tool"("p_serial" "text", "p_tool_id" "uuid", "p_mount_type" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."check_company_limits"("p_company_id" "uuid", "p_kind" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."company_tracked_tools_map"() TO "anon";
+GRANT ALL ON FUNCTION "public"."company_tracked_tools_map"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."company_tracked_tools_map"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."company_tracker_pool"() TO "anon";
+GRANT ALL ON FUNCTION "public"."company_tracker_pool"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."company_tracker_pool"() TO "service_role";
 
 
 
@@ -2338,6 +3653,12 @@ GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "service_rol
 GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."delete_user"("user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."detach_tracker_from_tool"("p_tool_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."detach_tracker_from_tool"("p_tool_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."detach_tracker_from_tool"("p_tool_id" "uuid") TO "service_role";
 
 
 
@@ -2437,9 +3758,26 @@ GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_in
 
 
 
+GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "anon";
 GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."refresh_tool_current_location"("p_tool_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."refresh_tool_current_location"("p_tool_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."refresh_tool_current_location"("p_tool_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."remove_user_from_company"("p_user_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."remove_user_from_company"("p_user_id" "uuid") TO "service_role";
 
 
 
@@ -2467,9 +3805,63 @@ GRANT ALL ON FUNCTION "public"."store_deleted_user_name"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."superadmin_company_trackers"() TO "anon";
+GRANT ALL ON FUNCTION "public"."superadmin_company_trackers"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."superadmin_company_trackers"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."superadmin_global_tracker_pool"() TO "anon";
+GRANT ALL ON FUNCTION "public"."superadmin_global_tracker_pool"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."superadmin_global_tracker_pool"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) TO "anon";
+GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tracker_latest_fix"("p_serial" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."tracker_latest_fix"("p_serial" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tracker_latest_fix"("p_serial" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "anon";
+GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "anon";
 GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_company_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_company_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_company_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") TO "service_role";
 
 
 
@@ -2485,9 +3877,21 @@ GRANT ALL ON FUNCTION "public"."upsert_company_settings"("p_company_id" "uuid", 
 
 
 
+GRANT ALL ON FUNCTION "public"."upsert_company_tools_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_company_tools_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_company_tools_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "service_role";
+
+
+
+
+
+
 
 
 
@@ -2530,6 +3934,12 @@ GRANT ALL ON TABLE "public"."company_access_codes" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."company_events" TO "anon";
+GRANT ALL ON TABLE "public"."company_events" TO "authenticated";
+GRANT ALL ON TABLE "public"."company_events" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."company_settings" TO "anon";
 GRANT ALL ON TABLE "public"."company_settings" TO "authenticated";
 GRANT ALL ON TABLE "public"."company_settings" TO "service_role";
@@ -2545,6 +3955,36 @@ GRANT ALL ON TABLE "public"."group_activity_log" TO "service_role";
 GRANT ALL ON TABLE "public"."location_aliases" TO "anon";
 GRANT ALL ON TABLE "public"."location_aliases" TO "authenticated";
 GRANT ALL ON TABLE "public"."location_aliases" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."personal_inventory_exports" TO "anon";
+GRANT ALL ON TABLE "public"."personal_inventory_exports" TO "authenticated";
+GRANT ALL ON TABLE "public"."personal_inventory_exports" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."personal_tool_images" TO "anon";
+GRANT ALL ON TABLE "public"."personal_tool_images" TO "authenticated";
+GRANT ALL ON TABLE "public"."personal_tool_images" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."personal_tool_transactions" TO "anon";
+GRANT ALL ON TABLE "public"."personal_tool_transactions" TO "authenticated";
+GRANT ALL ON TABLE "public"."personal_tool_transactions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."personal_tools" TO "anon";
+GRANT ALL ON TABLE "public"."personal_tools" TO "authenticated";
+GRANT ALL ON TABLE "public"."personal_tools" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."scheduled_export_runs" TO "anon";
+GRANT ALL ON TABLE "public"."scheduled_export_runs" TO "authenticated";
+GRANT ALL ON TABLE "public"."scheduled_export_runs" TO "service_role";
 
 
 
@@ -2581,6 +4021,36 @@ GRANT ALL ON TABLE "public"."tool_transactions" TO "service_role";
 GRANT ALL ON TABLE "public"."tools" TO "anon";
 GRANT ALL ON TABLE "public"."tools" TO "authenticated";
 GRANT ALL ON TABLE "public"."tools" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tracker_company_assignments" TO "anon";
+GRANT ALL ON TABLE "public"."tracker_company_assignments" TO "authenticated";
+GRANT ALL ON TABLE "public"."tracker_company_assignments" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tracker_locations" TO "anon";
+GRANT ALL ON TABLE "public"."tracker_locations" TO "authenticated";
+GRANT ALL ON TABLE "public"."tracker_locations" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."tracker_locations_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."tracker_locations_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."tracker_locations_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tracker_tool_assignments" TO "anon";
+GRANT ALL ON TABLE "public"."tracker_tool_assignments" TO "authenticated";
+GRANT ALL ON TABLE "public"."tracker_tool_assignments" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trackers" TO "anon";
+GRANT ALL ON TABLE "public"."trackers" TO "authenticated";
+GRANT ALL ON TABLE "public"."trackers" TO "service_role";
 
 
 

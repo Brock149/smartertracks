@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { fetchCompanyEvents } from '../lib/companyEvents'
 import type { CompanyEvent } from '../lib/companyEvents'
+import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 
 // A unified feed row: either a tool transaction or a company activity event.
 type FeedItem =
@@ -22,6 +23,10 @@ function eventMeta(eventType: string): { title: string; badge: string } {
       return { title: 'User removed', badge: 'text-amber-700 bg-amber-50' }
     case 'user_left':
       return { title: 'User left', badge: 'text-amber-700 bg-amber-50' }
+    case 'tracker_attached':
+      return { title: 'Tracker attached', badge: 'text-blue-700 bg-blue-50' }
+    case 'tracker_detached':
+      return { title: 'Tracker removed', badge: 'text-gray-700 bg-gray-100' }
     default:
       return { title: eventType, badge: 'text-gray-700 bg-gray-50' }
   }
@@ -76,9 +81,34 @@ interface ChecklistItem {
   required: boolean
 }
 
+interface PoolTracker {
+  serial: string
+  label: string | null
+  company_number: number | null
+}
+
+interface ActiveTrackerAssignment {
+  serial: string
+  mount_type: 'temporary' | 'permanent'
+}
+
 export default function Transactions() {
+  const { features } = useCompanyFeatures()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [companyEvents, setCompanyEvents] = useState<CompanyEvent[]>([])
+  // Tracker state for the create-transaction modal.
+  const [trackerPool, setTrackerPool] = useState<PoolTracker[]>([])
+  const [activeTrackers, setActiveTrackers] = useState<Record<string, ActiveTrackerAssignment>>({})
+  const [attachSerialByTool, setAttachSerialByTool] = useState<Record<string, string>>({})
+  const [detachByTool, setDetachByTool] = useState<Record<string, boolean>>({})
+  const [trackerNumbers, setTrackerNumbers] = useState<Record<string, number>>({})
+
+  // Friendly tracker name: "Tracker N" when numbered, else label, else serial.
+  const trackerName = (serial: string, label?: string | null): string => {
+    const n = trackerNumbers[serial]
+    if (n != null) return `Tracker ${n}`
+    return label || serial
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -121,6 +151,67 @@ export default function Transactions() {
     fetchUsers()
     fetchCompanyEvents().then(setCompanyEvents)
   }, [])
+
+  // Load the tracker pool + active tool assignments (only when the feature is on).
+  useEffect(() => {
+    if (!features.trackersEnabled) return
+    fetchTrackerData()
+  }, [features.trackersEnabled])
+
+  async function fetchTrackerData() {
+    try {
+      const [poolRes, assignRes, numbersRes] = await Promise.all([
+        supabase.rpc('company_tracker_pool'),
+        supabase
+          .from('tracker_tool_assignments')
+          .select('tool_id, serial, mount_type')
+          .is('detached_at', null),
+        supabase
+          .from('tracker_company_assignments')
+          .select('serial, company_number')
+          .is('released_at', null),
+      ])
+      if (!poolRes.error) setTrackerPool(poolRes.data || [])
+      if (!assignRes.error) {
+        const map: Record<string, ActiveTrackerAssignment> = {}
+        for (const a of assignRes.data || []) {
+          map[a.tool_id] = { serial: a.serial, mount_type: a.mount_type }
+        }
+        setActiveTrackers(map)
+      }
+      if (!numbersRes.error) {
+        const numMap: Record<string, number> = {}
+        for (const r of numbersRes.data || []) {
+          if (r.company_number != null) numMap[r.serial] = r.company_number
+        }
+        setTrackerNumbers(numMap)
+      }
+    } catch (e) {
+      console.warn('Failed to load tracker data (continuing):', e)
+    }
+  }
+
+  // Apply any per-tool tracker attach/detach selected in the modal. Best-effort:
+  // a tracker error must not roll back an already-created transaction. Each RPC
+  // also writes its own company_events history line item (see migration).
+  async function applyTrackerActions() {
+    for (const tool of selectedTools) {
+      try {
+        const current = activeTrackers[tool.id]
+        if (current && detachByTool[tool.id]) {
+          await supabase.rpc('detach_tracker_from_tool', { p_tool_id: tool.id })
+        } else if (!current && attachSerialByTool[tool.id]) {
+          // mount_type omitted — defaulted by the RPC; no temporary/permanent UX.
+          await supabase.rpc('attach_tracker_to_tool', {
+            p_serial: attachSerialByTool[tool.id],
+            p_tool_id: tool.id,
+          })
+        }
+      } catch (e) {
+        console.warn(`Tracker action failed for tool ${tool.id} (continuing):`, e)
+      }
+    }
+  }
 
   async function fetchTransactions() {
     try {
@@ -305,6 +396,12 @@ export default function Transactions() {
         throw new Error(data.error || 'Failed to create transaction')
       }
 
+      // Attach / detach any trackers chosen in the modal (best-effort, after the
+      // transaction itself succeeded).
+      if (features.trackersEnabled) {
+        await applyTrackerActions()
+      }
+
       // Reset form and close modal
       setNewTransaction({
         tool_id: '',
@@ -319,8 +416,12 @@ export default function Transactions() {
       setChecklistItemsByTool({})
       setChecklistStatusByTool({})
       setChecklistLoadingByTool({})
+      setAttachSerialByTool({})
+      setDetachByTool({})
       setIsCreateModalOpen(false)
       fetchTransactions() // Refresh the transactions list
+      fetchCompanyEvents().then(setCompanyEvents) // Pick up new tracker history items
+      if (features.trackersEnabled) fetchTrackerData()
     } catch (error: any) {
       setError(error.message || 'An unexpected error occurred')
     }
@@ -1118,6 +1219,69 @@ export default function Transactions() {
                             ) : (
                               <div className="text-gray-500 bg-gray-50 p-4 rounded-lg text-lg">
                                 No checklist items found for this tool.
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* GPS Trackers — attach/detach per selected tool during the transaction */}
+                {features.trackersEnabled && selectedTools.length > 0 && (
+                  <div>
+                    <label className="block font-medium mb-2 text-lg">GPS Trackers</label>
+                    <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+                      {selectedTools.map((tool) => {
+                        const current = activeTrackers[tool.id]
+                        const willDetach = !!detachByTool[tool.id]
+                        return (
+                          <div key={tool.id} className="bg-white p-4 rounded-lg border space-y-3">
+                            <div className="text-base font-semibold text-gray-900">
+                              #{tool.number} - {tool.name}
+                            </div>
+                            {current ? (
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                  <span className="text-base">📡</span>
+                                  <span className="font-medium text-gray-900">{trackerName(current.serial)}</span>
+                                  <span className="text-xs text-gray-400">({current.serial})</span>
+                                  <span className="text-xs text-gray-500">attached</span>
+                                </div>
+                                <label className="inline-flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={willDetach}
+                                    onChange={() =>
+                                      setDetachByTool((s) => ({ ...s, [tool.id]: !s[tool.id] }))
+                                    }
+                                    className="rounded border-gray-300 text-red-600 focus:ring-red-500 w-5 h-5"
+                                  />
+                                  <span className="text-sm text-gray-700">
+                                    Detach this tracker during this transaction
+                                  </span>
+                                </label>
+                              </div>
+                            ) : trackerPool.length === 0 ? (
+                              <p className="text-sm text-gray-400">No trackers available to attach.</p>
+                            ) : (
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Attach tracker</label>
+                                <select
+                                  value={attachSerialByTool[tool.id] || ''}
+                                  onChange={(e) =>
+                                    setAttachSerialByTool((s) => ({ ...s, [tool.id]: e.target.value }))
+                                  }
+                                  className="w-full border border-gray-300 rounded-md px-2 py-2 text-sm bg-white"
+                                >
+                                  <option value="">None</option>
+                                  {trackerPool.map((p) => (
+                                    <option key={p.serial} value={p.serial}>
+                                      {trackerName(p.serial, p.label)} ({p.serial})
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                             )}
                           </div>
