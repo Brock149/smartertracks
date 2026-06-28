@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import TrackerMap, { computeStops } from '../components/TrackerMap'
+import { computeStops } from '../components/trackerMapUtils'
+
+// Leaflet touches `window` at import time, which crashes the SSR/prerender
+// build. Loading the map lazily keeps it in a client-only chunk that the
+// server bundle never evaluates.
+const TrackerMap = lazy(() => import('../components/TrackerMap'))
 
 interface PoolTracker {
   serial: string
@@ -520,6 +525,7 @@ export default function Trackers() {
             {mapTools.length === 0 && ' No tracked tools have reported a position yet.'}
           </p>
           <div style={{ height: 'calc(100vh - 220px)', minHeight: 480 }}>
+            <Suspense fallback={<div className="h-full w-full bg-gray-100 animate-pulse rounded" />}>
             <TrackerMap
               height="100%"
               markers={mapTools.map((m) => ({
@@ -535,6 +541,7 @@ export default function Trackers() {
                 }`,
               }))}
             />
+            </Suspense>
           </div>
         </div>
       </div>
@@ -744,6 +751,7 @@ export default function Trackers() {
                 </div>
               )}
             </div>
+            <Suspense fallback={<div style={{ height: '72vh' }} className="w-full bg-gray-100 animate-pulse" />}>
             <TrackerMap
               height="72vh"
               path={trail}
@@ -758,10 +766,11 @@ export default function Trackers() {
                         title: mapTool.name,
                         label: mapTool.name,
                         sublabel: mapTool.sublabel,
-                      },
-                    ]
+                    },
+                  ]
               }
             />
+            </Suspense>
             {trail.length > 1 && (
               <div className="flex items-center gap-3 px-4 py-3 border-t">
                 <button
