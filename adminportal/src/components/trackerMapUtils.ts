@@ -8,6 +8,8 @@ export interface TrackerMapMarker {
   sublabel?: string
   /** Short name shown on a pill above the pin (truncated). */
   title?: string
+  /** Tool id — enables the "See trip history" action in the pin popup. */
+  toolId?: string
 }
 
 export interface TrackerMapPoint {

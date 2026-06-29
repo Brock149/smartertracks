@@ -17,6 +17,8 @@ interface TrackerMapProps {
   /** Override the auto-zoom (defaults to 15 for one point, fit-bounds for many). */
   zoom?: number
   className?: string
+  /** Called from a pin popup's "See trip history" button (marker.toolId). */
+  onTripHistory?: (toolId: string) => void
 }
 
 function fmtTime(at?: string | null): string {
@@ -75,6 +77,7 @@ export default function TrackerMap({
   height = 220,
   zoom,
   className,
+  onTripHistory,
 }: TrackerMapProps) {
   const valid = markers.filter(
     (m) => typeof m.lat === 'number' && typeof m.lng === 'number' && !isNaN(m.lat) && !isNaN(m.lng)
@@ -211,6 +214,27 @@ export default function TrackerMap({
                 )}
                 {m.label && <div style={{ fontWeight: 600 }}>{m.label}</div>}
                 {m.sublabel && <div style={{ color: '#6b7280' }}>{m.sublabel}</div>}
+                {m.toolId && onTripHistory && (
+                  <button
+                    type="button"
+                    onClick={() => onTripHistory(m.toolId as string)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      margin: '8px 0 6px',
+                      padding: '6px 10px',
+                      background: '#2563eb',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🧭 See trip history
+                  </button>
+                )}
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lng}`}
                   target="_blank"

@@ -187,6 +187,31 @@ export default function Trackers() {
     return label || serial
   }
 
+  // Open the breadcrumb/trip-history modal for a tool by id (used from map pins).
+  const openTripHistory = (toolId: string) => {
+    const m = mapTools.find((t) => t.tool_id === toolId)
+    if (m) {
+      setMapTool({
+        tool_id: m.tool_id,
+        name: m.name,
+        lat: m.latitude,
+        lng: m.longitude,
+        sublabel: `Last fix ${fmt(m.recorded_at)}`,
+      })
+      return
+    }
+    const t = tools.find((x) => x.id === toolId)
+    if (t && t.last_latitude != null && t.last_longitude != null) {
+      setMapTool({
+        tool_id: t.id,
+        name: t.name,
+        lat: t.last_latitude,
+        lng: t.last_longitude,
+        sublabel: `Last fix ${fmt(t.last_location_recorded_at)}`,
+      })
+    }
+  }
+
   // Relative "last seen" + a freshness bucket. Yabby Edge units often report
   // ~once/day, so the buckets are generous: within ~26h = live, within 3d =
   // delayed, older = offline.
@@ -474,19 +499,11 @@ export default function Trackers() {
 
                     {hasLoc && (
                       <button
-                        onClick={() =>
-                          setMapTool({
-                            tool_id: tool.id,
-                            name: tool.name,
-                            lat: tool.last_latitude!,
-                            lng: tool.last_longitude!,
-                            sublabel: `Last fix ${fmt(tool.last_location_recorded_at)}`,
-                          })
-                        }
-                        className="text-blue-600 hover:text-blue-700 text-xs font-medium"
-                        title="View on map"
+                        onClick={() => openTripHistory(tool.id)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                        title="See breadcrumb trip history"
                       >
-                        📍
+                        🧭 Trip history
                       </button>
                     )}
 
@@ -528,9 +545,11 @@ export default function Trackers() {
             <Suspense fallback={<div className="h-full w-full bg-gray-100 animate-pulse rounded" />}>
             <TrackerMap
               height="100%"
+              onTripHistory={openTripHistory}
               markers={mapTools.map((m) => ({
                 lat: m.latitude,
                 lng: m.longitude,
+                toolId: m.tool_id,
                 thumbUrl: m.thumb_url,
                 title: m.name,
                 label: `#${m.number} ${m.name}`,
@@ -705,25 +724,36 @@ export default function Trackers() {
                 <div className="font-semibold text-gray-900">{mapTool.name}</div>
                 <div className="text-xs text-gray-500">{mapTool.sublabel}</div>
               </div>
-              <div className="flex items-center gap-3">
-                <select
-                  value={trailHours}
-                  onChange={(e) => setTrailHours(Number(e.target.value))}
-                  className="border border-gray-300 rounded px-2 py-1 text-sm bg-white"
-                >
-                  <option value={6}>Trail: last 6h</option>
-                  <option value={24}>Trail: last 24h</option>
-                  <option value={168}>Trail: last 7d</option>
-                  <option value={720}>Trail: last 30d</option>
-                  <option value={0}>Trail: all</option>
-                </select>
+              <button
+                onClick={() => setMapTool(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-3"
+              >
+                ×
+              </button>
+            </div>
+            {/* Prominent trail-range selector */}
+            <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-blue-50 border-b border-blue-100">
+              <span className="text-sm font-semibold text-gray-700 mr-1">Trail range:</span>
+              {([
+                { v: 6, label: '6h' },
+                { v: 24, label: '24h' },
+                { v: 168, label: '7d' },
+                { v: 720, label: '30d' },
+                { v: 0, label: 'All' },
+              ] as { v: number; label: string }[]).map((opt) => (
                 <button
-                  onClick={() => setMapTool(null)}
-                  className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setTrailHours(opt.v)}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                    trailHours === opt.v
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
-                  ×
+                  {opt.label}
                 </button>
-              </div>
+              ))}
             </div>
             <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-50 border-b">
               {trail.length > 0 ? (
