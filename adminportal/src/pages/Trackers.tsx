@@ -60,7 +60,7 @@ export default function Trackers() {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [mapTool, setMapTool] = useState<
-    { tool_id: string; name: string; lat: number; lng: number; sublabel: string } | null
+    { tool_id: string; name: string; lat: number; lng: number; sublabel: string; thumbUrl?: string | null } | null
   >(null)
   const [trail, setTrail] = useState<{ lat: number; lng: number; at: string | null }[]>([])
   const [trailHours, setTrailHours] = useState<number>(24)
@@ -197,6 +197,7 @@ export default function Trackers() {
         lat: m.latitude,
         lng: m.longitude,
         sublabel: `Last fix ${fmt(m.recorded_at)}`,
+        thumbUrl: m.thumb_url,
       })
       return
     }
@@ -796,6 +797,7 @@ export default function Trackers() {
                         title: mapTool.name,
                         label: mapTool.name,
                         sublabel: mapTool.sublabel,
+                        thumbUrl: mapTool.thumbUrl,
                     },
                   ]
               }
