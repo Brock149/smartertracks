@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /superadminportal
 
 Sitemap: https://www.smartertracks.com/sitemap.xml

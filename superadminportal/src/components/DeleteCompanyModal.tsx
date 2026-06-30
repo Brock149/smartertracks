@@ -22,7 +22,7 @@ export default function DeleteCompanyModal({ company, isOpen, onClose, onSuccess
     setLoading(true)
     setError('')
     try {
-      const { data, error } = await supabase.functions.invoke('purge-company', {
+      const { error } = await supabase.functions.invoke('purge-company', {
         body: { company_id: company.id },
       })
       if (error) throw error

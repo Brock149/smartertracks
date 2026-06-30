@@ -35,8 +35,17 @@ begin
   end loop;
 end $$;
 
--- 2) Every Tuesday at 12:00 UTC (8:00 AM EDT), queue a run for every enabled
---    company. The minutely processor picks these up within ~1 minute and sends.
+-- 2) Every Tuesday at 12:00 UTC (8:00 AM EDT), queue a run for every company
+--    that actually has recipients configured for that report. The minutely
+--    processor picks these rows up within ~1 minute and force-sends them.
+--
+-- NOTE: this mirrors exactly what the (working) one-off test scheduler checks —
+-- it does NOT also require auto_export_enabled / company_export_enabled to be
+-- true. If your company's toggle in Settings is off, this will still send as
+-- long as recipients are configured. If you want the toggle to gate sending
+-- again later, add back `and auto_export_enabled = true` / `and
+-- company_export_enabled = true` once you've confirmed the toggle is reliably
+-- on for the companies that should receive reports.
 select cron.schedule(
   'weekly-inventory-export',
   '0 12 * * 2',
@@ -44,10 +53,10 @@ select cron.schedule(
   insert into public.scheduled_export_runs (company_id, export_type, run_at, status)
   select company_id, 'personal', now(), 'pending'
     from public.company_settings
-   where auto_export_enabled = true
+   where coalesce(array_length(auto_export_recipients, 1), 0) > 0
   union all
   select company_id, 'company', now(), 'pending'
     from public.company_settings
-   where company_export_enabled = true;
+   where coalesce(array_length(company_export_recipients, 1), 0) > 0;
   $job$
 );

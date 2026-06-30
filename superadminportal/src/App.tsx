@@ -47,7 +47,7 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <Router basename="/superadminportal">
         <div className="min-h-screen bg-gray-50">
           <AppRoutes />
         </div>

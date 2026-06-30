@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/superadminportal/:path*",
+      "destination": "https://REPLACE_WITH_SUPERADMINPORTAL_VERCEL_URL/superadminportal/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -32,9 +32,18 @@ export default function DashboardPage() {
   const [scheduling, setScheduling] = useState(false)
   const [schedMessage, setSchedMessage] = useState('')
 
+  // Weekly automated-report schedule (when it fires, Eastern time).
+  const [weekday, setWeekday] = useState(2)
+  const [hour, setHour] = useState(8)
+  const [minute, setMinute] = useState(0)
+  const [scheduleLoading, setScheduleLoading] = useState(true)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleMessage, setScheduleMessage] = useState('')
+
   useEffect(() => {
     console.log('Dashboard useEffect: fetch companies')
     fetchCompanies()
+    fetchExportSchedule()
   }, [])
 
   // Default the scheduler company picker to the first company once loaded.
@@ -99,6 +108,45 @@ export default function DashboardPage() {
       setPurgeMessage(err instanceof Error ? `Error: ${err.message}` : 'Failed to purge')
     } finally {
       setPurging(false)
+    }
+  }
+
+  const fetchExportSchedule = async () => {
+    try {
+      setScheduleLoading(true)
+      const { data, error } = await supabase
+        .from('export_schedule_settings')
+        .select('weekday, hour, minute')
+        .eq('id', true)
+        .single()
+      if (error) throw error
+      if (data) {
+        setWeekday(data.weekday)
+        setHour(data.hour)
+        setMinute(data.minute)
+      }
+    } catch (err) {
+      console.error('Fetch export schedule error:', err)
+    } finally {
+      setScheduleLoading(false)
+    }
+  }
+
+  const handleSaveExportSchedule = async () => {
+    try {
+      setScheduleSaving(true)
+      setScheduleMessage('')
+      const { error } = await supabase.rpc('update_export_schedule', {
+        p_weekday: weekday,
+        p_hour: hour,
+        p_minute: minute,
+      })
+      if (error) throw error
+      setScheduleMessage('Saved. Takes effect immediately — no redeploy needed.')
+    } catch (err) {
+      setScheduleMessage(err instanceof Error ? `Error: ${err.message}` : 'Failed to save schedule')
+    } finally {
+      setScheduleSaving(false)
     }
   }
 
@@ -246,6 +294,75 @@ export default function DashboardPage() {
             >
               + Add Company
             </button>
+          </div>
+
+          {/* Weekly automated-report schedule (when the recurring job fires) */}
+          <div className="bg-white shadow rounded-lg p-4 mb-6 border border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">🗓️ Weekly report schedule</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              When the automated weekly inventory reports go out, in Eastern time. Handles
+              daylight saving automatically — no manual UTC math required.
+            </p>
+            {scheduleLoading ? (
+              <p className="text-sm text-gray-500">Loading…</p>
+            ) : (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Day</label>
+                  <select
+                    value={weekday}
+                    onChange={(e) => setWeekday(Number(e.target.value))}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                  >
+                    <option value={0}>Sunday</option>
+                    <option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option>
+                    <option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option>
+                    <option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Time (Eastern)</label>
+                  <div className="flex items-center gap-1">
+                    <select
+                      value={hour}
+                      onChange={(e) => setHour(Number(e.target.value))}
+                      className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                    >
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <option key={h} value={h}>
+                          {h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-gray-500">:</span>
+                    <select
+                      value={minute}
+                      onChange={(e) => setMinute(Number(e.target.value))}
+                      className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                    >
+                      {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
+                        <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveExportSchedule}
+                  disabled={scheduleSaving}
+                  className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-md"
+                >
+                  {scheduleSaving ? 'Saving…' : 'Save schedule'}
+                </button>
+                {scheduleMessage && (
+                  <span className={`text-sm ${scheduleMessage.startsWith('Error') ? 'text-red-600' : 'text-gray-600'}`}>
+                    {scheduleMessage}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Test the automated-report scheduler (one-off, superadmin only) */}

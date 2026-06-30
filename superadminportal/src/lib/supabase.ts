@@ -30,6 +30,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    // Distinct storage key so that once this app is proxied onto the same
+    // origin as the regular admin portal, its session doesn't collide with
+    // (or get overwritten by) the admin portal's Supabase auth session.
+    storageKey: 'sb-superadmin-auth-token',
   },
   global: {
     headers: {

@@ -88,10 +88,12 @@ $$;
 ALTER FUNCTION "public"."assign_personal_tool_number"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text" DEFAULT NULL::"text") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text" DEFAULT NULL::"text", "p_company_number" integer DEFAULT NULL::integer) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+declare
+  v_num integer;
 begin
   if not public.is_superadmin(auth.uid()) then
     raise exception 'Only a superadmin can assign trackers to companies';
@@ -107,13 +109,23 @@ begin
     raise exception 'Tracker % is already assigned to a company', p_serial;
   end if;
 
-  insert into public.tracker_company_assignments (serial, company_id, assigned_by, notes)
-  values (p_serial, p_company_id, auth.uid(), p_notes);
+  v_num := coalesce(p_company_number, public.next_company_tracker_number(p_company_id));
+
+  if exists (
+    select 1 from public.tracker_company_assignments
+    where company_id = p_company_id and released_at is null and company_number = v_num
+  ) then
+    raise exception 'Tracker number % is already in use for this company', v_num;
+  end if;
+
+  insert into public.tracker_company_assignments
+    (serial, company_id, assigned_by, notes, company_number)
+  values (p_serial, p_company_id, auth.uid(), p_notes, v_num);
 end;
 $$;
 
 
-ALTER FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text", "p_company_number" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."attach_tracker_to_tool"("p_serial" "text", "p_tool_id" "uuid", "p_mount_type" "text" DEFAULT 'temporary'::"text") RETURNS "void"
@@ -159,19 +171,13 @@ begin
     (serial, tool_id, company_id, mount_type, attached_by)
   values (p_serial, p_tool_id, v_company_id, p_mount_type, auth.uid());
 
-  -- Show a position right away if any in-window fix already exists.
   perform public.refresh_tool_current_location(p_tool_id);
 
-  -- History line item.
   select coalesce(u.name, 'Someone') into v_actor_name
     from public.users u where u.id = auth.uid();
   select t.number, t.name into v_tool_number, v_tool_name
     from public.tools t where t.id = p_tool_id;
-  select coalesce(tr.label, p_serial) into v_tracker_label
-    from public.trackers tr where tr.serial = p_serial;
-  if v_tracker_label is null then
-    v_tracker_label := p_serial;
-  end if;
+  v_tracker_label := public.tracker_display_name(p_serial, v_company_id);
 
   insert into public.company_events
     (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
@@ -183,7 +189,7 @@ begin
     'tool',
     p_tool_id,
     '#' || coalesce(v_tool_number, '?') || ' - ' || coalesce(v_tool_name, 'Tool'),
-    'Tracker ' || v_tracker_label || ' attached (' || p_mount_type || ')'
+    coalesce(v_tracker_label, p_serial) || ' attached'
   );
 end;
 $$;
@@ -275,11 +281,11 @@ $$;
 ALTER FUNCTION "public"."company_tracked_tools_map"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."company_tracker_pool"() RETURNS TABLE("serial" "text", "label" "text", "assigned_at" timestamp with time zone, "last_seen_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."company_tracker_pool"() RETURNS TABLE("serial" "text", "label" "text", "assigned_at" timestamp with time zone, "last_seen_at" timestamp with time zone, "company_number" integer)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-  select tca.serial, tr.label, tca.assigned_at, tr.last_seen_at
+  select tca.serial, tr.label, tca.assigned_at, tr.last_seen_at, tca.company_number
   from public.tracker_company_assignments tca
   left join public.trackers tr on tr.serial = tca.serial
   where tca.company_id = public.get_user_company_id(auth.uid())
@@ -288,7 +294,7 @@ CREATE OR REPLACE FUNCTION "public"."company_tracker_pool"() RETURNS TABLE("seri
       select 1 from public.tracker_tool_assignments tta
       where tta.serial = tca.serial and tta.detached_at is null
     )
-  order by tca.assigned_at desc;
+  order by tca.company_number nulls last, tca.assigned_at desc;
 $$;
 
 
@@ -522,7 +528,6 @@ declare
   v_tool_name text;
   v_tracker_label text;
 begin
-  -- Remember which tracker was on the tool so we can describe the event.
   select tta.serial into v_serial
     from public.tracker_tool_assignments tta
    where tta.tool_id = p_tool_id
@@ -545,7 +550,6 @@ begin
    where id = p_tool_id
      and company_id = v_company_id;
 
-  -- Only log if something was actually detached.
   if v_serial is null then
     return;
   end if;
@@ -554,11 +558,7 @@ begin
     from public.users u where u.id = auth.uid();
   select t.number, t.name into v_tool_number, v_tool_name
     from public.tools t where t.id = p_tool_id;
-  select coalesce(tr.label, v_serial) into v_tracker_label
-    from public.trackers tr where tr.serial = v_serial;
-  if v_tracker_label is null then
-    v_tracker_label := v_serial;
-  end if;
+  v_tracker_label := public.tracker_display_name(v_serial, v_company_id);
 
   insert into public.company_events
     (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
@@ -570,7 +570,7 @@ begin
     'tool',
     p_tool_id,
     '#' || coalesce(v_tool_number, '?') || ' - ' || coalesce(v_tool_name, 'Tool'),
-    'Tracker ' || v_tracker_label || ' detached'
+    coalesce(v_tracker_label, v_serial) || ' detached'
   );
 end;
 $$;
@@ -978,6 +978,28 @@ $$;
 ALTER FUNCTION "public"."log_group_activity"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."next_company_tracker_number"("p_company_id" "uuid") RETURNS integer
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select coalesce(min(n.num), 1)
+  from generate_series(1, (
+    select coalesce(max(company_number), 0) + 1
+    from public.tracker_company_assignments
+    where company_id = p_company_id and released_at is null
+  )) as n(num)
+  where not exists (
+    select 1 from public.tracker_company_assignments tca
+    where tca.company_id = p_company_id
+      and tca.released_at is null
+      and tca.company_number = n.num
+  );
+$$;
+
+
+ALTER FUNCTION "public"."next_company_tracker_number"("p_company_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") RETURNS "text"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -1267,7 +1289,7 @@ $$;
 ALTER FUNCTION "public"."store_deleted_user_name"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") RETURNS TABLE("serial" "text", "label" "text", "assigned_at" timestamp with time zone, "released_at" timestamp with time zone, "is_active" boolean)
+CREATE OR REPLACE FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") RETURNS TABLE("serial" "text", "label" "text", "assigned_at" timestamp with time zone, "released_at" timestamp with time zone, "is_active" boolean, "company_number" integer)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1275,7 +1297,8 @@ CREATE OR REPLACE FUNCTION "public"."superadmin_company_tracker_history"("p_comp
          tr.label,
          tca.assigned_at,
          tca.released_at,
-         (tca.released_at is null) as is_active
+         (tca.released_at is null) as is_active,
+         tca.company_number
   from public.tracker_company_assignments tca
   left join public.trackers tr on tr.serial = tca.serial
   where public.is_superadmin(auth.uid())
@@ -1287,7 +1310,7 @@ $$;
 ALTER FUNCTION "public"."superadmin_company_tracker_history"("p_company_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."superadmin_company_trackers"() RETURNS TABLE("serial" "text", "label" "text", "company_id" "uuid", "company_name" "text", "assigned_at" timestamp with time zone, "last_seen_at" timestamp with time zone, "tool_id" "uuid", "tool_name" "text")
+CREATE OR REPLACE FUNCTION "public"."superadmin_company_trackers"() RETURNS TABLE("serial" "text", "label" "text", "company_id" "uuid", "company_name" "text", "assigned_at" timestamp with time zone, "last_seen_at" timestamp with time zone, "tool_id" "uuid", "tool_name" "text", "company_number" integer)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1298,7 +1321,8 @@ CREATE OR REPLACE FUNCTION "public"."superadmin_company_trackers"() RETURNS TABL
          tca.assigned_at,
          tr.last_seen_at,
          tta.tool_id,
-         t.name
+         t.name,
+         tca.company_number
   from public.tracker_company_assignments tca
   join public.companies c on c.id = tca.company_id
   left join public.trackers tr on tr.serial = tca.serial
@@ -1307,7 +1331,7 @@ CREATE OR REPLACE FUNCTION "public"."superadmin_company_trackers"() RETURNS TABL
   left join public.tools t on t.id = tta.tool_id
   where public.is_superadmin(auth.uid())
     and tca.released_at is null
-  order by c.name, tca.serial;
+  order by c.name, tca.company_number nulls last, tca.serial;
 $$;
 
 
@@ -1403,6 +1427,25 @@ $$;
 
 
 ALTER FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tracker_display_name"("p_serial" "text", "p_company_id" "uuid") RETURNS "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select case
+    when tca.company_number is not null then 'Tracker ' || tca.company_number
+    else coalesce(tr.label, p_serial)
+  end
+  from public.trackers tr
+  left join public.tracker_company_assignments tca
+    on tca.serial = tr.serial and tca.company_id = p_company_id and tca.released_at is null
+  where tr.serial = p_serial
+  limit 1;
+$$;
+
+
+ALTER FUNCTION "public"."tracker_display_name"("p_serial" "text", "p_company_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."tracker_latest_fix"("p_serial" "text") RETURNS TABLE("latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone, "battery" double precision)
@@ -2181,7 +2224,8 @@ CREATE TABLE IF NOT EXISTS "public"."tracker_company_assignments" (
     "assigned_by" "uuid",
     "released_at" timestamp with time zone,
     "released_by" "uuid",
-    "notes" "text"
+    "notes" "text",
+    "company_number" integer
 );
 
 
@@ -2592,6 +2636,10 @@ CREATE UNIQUE INDEX "tool_images_one_primary_per_tool" ON "public"."tool_images"
 
 
 CREATE INDEX "tracker_company_company_idx" ON "public"."tracker_company_assignments" USING "btree" ("company_id");
+
+
+
+CREATE UNIQUE INDEX "tracker_company_number_active_idx" ON "public"."tracker_company_assignments" USING "btree" ("company_id", "company_number") WHERE (("released_at" IS NULL) AND ("company_number" IS NOT NULL));
 
 
 
@@ -3602,9 +3650,9 @@ GRANT ALL ON FUNCTION "public"."assign_personal_tool_number"() TO "service_role"
 
 
 
-GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text", "p_company_number" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text", "p_company_number" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."assign_tracker_to_company"("p_serial" "text", "p_company_id" "uuid", "p_notes" "text", "p_company_number" integer) TO "service_role";
 
 
 
@@ -3752,6 +3800,12 @@ GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."next_company_tracker_number"("p_company_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."next_company_tracker_number"("p_company_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."next_company_tracker_number"("p_company_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") TO "service_role";
@@ -3838,6 +3892,12 @@ GRANT ALL ON FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") TO "s
 GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tracker_display_name"("p_serial" "text", "p_company_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."tracker_display_name"("p_serial" "text", "p_company_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tracker_display_name"("p_serial" "text", "p_company_id" "uuid") TO "service_role";
 
 
 

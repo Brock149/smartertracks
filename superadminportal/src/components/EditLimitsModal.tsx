@@ -187,7 +187,7 @@ export default function EditLimitsModal({ company, isOpen, onClose, onSuccess }:
               >
                 <option value="">Not set</option>
                 {billingOptions.map((cycle) => (
-                  <option key={cycle} value={cycle}>
+                  <option key={cycle} value={cycle ?? ''}>
                     {cycle}
                   </option>
                 ))}
