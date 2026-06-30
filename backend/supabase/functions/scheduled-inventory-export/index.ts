@@ -75,16 +75,47 @@ function json(body: unknown, status = 200) {
   })
 }
 
-/** Weekly = Mondays, Monthly = the 1st (UTC). Guard against double-sends per day. */
+// All schedule math is done in the company's local zone (Eastern) rather than
+// UTC. Using UTC caused the weekday/"already sent today" checks to roll over at
+// 8 PM local, so a run scheduled for a given local day could be evaluated as the
+// wrong day and silently skipped.
+const REPORT_TIMEZONE = 'America/New_York'
+// 0 = Sunday … 6 = Saturday. Weekly reports go out on Monday.
+const REPORT_WEEKDAY = 1
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+}
+
+/** Local (Eastern) calendar date as YYYY-MM-DD for the given instant. */
+function easternDate(instant: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: REPORT_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant)
+}
+
+/** Local (Eastern) day-of-week, 0 = Sunday … 6 = Saturday. */
+function easternWeekday(instant: Date): number {
+  const name = new Intl.DateTimeFormat('en-US', {
+    timeZone: REPORT_TIMEZONE,
+    weekday: 'short',
+  }).format(instant)
+  return WEEKDAY_INDEX[name] ?? instant.getUTCDay()
+}
+
+/** Weekly = Mondays, Monthly = the 1st (Eastern). Guard against double-sends per day. */
 function isDue(frequency: string, lastSentAt: string | null, now: Date): boolean {
-  const today = now.toISOString().slice(0, 10)
-  if (lastSentAt && new Date(lastSentAt).toISOString().slice(0, 10) === today) {
+  const today = easternDate(now)
+  if (lastSentAt && easternDate(new Date(lastSentAt)) === today) {
     return false
   }
   if (frequency === 'monthly') {
-    return now.getUTCDate() === 1
+    return Number(today.slice(8, 10)) === 1
   }
-  return now.getUTCDay() === 1
+  return easternWeekday(now) === REPORT_WEEKDAY
 }
 
 function escapeHtml(value: string): string {
