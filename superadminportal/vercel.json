@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/superadminportal/assets/:path*",
+      "destination": "/assets/:path*"
+    },
+    {
+      "source": "/superadminportal/vite.svg",
+      "destination": "/vite.svg"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
