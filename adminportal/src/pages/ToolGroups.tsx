@@ -84,9 +84,11 @@ export default function ToolGroups() {
   const [newGroupTool, setNewGroupTool] = useState({
     name: '',
     description: '',
+    location: '',
     estimated_cost: null as number | null,
     checklist: [] as NewGroupToolChecklistItem[],
   })
+  const [groupToolLocationIsDefault, setGroupToolLocationIsDefault] = useState(true)
   const [pendingGroupToolImages, setPendingGroupToolImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
   const [uploadingGroupToolImage, setUploadingGroupToolImage] = useState(false)
   const [groupToolImageError, setGroupToolImageError] = useState<string | null>(null)
@@ -487,9 +489,11 @@ export default function ToolGroups() {
     setNewGroupTool({
       name: '',
       description: '',
+      location: selectedGroup.name,
       estimated_cost: null,
       checklist: [{ item_name: 'Overall Tool Condition', required: true }],
     })
+    setGroupToolLocationIsDefault(true)
     setPendingGroupToolImages([])
     setGroupToolImageError(null)
     setIsCreateToolOpen(true)
@@ -499,7 +503,8 @@ export default function ToolGroups() {
     for (const img of pendingGroupToolImages) {
       await removeStorageObject(img.filePath)
     }
-    setNewGroupTool({ name: '', description: '', estimated_cost: null, checklist: [] })
+    setNewGroupTool({ name: '', description: '', location: '', estimated_cost: null, checklist: [] })
+    setGroupToolLocationIsDefault(true)
     setPendingGroupToolImages([])
     setGroupToolImageError(null)
   }
@@ -578,6 +583,7 @@ export default function ToolGroups() {
             group_id: selectedGroup.id,
             name: newGroupTool.name.trim(),
             description: newGroupTool.description.trim(),
+            location: newGroupTool.location.trim(),
             estimated_cost: newGroupTool.estimated_cost,
             checklist: checklistToSend,
           }),
@@ -595,7 +601,8 @@ export default function ToolGroups() {
         }
       }
 
-      setNewGroupTool({ name: '', description: '', estimated_cost: null, checklist: [] })
+      setNewGroupTool({ name: '', description: '', location: '', estimated_cost: null, checklist: [] })
+      setGroupToolLocationIsDefault(true)
       setPendingGroupToolImages([])
       setGroupToolImageError(null)
       setIsCreateToolOpen(false)
@@ -1359,9 +1366,6 @@ export default function ToolGroups() {
                   {selectedGroup.name} #{groupMembers.length + 1} <span className="text-xs text-gray-400">(assigned automatically)</span>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-800">Location:</span> {selectedGroup.name}
-                </div>
-                <div>
                   <span className="font-medium text-gray-800">Owner:</span> {resolvedGroupOwnerLabel(selectedGroup)}
                 </div>
               </div>
@@ -1376,6 +1380,29 @@ export default function ToolGroups() {
                   placeholder="e.g. Socket Set"
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <div>
+                <label className="block font-medium mb-2 text-sm">
+                  Location
+                  {groupToolLocationIsDefault && newGroupTool.location && (
+                    <span className="ml-2 text-xs font-normal text-gray-400">(default)</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={newGroupTool.location}
+                  onChange={(e) => {
+                    setGroupToolLocationIsDefault(false)
+                    setNewGroupTool((prev) => ({ ...prev, location: e.target.value }))
+                  }}
+                  onFocus={() => setGroupToolLocationIsDefault(false)}
+                  placeholder="Enter tool location"
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Pre-filled with this group's name. Edit or clear it to set something else.
+                </p>
               </div>
 
               <div>

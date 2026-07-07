@@ -11,6 +11,7 @@ import {
 } from '../lib/uploadImage'
 import { logCompanyEvent } from '../lib/companyEvents'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
+import { getMyCompanySettings } from '../lib/companySettingsApi'
 
 interface Tool {
   id: string
@@ -60,9 +61,12 @@ export default function Tools() {
     number: '',
     name: '',
     description: '',
+    location: '',
     estimated_cost: null as number | null,
     checklist: [] as Array<ChecklistItem | { item_name: string; required: boolean }>
   })
+  const [defaultLocation, setDefaultLocation] = useState('')
+  const [locationIsDefault, setLocationIsDefault] = useState(true)
   const [newChecklistItem, setNewChecklistItem] = useState({
     item_name: '',
     required: true
@@ -108,6 +112,9 @@ export default function Tools() {
   useEffect(() => {
     console.log('Tools component mounted')
     fetchTools()
+    getMyCompanySettings()
+      .then((settings) => setDefaultLocation(settings?.default_location || ''))
+      .catch(() => setDefaultLocation(''))
 
     // Subscribe to changes in tool_transactions
     const subscription = supabase
@@ -260,7 +267,7 @@ export default function Tools() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
           },
-          body: JSON.stringify({ ...newTool, checklist: checklistToSend })
+          body: JSON.stringify({ ...newTool, location: newTool.location.trim(), checklist: checklistToSend })
         }
       )
       const data = await response.json()
@@ -282,9 +289,11 @@ export default function Tools() {
         number: '',
         name: '',
         description: '',
+        location: '',
         estimated_cost: null,
         checklist: []
       });
+      setLocationIsDefault(true);
       setNewToolImages([]);
       setNewToolImagesAdded([]);
       setPendingCreateImages([]);
@@ -472,9 +481,11 @@ export default function Tools() {
       number: '',
       name: '',
       description: '',
+      location: '',
       estimated_cost: null,
       checklist: []
     });
+    setLocationIsDefault(true);
     setNewToolImages([]);
     setNewToolImagesAdded([]);
     setPendingCreateImages([]);
@@ -713,10 +724,12 @@ export default function Tools() {
       const hasOverall = existing.some(
         (it) => it.item_name.trim().toLowerCase() === 'overall tool condition'
       )
-      return hasOverall
-        ? { ...prev }
-        : { ...prev, checklist: [...existing, { item_name: 'Overall Tool Condition', required: true }] }
+      const withChecklist = hasOverall
+        ? existing
+        : [...existing, { item_name: 'Overall Tool Condition', required: true }]
+      return { ...prev, checklist: withChecklist, location: defaultLocation }
     })
+    setLocationIsDefault(!!defaultLocation)
     setIsCreateModalOpen(true)
   }
 
@@ -1054,6 +1067,29 @@ export default function Tools() {
                     className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   />
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-2 text-base md:text-lg">
+                    Location
+                    {locationIsDefault && newTool.location && (
+                      <span className="ml-2 text-sm font-normal text-gray-400">(default)</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={newTool.location}
+                    onChange={(e) => {
+                      setLocationIsDefault(false)
+                      setNewTool(prev => ({ ...prev, location: e.target.value }))
+                    }}
+                    onFocus={() => setLocationIsDefault(false)}
+                    placeholder="Enter tool location"
+                    className="w-full border rounded-lg px-3 md:px-5 py-2 md:py-3 text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Pre-filled with your company's default location. Edit or clear it to set something else.
+                  </p>
                 </div>
 
                 {features.toolCostingEnabled && (
