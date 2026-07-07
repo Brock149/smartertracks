@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { ToolImageGallery } from '../components/ToolImageGallery'
+import { uploadToolImageToStorage, insertToolImageRecord, removeStorageObject } from '../lib/uploadImage'
+import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
+
+type OwnerMode = 'specific' | 'company_default' | 'unassigned'
 
 type ToolGroup = {
   id: string
   name: string
   description: string | null
   created_at: string
+  default_owner_id: string | null
+  default_owner_mode: OwnerMode
 }
 
 type ToolSummary = {
@@ -43,7 +49,16 @@ type GroupActivity = {
   created_at: string
 }
 
+type NewGroupToolChecklistItem = { item_name: string; required: boolean }
+
+type CompanyOwnerDefault = {
+  default_owner_id: string | null
+  default_owner_name: string | null
+  use_default_owner: boolean
+}
+
 export default function ToolGroups() {
+  const { features } = useCompanyFeatures()
   const [groups, setGroups] = useState<ToolGroup[]>([])
   const [selectedGroup, setSelectedGroup] = useState<ToolGroup | null>(null)
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([])
@@ -58,6 +73,24 @@ export default function ToolGroups() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isAddToolsOpen, setIsAddToolsOpen] = useState(false)
   const [newGroup, setNewGroup] = useState({ name: '', description: '' })
+  const [newGroupOwnerMode, setNewGroupOwnerMode] = useState<OwnerMode>('company_default')
+  const [newGroupOwnerId, setNewGroupOwnerId] = useState('')
+  const [companyOwnerDefault, setCompanyOwnerDefault] = useState<CompanyOwnerDefault>({
+    default_owner_id: null,
+    default_owner_name: null,
+    use_default_owner: false,
+  })
+  const [isCreateToolOpen, setIsCreateToolOpen] = useState(false)
+  const [newGroupTool, setNewGroupTool] = useState({
+    name: '',
+    description: '',
+    estimated_cost: null as number | null,
+    checklist: [] as NewGroupToolChecklistItem[],
+  })
+  const [pendingGroupToolImages, setPendingGroupToolImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
+  const [uploadingGroupToolImage, setUploadingGroupToolImage] = useState(false)
+  const [groupToolImageError, setGroupToolImageError] = useState<string | null>(null)
+  const [createToolLoading, setCreateToolLoading] = useState(false)
   const [toolSearch, setToolSearch] = useState('')
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([])
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null)
@@ -75,6 +108,8 @@ export default function ToolGroups() {
   const [activeView, setActiveView] = useState<'groups' | 'activity'>('groups')
   const [isEditGroupOpen, setIsEditGroupOpen] = useState(false)
   const [editGroupForm, setEditGroupForm] = useState({ name: '', description: '' })
+  const [editGroupOwnerMode, setEditGroupOwnerMode] = useState<OwnerMode>('company_default')
+  const [editGroupOwnerId, setEditGroupOwnerId] = useState('')
   const [editingMemberTool, setEditingMemberTool] = useState<ToolSummary | null>(null)
   const [editToolForm, setEditToolForm] = useState({ name: '', description: '' })
   const [editToolLoading, setEditToolLoading] = useState(false)
@@ -93,11 +128,43 @@ export default function ToolGroups() {
     fetchUsers()
     fetchGroupActivity()
     fetchAllGroupTools()
+    fetchCompanyOwnerDefault()
   }, [])
 
   useEffect(() => {
     setGroupsPage(1)
   }, [groupSearch])
+
+  async function fetchCompanyOwnerDefault() {
+    try {
+      const { data: authData } = await supabase.auth.getUser()
+      if (!authData?.user) return
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (!userData?.company_id) return
+
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('default_owner_id, use_default_owner, owner:users!company_settings_default_owner_id_fkey(name)')
+        .eq('company_id', userData.company_id)
+        .single()
+
+      if (error) return
+
+      setCompanyOwnerDefault({
+        default_owner_id: data?.default_owner_id ?? null,
+        default_owner_name: (data as any)?.owner?.name ?? null,
+        use_default_owner: data?.use_default_owner ?? false,
+      })
+    } catch {
+      // non-critical; owner mode picker just won't show a company-default option
+    }
+  }
 
   async function fetchGroups() {
     try {
@@ -105,7 +172,7 @@ export default function ToolGroups() {
       setError(null)
       const { data, error } = await supabase
         .from('tool_groups')
-        .select('id, name, description, created_at')
+        .select('id, name, description, created_at, default_owner_id, default_owner_mode')
         .eq('is_deleted', false)
         .order('name', { ascending: true })
 
@@ -357,10 +424,14 @@ export default function ToolGroups() {
           description: newGroup.description.trim() || null,
           company_id: userData.company_id,
           created_by: authData.user.id,
+          default_owner_mode: newGroupOwnerMode,
+          default_owner_id: newGroupOwnerMode === 'specific' ? (newGroupOwnerId || null) : null,
         }])
 
       if (error) throw error
       setNewGroup({ name: '', description: '' })
+      setNewGroupOwnerMode('company_default')
+      setNewGroupOwnerId('')
       setIsCreateOpen(false)
       await fetchGroups()
     } catch (err: any) {
@@ -411,6 +482,131 @@ export default function ToolGroups() {
     }
   }
 
+  function openCreateToolModal() {
+    if (!selectedGroup) return
+    setNewGroupTool({
+      name: '',
+      description: '',
+      estimated_cost: null,
+      checklist: [{ item_name: 'Overall Tool Condition', required: true }],
+    })
+    setPendingGroupToolImages([])
+    setGroupToolImageError(null)
+    setIsCreateToolOpen(true)
+  }
+
+  async function resetNewGroupTool() {
+    for (const img of pendingGroupToolImages) {
+      await removeStorageObject(img.filePath)
+    }
+    setNewGroupTool({ name: '', description: '', estimated_cost: null, checklist: [] })
+    setPendingGroupToolImages([])
+    setGroupToolImageError(null)
+  }
+
+  async function handleCreateToolImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setGroupToolImageError('Please choose an image file.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setGroupToolImageError('Image must be less than 5MB.')
+      return
+    }
+    setGroupToolImageError(null)
+    setUploadingGroupToolImage(true)
+    try {
+      const uploaded = await uploadToolImageToStorage(file)
+      if (!uploaded) {
+        setGroupToolImageError('Failed to upload image. Please try again.')
+        return
+      }
+      setPendingGroupToolImages((prev) => [...prev, uploaded])
+    } finally {
+      setUploadingGroupToolImage(false)
+    }
+  }
+
+  async function handleRemoveGroupToolImage(filePath: string) {
+    await removeStorageObject(filePath)
+    setPendingGroupToolImages((prev) => prev.filter((img) => img.filePath !== filePath))
+  }
+
+  function resolvedGroupOwnerLabel(group: ToolGroup): string {
+    if (group.default_owner_mode === 'specific') {
+      const owner = users.find((u) => u.id === group.default_owner_id)
+      return owner ? owner.name : 'Unassigned'
+    }
+    if (group.default_owner_mode === 'unassigned') {
+      return 'Unassigned'
+    }
+    if (companyOwnerDefault.use_default_owner && companyOwnerDefault.default_owner_id) {
+      return companyOwnerDefault.default_owner_name || 'Company default owner'
+    }
+    return 'Unassigned'
+  }
+
+  async function handleCreateGroupTool() {
+    if (!selectedGroup || !newGroupTool.name.trim()) return
+    try {
+      setCreateToolLoading(true)
+      setError(null)
+
+      const baseChecklist = newGroupTool.checklist ? [...newGroupTool.checklist] : []
+      const hasOverall = baseChecklist.some(
+        (it) => it.item_name.trim().toLowerCase() === 'overall tool condition'
+      )
+      const checklistToSend = hasOverall
+        ? baseChecklist
+        : [...baseChecklist, { item_name: 'Overall Tool Condition', required: true }]
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('You must be logged in')
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-group-tool`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            group_id: selectedGroup.id,
+            name: newGroupTool.name.trim(),
+            description: newGroupTool.description.trim(),
+            estimated_cost: newGroupTool.estimated_cost,
+            checklist: checklistToSend,
+          }),
+        }
+      )
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to create tool')
+
+      const createdToolId = data.id || data.tool?.id
+      const createdCompanyId = data.tool?.company_id
+      if (createdToolId && createdCompanyId && pendingGroupToolImages.length > 0) {
+        for (const img of pendingGroupToolImages) {
+          await insertToolImageRecord(createdToolId, createdCompanyId, img.publicUrl, img.filePath)
+        }
+      }
+
+      setNewGroupTool({ name: '', description: '', estimated_cost: null, checklist: [] })
+      setPendingGroupToolImages([])
+      setGroupToolImageError(null)
+      setIsCreateToolOpen(false)
+      await Promise.all([fetchGroupMembers(selectedGroup.id), fetchAllGroupTools(), fetchTools()])
+    } catch (err: any) {
+      setError(err.message || 'Failed to create tool in group')
+    } finally {
+      setCreateToolLoading(false)
+    }
+  }
+
   async function handleRemoveTool(toolId: string) {
     if (!selectedGroup) return
     try {
@@ -432,20 +628,30 @@ export default function ToolGroups() {
 
   async function handleEditGroup() {
     if (!selectedGroup || !editGroupForm.name.trim()) return
+    if (editGroupOwnerMode === 'specific' && !editGroupOwnerId) return
     try {
       setActionLoading(true)
       setError(null)
+      const resolvedOwnerId = editGroupOwnerMode === 'specific' ? editGroupOwnerId : null
       const { error } = await supabase
         .from('tool_groups')
         .update({
           name: editGroupForm.name.trim(),
           description: editGroupForm.description.trim() || null,
+          default_owner_mode: editGroupOwnerMode,
+          default_owner_id: resolvedOwnerId,
         })
         .eq('id', selectedGroup.id)
 
       if (error) throw error
       setIsEditGroupOpen(false)
-      const updatedGroup = { ...selectedGroup, name: editGroupForm.name.trim(), description: editGroupForm.description.trim() || null }
+      const updatedGroup = {
+        ...selectedGroup,
+        name: editGroupForm.name.trim(),
+        description: editGroupForm.description.trim() || null,
+        default_owner_mode: editGroupOwnerMode,
+        default_owner_id: resolvedOwnerId,
+      }
       setSelectedGroup(updatedGroup)
       await Promise.all([fetchGroups(), fetchAllGroupTools()])
     } catch (err: any) {
@@ -458,6 +664,8 @@ export default function ToolGroups() {
   function openEditGroup() {
     if (!selectedGroup) return
     setEditGroupForm({ name: selectedGroup.name, description: selectedGroup.description || '' })
+    setEditGroupOwnerMode(selectedGroup.default_owner_mode || 'company_default')
+    setEditGroupOwnerId(selectedGroup.default_owner_id || '')
     setIsEditGroupOpen(true)
   }
 
@@ -828,6 +1036,12 @@ export default function ToolGroups() {
                         Add Tools
                       </button>
                       <button
+                        onClick={openCreateToolModal}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 border-l border-gray-200 hover:bg-gray-50"
+                      >
+                        Create New Tool in Group
+                      </button>
+                      <button
                         onClick={openTransferGroup}
                         className="px-3 py-2 text-sm font-medium text-gray-700 border-l border-gray-200 hover:bg-gray-50"
                       >
@@ -979,6 +1193,57 @@ export default function ToolGroups() {
                   rows={3}
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Default Owner for Tools Created in This Group
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Applies to tools created with "Create New Tool in Group". You can change this later by editing the group.
+                </p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="new-group-owner-mode"
+                      checked={newGroupOwnerMode === 'unassigned'}
+                      onChange={() => setNewGroupOwnerMode('unassigned')}
+                    />
+                    Leave unassigned
+                  </label>
+                  {companyOwnerDefault.use_default_owner && companyOwnerDefault.default_owner_id && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="new-group-owner-mode"
+                        checked={newGroupOwnerMode === 'company_default'}
+                        onChange={() => setNewGroupOwnerMode('company_default')}
+                      />
+                      Use company default owner{companyOwnerDefault.default_owner_name ? ` (${companyOwnerDefault.default_owner_name})` : ''}
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="new-group-owner-mode"
+                      checked={newGroupOwnerMode === 'specific'}
+                      onChange={() => setNewGroupOwnerMode('specific')}
+                    />
+                    Choose a specific owner for this group
+                  </label>
+                  {newGroupOwnerMode === 'specific' && (
+                    <select
+                      value={newGroupOwnerId}
+                      onChange={(e) => setNewGroupOwnerId(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ml-6"
+                    >
+                      <option value="">Select an owner</option>
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>{user.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
               <button
@@ -990,7 +1255,7 @@ export default function ToolGroups() {
               <button
                 onClick={handleCreateGroup}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                disabled={actionLoading || !newGroup.name.trim()}
+                disabled={actionLoading || !newGroup.name.trim() || (newGroupOwnerMode === 'specific' && !newGroupOwnerId)}
               >
                 Create Group
               </button>
@@ -1068,6 +1333,191 @@ export default function ToolGroups() {
                 disabled={actionLoading || selectedToolIds.length === 0}
               >
                 Add Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCreateToolOpen && selectedGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b">
+              <button
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+                onClick={async () => { setIsCreateToolOpen(false); await resetNewGroupTool(); }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+              <h3 className="text-xl font-semibold">Create New Tool in {selectedGroup.name}</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 space-y-1 text-sm text-gray-600">
+                <div>
+                  <span className="font-medium text-gray-800">Tool Number:</span>{' '}
+                  {selectedGroup.name} #{groupMembers.length + 1} <span className="text-xs text-gray-400">(assigned automatically)</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-800">Location:</span> {selectedGroup.name}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-800">Owner:</span> {resolvedGroupOwnerLabel(selectedGroup)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium mb-2 text-sm">Tool Name</label>
+                <input
+                  type="text"
+                  value={newGroupTool.name}
+                  onChange={(e) => setNewGroupTool((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                  placeholder="e.g. Socket Set"
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium mb-2 text-sm">Description (optional)</label>
+                <textarea
+                  value={newGroupTool.description}
+                  onChange={(e) => setNewGroupTool((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+
+              {features.toolCostingEnabled && (
+                <div>
+                  <label className="block font-medium mb-2 text-sm">Estimated Cost (optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={newGroupTool.estimated_cost ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setNewGroupTool((prev) => ({ ...prev, estimated_cost: val === '' ? null : Math.round(Number(val)) }))
+                      }}
+                      placeholder="e.g. 450"
+                      className="w-full border rounded-lg pl-7 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-medium mb-2 text-sm">Tool Images (optional)</label>
+                <div className="space-y-3">
+                  <div>
+                    <label className={`inline-block cursor-pointer px-4 py-2 rounded-lg transition-colors text-white text-sm ${
+                      uploadingGroupToolImage ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
+                    }`}>
+                      {uploadingGroupToolImage ? 'Uploading...' : 'Upload Image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCreateToolImageUpload}
+                        className="hidden"
+                        disabled={uploadingGroupToolImage}
+                      />
+                    </label>
+                  </div>
+                  {groupToolImageError && (
+                    <p className="text-red-500 text-sm">{groupToolImageError}</p>
+                  )}
+                  {pendingGroupToolImages.length > 0 && (
+                    <div className="flex flex-wrap gap-4">
+                      {pendingGroupToolImages.map((img) => (
+                        <div key={img.filePath} className="relative w-24 h-24 border rounded-lg overflow-hidden group">
+                          <img src={img.publicUrl} alt="Tool" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-80 group-hover:opacity-100"
+                            onClick={() => handleRemoveGroupToolImage(img.filePath)}
+                            title="Remove image"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium mb-2 text-sm">Checklist Items</label>
+                <div className="space-y-3">
+                  {newGroupTool.checklist.map((item, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={item.item_name}
+                        onChange={(e) => {
+                          const newChecklist = [...newGroupTool.checklist]
+                          newChecklist[index] = { ...item, item_name: e.target.value }
+                          setNewGroupTool((prev) => ({ ...prev, checklist: newChecklist }))
+                        }}
+                        placeholder="Item name"
+                        className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={item.required}
+                          onChange={(e) => {
+                            const newChecklist = [...newGroupTool.checklist]
+                            newChecklist[index] = { ...item, required: e.target.checked }
+                            setNewGroupTool((prev) => ({ ...prev, checklist: newChecklist }))
+                          }}
+                          className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-4 h-4"
+                        />
+                        Required
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newChecklist = newGroupTool.checklist.filter((_, i) => i !== index)
+                          setNewGroupTool((prev) => ({ ...prev, checklist: newChecklist }))
+                        }}
+                        className="text-red-600 hover:text-red-900 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewGroupTool((prev) => ({
+                        ...prev,
+                        checklist: [...prev.checklist, { item_name: '', required: true }],
+                      }))
+                    }}
+                    className="text-blue-600 hover:text-blue-900 text-sm"
+                  >
+                    + Add Checklist Item
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={async () => { setIsCreateToolOpen(false); await resetNewGroupTool(); }}
+                className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateGroupTool}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={createToolLoading || !newGroupTool.name.trim()}
+              >
+                {createToolLoading ? 'Creating...' : 'Create Tool'}
               </button>
             </div>
           </div>
@@ -1301,6 +1751,57 @@ export default function ToolGroups() {
                   rows={3}
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Default Owner for Tools Created in This Group
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Applies to tools created with "Create New Tool in Group".
+                </p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="edit-group-owner-mode"
+                      checked={editGroupOwnerMode === 'unassigned'}
+                      onChange={() => setEditGroupOwnerMode('unassigned')}
+                    />
+                    Leave unassigned
+                  </label>
+                  {companyOwnerDefault.use_default_owner && companyOwnerDefault.default_owner_id && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="edit-group-owner-mode"
+                        checked={editGroupOwnerMode === 'company_default'}
+                        onChange={() => setEditGroupOwnerMode('company_default')}
+                      />
+                      Use company default owner{companyOwnerDefault.default_owner_name ? ` (${companyOwnerDefault.default_owner_name})` : ''}
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="edit-group-owner-mode"
+                      checked={editGroupOwnerMode === 'specific'}
+                      onChange={() => setEditGroupOwnerMode('specific')}
+                    />
+                    Choose a specific owner for this group
+                  </label>
+                  {editGroupOwnerMode === 'specific' && (
+                    <select
+                      value={editGroupOwnerId}
+                      onChange={(e) => setEditGroupOwnerId(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ml-6"
+                    >
+                      <option value="">Select an owner</option>
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>{user.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
               <button
@@ -1312,7 +1813,7 @@ export default function ToolGroups() {
               <button
                 onClick={handleEditGroup}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                disabled={actionLoading || !editGroupForm.name.trim()}
+                disabled={actionLoading || !editGroupForm.name.trim() || (editGroupOwnerMode === 'specific' && !editGroupOwnerId)}
               >
                 Save Changes
               </button>
