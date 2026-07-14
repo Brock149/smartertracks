@@ -1191,7 +1191,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         presentationStyle="fullScreen"
         onRequestClose={() => setClaimModalVisible(false)}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={80}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
             <SafeAreaView
               edges={['left', 'right', 'bottom']}
               style={[
@@ -1695,7 +1695,8 @@ const styles = StyleSheet.create({
   },
   attributionText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#2563eb',
+    fontWeight: '600',
     fontStyle: 'italic',
     lineHeight: 20,
     marginBottom: 6,
