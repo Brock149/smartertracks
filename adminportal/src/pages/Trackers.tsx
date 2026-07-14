@@ -727,12 +727,12 @@ export default function Trackers() {
           onClick={() => setMapTool(null)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden"
+            className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+            <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
               <div className="min-w-0">
-                <div className="font-semibold text-gray-900 truncate">{mapTool.name}</div>
+                <div className="font-semibold text-gray-900 truncate text-sm">{mapTool.name}</div>
                 <div className="text-xs text-gray-500 truncate">{mapTool.sublabel}</div>
               </div>
               <button
@@ -742,13 +742,14 @@ export default function Trackers() {
                 ×
               </button>
             </div>
-            {/* Everything below the header scrolls as one column on small
-                screens, so the replay controls/scrubber are always reachable
-                even though the map itself also captures touch/scroll. */}
-            <div className="overflow-y-auto flex-1 min-h-0">
+            {/* Everything below fits within the modal's max-height at once —
+                no internal scrolling — by giving the map a flexible height
+                (flex-1) that absorbs whatever space the fixed-height rows
+                above/below it don't use, instead of a fixed vh that could
+                push the replay controls off-screen on short viewports. */}
             {/* Prominent trail-range selector */}
-            <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-blue-50 border-b border-blue-100">
-              <span className="text-sm font-semibold text-gray-700 mr-1">Trail range:</span>
+            <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-blue-50 border-b border-blue-100 shrink-0">
+              <span className="text-xs font-semibold text-gray-700 mr-1">Trail range:</span>
               {([
                 { v: 6, label: '6h' },
                 { v: 24, label: '24h' },
@@ -760,7 +761,7 @@ export default function Trackers() {
                   key={opt.v}
                   type="button"
                   onClick={() => setTrailHours(opt.v)}
-                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
                     trailHours === opt.v
                       ? 'bg-blue-600 text-white shadow'
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -770,35 +771,36 @@ export default function Trackers() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-50 border-b">
+            <div className="flex items-center justify-between gap-3 px-3 py-1 bg-gray-50 border-b shrink-0">
               {trail.length > 0 ? (
-                <div className="flex items-center gap-2.5">
-                  <span className="inline-block w-4 h-4 rounded-full bg-green-600" />
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-600 shrink-0" />
                   <div className="leading-tight">
-                    <div className="text-xs uppercase tracking-wide text-gray-500">Trip start</div>
-                    <div className="text-lg font-bold text-gray-900">{fmtStop(trail[0].at)}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500">Trip start</div>
+                    <div className="text-xs font-bold text-gray-900">{fmtStop(trail[0].at)}</div>
                   </div>
                 </div>
               ) : (
-                <span className="text-base text-gray-500">
+                <span className="text-xs text-gray-500">
                   {trailLoading ? 'Loading trail…' : 'No movement recorded in this range'}
                 </span>
               )}
               {trail.length > 1 && (
-                <div className="flex items-center gap-2.5 text-right">
+                <div className="flex items-center gap-1.5 text-right">
                   <div className="leading-tight">
-                    <div className="text-xs uppercase tracking-wide text-gray-500">Trip end</div>
-                    <div className="text-lg font-bold text-gray-900">
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500">Trip end</div>
+                    <div className="text-xs font-bold text-gray-900">
                       {fmtStop(trail[trail.length - 1].at)}
                     </div>
                   </div>
-                  <span className="inline-block w-4 h-4 rounded-full bg-red-600" />
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-600 shrink-0" />
                 </div>
               )}
             </div>
-            <Suspense fallback={<div style={{ height: 'min(60vh, 480px)' }} className="w-full bg-gray-100 animate-pulse" />}>
+            <div className="flex-1 min-h-0">
+            <Suspense fallback={<div className="w-full h-full bg-gray-100 animate-pulse" />}>
             <TrackerMap
-              height="min(60vh, 480px)"
+              height="100%"
               path={trail}
               replayIndex={replayIndex}
               markers={
@@ -817,8 +819,9 @@ export default function Trackers() {
               }
             />
             </Suspense>
+            </div>
             {trail.length > 1 && (
-              <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-t">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t shrink-0">
                 <button
                   onClick={() => {
                     if (replaying) {
@@ -876,7 +879,6 @@ export default function Trackers() {
                 </span>
               </div>
             )}
-            </div>
           </div>
         </div>
       )}
