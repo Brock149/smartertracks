@@ -732,7 +732,7 @@ export default function Transactions() {
                       </td>
                       <td className="px-6 py-4">
                         {transaction.attribution && (
-                          <div className="text-sm text-gray-500 italic break-words mb-1">
+                          <div className="text-sm text-blue-600 font-medium italic break-words mb-1">
                             {transaction.attribution}
                           </div>
                         )}
@@ -836,7 +836,7 @@ export default function Transactions() {
                   {transaction.attribution && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Method:</span>
-                      <span className="text-gray-600 italic text-right max-w-48 break-words" title={transaction.attribution}>
+                      <span className="text-blue-600 font-medium italic text-right max-w-48 break-words" title={transaction.attribution}>
                         {transaction.attribution}
                       </span>
                     </div>
