@@ -73,6 +73,8 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
   const [storedAtPickerVisible, setStoredAtPickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  const [attemptedTransfer, setAttemptedTransfer] = useState(false);
+  const [transferErrors, setTransferErrors] = useState<string[]>([]);
   const [transferring, setTransferring] = useState(false);
   const [userPickerVisible, setUserPickerVisible] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -453,10 +455,20 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
   };
 
   const handleTransfer = async () => {
-    if (!isTransferFormValid) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    // Validate and, on failure, stack a fresh set of red messages so repeated
+    // taps make it visually obvious what's missing (mirrors single-tool claim).
+    setAttemptedTransfer(true);
+    const missing: string[] = [];
+    if (selectedTools.length === 0) missing.push('Must select at least one tool');
+    if (!location.trim()) missing.push('Must enter a location');
+    if (!storedAt.trim()) missing.push('Must select where it’s stored');
+    if (!isClaimingAny && !toUser.trim()) missing.push('Must select a recipient');
+    if (isClaimingAny && !acknowledged) missing.push('Must check responsibility acknowledgement');
+    if (missing.length > 0) {
+      setTransferErrors((prev) => [...prev, ...missing]);
       return;
     }
+    setTransferErrors([]);
 
     const toolIds = selectedTools.map((tool) => tool.id);
     const issues = await checkForOpenIssues(toolIds);
@@ -471,6 +483,13 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
 
   const proceedWithTransfer = async () => {
     if (!user?.id) return;
+    // Re-check in case the user unchecked the acknowledgment while the open-
+    // issues warning modal was up.
+    if (isClaimingAny && !acknowledged) {
+      setAttemptedTransfer(true);
+      setTransferErrors((prev) => [...prev, 'Must check responsibility acknowledgement']);
+      return;
+    }
     setTransferring(true);
 
     try {
@@ -563,6 +582,8 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
     setStoredAt('');
     setNotes('');
     setAcknowledged(false);
+    setAttemptedTransfer(false);
+    setTransferErrors([]);
     setToUser('');
     setChecklistsByTool({});
     setChecklistStatusByTool({});
@@ -770,8 +791,14 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
           {isClaimingAny && (
             <View style={styles.inputSection}>
               <TouchableOpacity
-                style={styles.ackRow}
-                onPress={() => setAcknowledged((prev) => !prev)}
+                style={[
+                  styles.ackRow,
+                  attemptedTransfer && !acknowledged && styles.ackRowError,
+                ]}
+                onPress={() => {
+                  setAcknowledged((prev) => !prev);
+                  setTransferErrors([]);
+                }}
                 activeOpacity={0.7}
               >
                 <View style={[styles.ackCheckbox, acknowledged && styles.ackCheckboxChecked]}>
@@ -785,6 +812,15 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
                   that {selectedTools.length > 1 ? 'they are' : 'it is'} now in my possession and care.
                 </Text>
               </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Stacked validation messages (grow on each failed tap) */}
+          {transferErrors.length > 0 && (
+            <View style={styles.transferErrorBox}>
+              {transferErrors.map((msg, idx) => (
+                <Text key={idx} style={styles.transferErrorText}>{msg}</Text>
+              ))}
             </View>
           )}
         </View>
@@ -894,12 +930,17 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
         )}
 
         <View style={styles.bottomButtonSection}>
+          {/* Claim/Transfer button is always pressable (only disabled while
+              submitting) so an invalid tap gives feedback instead of silently
+              doing nothing, matching the single-tool claim flow. */}
           <TouchableOpacity
             onPress={handleTransfer}
-            disabled={!isTransferFormValid || transferring}
+            disabled={transferring}
             style={[
               styles.transferButton,
-              (!isTransferFormValid || transferring) && styles.transferButtonDisabled,
+              isTransferFormValid
+                ? undefined
+                : styles.transferButtonDisabled,
             ]}
           >
             <Ionicons name="swap-horizontal-outline" size={20} color="#ffffff" />
@@ -1304,6 +1345,21 @@ const styles = StyleSheet.create({
     borderColor: '#fdba74',
     borderRadius: 12,
     padding: 14,
+  },
+  ackRowError: {
+    borderColor: '#dc2626',
+    borderWidth: 2,
+    backgroundColor: '#fef2f2',
+  },
+  transferErrorBox: {
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  transferErrorText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   ackCheckbox: {
     width: 24,

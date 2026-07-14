@@ -72,12 +72,12 @@ serve(async (req) => {
     }
 
     // Get the request body
-    const { number, name, description, photo_url, checklist, estimated_cost, location } = await req.json()
+    const { group_id, name, description, photo_url, checklist, estimated_cost, location } = await req.json()
 
     // Validate required fields
-    if (!number || !name) {
+    if (!group_id || !name) {
       return new Response(
-        JSON.stringify({ error: 'Number and name are required' }),
+        JSON.stringify({ error: 'Group and name are required' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -85,16 +85,106 @@ serve(async (req) => {
       )
     }
 
-    // Use the database function to create the tool with checklist
+    // Fetch the group and confirm it belongs to this company and isn't deleted
+    const { data: group, error: groupError } = await supabaseClient
+      .from('tool_groups')
+      .select('id, name, is_deleted, default_owner_id, default_owner_mode')
+      .eq('id', group_id)
+      .eq('company_id', userData.company_id)
+      .single()
+
+    if (groupError || !group) {
+      return new Response(
+        JSON.stringify({ error: 'Group not found' }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    if (group.is_deleted) {
+      return new Response(
+        JSON.stringify({ error: 'This group has been deleted' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Resolve the owner based on the group's default-owner mode
+    let ownerId: string | null = null
+    const ownerMode = group.default_owner_mode || 'company_default'
+
+    if (ownerMode === 'specific') {
+      ownerId = group.default_owner_id || null
+    } else if (ownerMode === 'unassigned') {
+      ownerId = null
+    } else {
+      // 'company_default': fall back to the company's default owner settings
+      const { data: companySettings } = await supabaseClient
+        .from('company_settings')
+        .select('default_owner_id, use_default_owner')
+        .eq('company_id', userData.company_id)
+        .single()
+
+      if (companySettings?.use_default_owner && companySettings.default_owner_id) {
+        ownerId = companySettings.default_owner_id
+      }
+    }
+
+    // Compute the next tool number as "{Group Name} #{N}", based on how many
+    // tools are already in the group, bumping further on collision since
+    // tool numbers must be unique within the company.
+    const { count: memberCount, error: countError } = await supabaseClient
+      .from('tool_group_members')
+      .select('tool_id', { count: 'exact', head: true })
+      .eq('group_id', group_id)
+
+    if (countError) {
+      return new Response(
+        JSON.stringify({ error: 'Failed to determine next tool number: ' + countError.message }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    let nextIndex = (memberCount || 0) + 1
+    let candidateNumber = `${group.name} #${nextIndex}`
+    const MAX_ATTEMPTS = 1000
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const { data: existing } = await supabaseClient
+        .from('tools')
+        .select('id')
+        .eq('number', candidateNumber)
+        .eq('company_id', userData.company_id)
+        .maybeSingle()
+
+      if (!existing) break
+
+      nextIndex += 1
+      candidateNumber = `${group.name} #${nextIndex}`
+    }
+
+    // Use the database function to create the tool, link it to the group,
+    // and set its initial location. The admin can edit the pre-filled
+    // location (which defaults to the group's name) before submitting.
+    const resolvedLocation = typeof location === 'string' && location.trim() ? location.trim() : group.name
+
     const { data: toolId, error: toolError } = await supabaseClient
-      .rpc('create_tool_with_checklist', {
-        p_number: number,
+      .rpc('create_group_tool_with_checklist', {
+        p_group_id: group_id,
+        p_number: candidateNumber,
         p_name: name,
         p_description: description || '',
         p_photo_url: photo_url || '',
         p_company_id: userData.company_id,
         p_checklist: checklist || [],
-        p_location: typeof location === 'string' && location.trim() ? location.trim() : null
+        p_owner_id: ownerId,
+        p_location: resolvedLocation
       })
 
     if (toolError) {
@@ -128,8 +218,8 @@ serve(async (req) => {
         actor_name: userData.name || user.email || 'An admin',
         target_type: 'tool',
         target_id: toolId,
-        target_label: `#${number} - ${name}`,
-        details: 'Tool created',
+        target_label: `#${candidateNumber} - ${name}`,
+        details: `Tool created in group "${group.name}"`,
       })
     } catch (_e) {
       // company_events table not present yet — ignore.
@@ -153,7 +243,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
         tool: toolData,
         id: toolId
@@ -172,4 +262,4 @@ serve(async (req) => {
       }
     )
   }
-}) 
+})

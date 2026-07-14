@@ -328,7 +328,7 @@ export default function Trackers() {
       (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
     const time = (t: Tool) => (t.created_at ? new Date(t.created_at).getTime() : 0)
 
-    return [...filtered].sort((a, b) => {
+    const bySortMode = (a: Tool, b: Tool) => {
       switch (sortMode) {
         case 'name_asc':
           return byName(a, b) || byNumber(a, b)
@@ -341,6 +341,16 @@ export default function Trackers() {
         default:
           return byNumber(a, b)
       }
+    }
+
+    // Tools with a tracker attached always sort ahead of tools without one —
+    // otherwise the handful of tracked tools get buried under 100+ untracked
+    // ones. Within each group, the chosen sort mode still applies.
+    return [...filtered].sort((a, b) => {
+      const aTracked = assignments[a.id] ? 1 : 0
+      const bTracked = assignments[b.id] ? 1 : 0
+      if (aTracked !== bTracked) return bTracked - aTracked
+      return bySortMode(a, b)
     })
   }, [tools, assignments, searchTerm, sortMode, trackerNumbers])
 
@@ -572,7 +582,7 @@ export default function Trackers() {
         const a = assignments[editTool.id]
         return (
           <div
-            className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black bg-opacity-40 z-[10000] flex items-center justify-center p-4"
             onClick={() => setEditTool(null)}
           >
             <div
@@ -713,7 +723,7 @@ export default function Trackers() {
       {/* Map preview modal */}
       {mapTool && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center p-4"
           onClick={() => setMapTool(null)}
         >
           <div

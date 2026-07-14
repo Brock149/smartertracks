@@ -301,6 +301,63 @@ $$;
 ALTER FUNCTION "public"."company_tracker_pool"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+    v_tool_id uuid;
+begin
+    insert into tools (number, name, description, photo_url, company_id, current_owner)
+    values (p_number, p_name, p_description, p_photo_url, p_company_id, p_owner_id)
+    returning id into v_tool_id;
+
+    if p_checklist is not null and jsonb_array_length(p_checklist) > 0 then
+        insert into tool_checklists (tool_id, item_name, required, company_id)
+        select
+            v_tool_id,
+            (item->>'item_name')::text,
+            (item->>'required')::boolean,
+            p_company_id
+        from jsonb_array_elements(p_checklist) as item;
+    end if;
+
+    insert into tool_transactions (
+        tool_id,
+        from_user_id,
+        to_user_id,
+        location,
+        stored_at,
+        notes,
+        company_id
+    ) values (
+        v_tool_id,
+        null,
+        p_owner_id,
+        normalize_location(p_company_id, coalesce(p_location, 'Not specified')),
+        'N/A',
+        'Initial assignment from system (created in group)' ||
+        case
+            when p_owner_id is not null then ' to owner'
+            else ''
+        end,
+        p_company_id
+    );
+
+    insert into tool_group_members (group_id, tool_id)
+    values (p_group_id, v_tool_id);
+
+    return v_tool_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") IS 'p_location is caller-resolved: the admin-edited location if provided, otherwise the group name.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -387,6 +444,91 @@ $$;
 
 
 ALTER FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_location" "text" DEFAULT NULL::"text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+    v_tool_id uuid;
+    v_default_owner_id uuid;
+    v_default_location text;
+    v_use_default_location boolean;
+    v_use_default_owner boolean;
+    v_final_owner_id uuid;
+    v_final_location text;
+begin
+    select
+        default_owner_id,
+        default_location,
+        use_default_location,
+        use_default_owner
+    into
+        v_default_owner_id,
+        v_default_location,
+        v_use_default_location,
+        v_use_default_owner
+    from company_settings
+    where company_id = p_company_id;
+
+    v_final_owner_id := case
+        when v_use_default_owner and v_default_owner_id is not null
+        then v_default_owner_id
+        else null
+    end;
+
+    -- An explicitly provided location (from the create-tool UI) always wins
+    -- over the company's toggle-based default.
+    v_final_location := case
+        when p_location is not null and btrim(p_location) <> '' then btrim(p_location)
+        when v_use_default_location and v_default_location is not null then v_default_location
+        else null
+    end;
+
+    insert into tools (number, name, description, photo_url, company_id, current_owner)
+    values (p_number, p_name, p_description, p_photo_url, p_company_id, v_final_owner_id)
+    returning id into v_tool_id;
+
+    if p_checklist is not null and jsonb_array_length(p_checklist) > 0 then
+        insert into tool_checklists (tool_id, item_name, required, company_id)
+        select
+            v_tool_id,
+            (item->>'item_name')::text,
+            (item->>'required')::boolean,
+            p_company_id
+        from jsonb_array_elements(p_checklist) as item;
+    end if;
+
+    if v_final_owner_id is not null or v_final_location is not null then
+        insert into tool_transactions (
+            tool_id,
+            from_user_id,
+            to_user_id,
+            location,
+            stored_at,
+            notes,
+            company_id
+        ) values (
+            v_tool_id,
+            null,
+            v_final_owner_id,
+            normalize_location(p_company_id, coalesce(v_final_location, 'Not specified')),
+            'N/A',
+            'Initial assignment from system' ||
+            case
+                when v_final_owner_id is not null then ' to default owner'
+                else ''
+            end,
+            p_company_id
+        );
+    end if;
+
+    return v_tool_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_location" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") RETURNS "json"
@@ -978,6 +1120,61 @@ $$;
 ALTER FUNCTION "public"."log_group_activity"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."maybe_queue_weekly_export_runs"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_settings public.export_schedule_settings;
+  v_now_et timestamp;
+  v_today date;
+  v_weekday smallint;
+  v_minutes_of_day int;
+  v_target_minutes_of_day int;
+begin
+  select * into v_settings from public.export_schedule_settings where id = true;
+  if v_settings is null then
+    return;
+  end if;
+
+  v_now_et := now() at time zone 'America/New_York';
+  v_today := v_now_et::date;
+  v_weekday := extract(dow from v_now_et);
+  v_minutes_of_day := extract(hour from v_now_et) * 60 + extract(minute from v_now_et);
+  v_target_minutes_of_day := v_settings.hour * 60 + v_settings.minute;
+
+  -- Due if it's the right weekday, we're within 5 minutes after the target
+  -- time (this function runs every 5 min via cron), and we haven't already
+  -- queued today.
+  if v_weekday <> v_settings.weekday then
+    return;
+  end if;
+  if v_minutes_of_day < v_target_minutes_of_day or v_minutes_of_day >= v_target_minutes_of_day + 5 then
+    return;
+  end if;
+  if v_settings.last_queued_date = v_today then
+    return;
+  end if;
+
+  insert into public.scheduled_export_runs (company_id, export_type, run_at, status)
+  select company_id, 'personal', now(), 'pending'
+    from public.company_settings
+   where coalesce(array_length(auto_export_recipients, 1), 0) > 0
+  union all
+  select company_id, 'company', now(), 'pending'
+    from public.company_settings
+   where coalesce(array_length(company_export_recipients, 1), 0) > 0;
+
+  update public.export_schedule_settings
+     set last_queued_date = v_today
+   where id = true;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."maybe_queue_weekly_export_runs"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."next_company_tracker_number"("p_company_id" "uuid") RETURNS integer
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1531,6 +1728,65 @@ $$;
 
 ALTER FUNCTION "public"."update_app_version_control_updated_at"() OWNER TO "postgres";
 
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."export_schedule_settings" (
+    "id" boolean DEFAULT true NOT NULL,
+    "weekday" smallint DEFAULT 1 NOT NULL,
+    "hour" smallint DEFAULT 8 NOT NULL,
+    "minute" smallint DEFAULT 30 NOT NULL,
+    "last_queued_date" "date",
+    "updated_by" "uuid",
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "export_schedule_settings_hour_check" CHECK ((("hour" >= 0) AND ("hour" <= 23))),
+    CONSTRAINT "export_schedule_settings_minute_check" CHECK ((("minute" >= 0) AND ("minute" <= 59))),
+    CONSTRAINT "export_schedule_settings_singleton" CHECK ("id"),
+    CONSTRAINT "export_schedule_settings_weekday_check" CHECK ((("weekday" >= 0) AND ("weekday" <= 6)))
+);
+
+
+ALTER TABLE "public"."export_schedule_settings" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_export_schedule"("p_weekday" smallint, "p_hour" smallint, "p_minute" smallint) RETURNS "public"."export_schedule_settings"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_row public.export_schedule_settings;
+begin
+  if not public.is_superadmin(auth.uid()) then
+    raise exception 'Only a superadmin can change the export schedule';
+  end if;
+  if p_weekday not between 0 and 6 then
+    raise exception 'weekday must be between 0 (Sunday) and 6 (Saturday)';
+  end if;
+  if p_hour not between 0 and 23 then
+    raise exception 'hour must be between 0 and 23';
+  end if;
+  if p_minute not between 0 and 59 then
+    raise exception 'minute must be between 0 and 59';
+  end if;
+
+  update public.export_schedule_settings
+     set weekday = p_weekday,
+         hour = p_hour,
+         minute = p_minute,
+         updated_by = auth.uid(),
+         updated_at = now()
+   where id = true
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."update_export_schedule"("p_weekday" smallint, "p_hour" smallint, "p_minute" smallint) OWNER TO "postgres";
+
 
 CREATE OR REPLACE FUNCTION "public"."upsert_company_export_settings"("p_company_id" "uuid", "p_enabled" boolean, "p_recipients" "text"[], "p_frequency" "text") RETURNS "json"
     LANGUAGE "plpgsql" SECURITY DEFINER
@@ -1843,10 +2099,6 @@ $$;
 
 ALTER FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") OWNER TO "postgres";
 
-SET default_tablespace = '';
-
-SET default_table_access_method = "heap";
-
 
 CREATE TABLE IF NOT EXISTS "public"."app_version_control" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -2139,7 +2391,10 @@ CREATE TABLE IF NOT EXISTS "public"."tool_groups" (
     "created_by" "uuid",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "is_deleted" boolean DEFAULT false NOT NULL,
-    CONSTRAINT "ck_tool_groups_company_active" CHECK ("public"."is_company_active"("company_id"))
+    "default_owner_id" "uuid",
+    "default_owner_mode" "text" DEFAULT 'company_default'::"text" NOT NULL,
+    CONSTRAINT "ck_tool_groups_company_active" CHECK ("public"."is_company_active"("company_id")),
+    CONSTRAINT "ck_tool_groups_default_owner_mode" CHECK (("default_owner_mode" = ANY (ARRAY['specific'::"text", 'company_default'::"text", 'unassigned'::"text"])))
 );
 
 
@@ -2378,6 +2633,11 @@ ALTER TABLE ONLY "public"."company_settings"
 
 ALTER TABLE ONLY "public"."company_settings"
     ADD CONSTRAINT "company_settings_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."export_schedule_settings"
+    ADD CONSTRAINT "export_schedule_settings_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2916,6 +3176,11 @@ ALTER TABLE ONLY "public"."tool_groups"
 
 
 
+ALTER TABLE ONLY "public"."tool_groups"
+    ADD CONSTRAINT "tool_groups_default_owner_id_fkey" FOREIGN KEY ("default_owner_id") REFERENCES "public"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."tool_images"
     ADD CONSTRAINT "tool_images_tool_id_fkey" FOREIGN KEY ("tool_id") REFERENCES "public"."tools"("id") ON DELETE CASCADE;
 
@@ -3177,6 +3442,10 @@ CREATE POLICY "Service role can do everything on company_settings" ON "public"."
 
 
 
+CREATE POLICY "Service role can do everything on export_schedule_settings" ON "public"."export_schedule_settings" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Service role can do everything on group activity" ON "public"."group_activity_log" TO "service_role" USING (true) WITH CHECK (true);
 
 
@@ -3258,6 +3527,10 @@ CREATE POLICY "Superadmins can view all transactions" ON "public"."tool_transact
 
 
 CREATE POLICY "Superadmins can view all users" ON "public"."users" FOR SELECT TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"()));
+
+
+
+CREATE POLICY "Superadmins can view export schedule" ON "public"."export_schedule_settings" FOR SELECT TO "authenticated" USING ("public"."is_superadmin"("auth"."uid"()));
 
 
 
@@ -3395,6 +3668,9 @@ CREATE POLICY "company_events_select" ON "public"."company_events" FOR SELECT US
 
 
 ALTER TABLE "public"."company_settings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."export_schedule_settings" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."group_activity_log" ENABLE ROW LEVEL SECURITY;
@@ -3680,9 +3956,21 @@ GRANT ALL ON FUNCTION "public"."company_tracker_pool"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_location" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_location" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_location" "text") TO "service_role";
 
 
 
@@ -3797,6 +4085,12 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "service_role";
 GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."maybe_queue_weekly_export_runs"() TO "anon";
+GRANT ALL ON FUNCTION "public"."maybe_queue_weekly_export_runs"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."maybe_queue_weekly_export_runs"() TO "service_role";
 
 
 
@@ -3916,6 +4210,18 @@ GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "service_ro
 GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "anon";
 GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_app_version_control_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."export_schedule_settings" TO "anon";
+GRANT ALL ON TABLE "public"."export_schedule_settings" TO "authenticated";
+GRANT ALL ON TABLE "public"."export_schedule_settings" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_export_schedule"("p_weekday" smallint, "p_hour" smallint, "p_minute" smallint) TO "anon";
+GRANT ALL ON FUNCTION "public"."update_export_schedule"("p_weekday" smallint, "p_hour" smallint, "p_minute" smallint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_export_schedule"("p_weekday" smallint, "p_hour" smallint, "p_minute" smallint) TO "service_role";
 
 
 
