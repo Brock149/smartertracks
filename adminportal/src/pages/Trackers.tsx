@@ -727,21 +727,25 @@ export default function Trackers() {
           onClick={() => setMapTool(null)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-6xl overflow-hidden"
+            className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <div>
-                <div className="font-semibold text-gray-900">{mapTool.name}</div>
-                <div className="text-xs text-gray-500">{mapTool.sublabel}</div>
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+              <div className="min-w-0">
+                <div className="font-semibold text-gray-900 truncate">{mapTool.name}</div>
+                <div className="text-xs text-gray-500 truncate">{mapTool.sublabel}</div>
               </div>
               <button
                 onClick={() => setMapTool(null)}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-3"
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-3 shrink-0"
               >
                 ×
               </button>
             </div>
+            {/* Everything below the header scrolls as one column on small
+                screens, so the replay controls/scrubber are always reachable
+                even though the map itself also captures touch/scroll. */}
+            <div className="overflow-y-auto flex-1 min-h-0">
             {/* Prominent trail-range selector */}
             <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-blue-50 border-b border-blue-100">
               <span className="text-sm font-semibold text-gray-700 mr-1">Trail range:</span>
@@ -792,9 +796,9 @@ export default function Trackers() {
                 </div>
               )}
             </div>
-            <Suspense fallback={<div style={{ height: '72vh' }} className="w-full bg-gray-100 animate-pulse" />}>
+            <Suspense fallback={<div style={{ height: 'min(60vh, 480px)' }} className="w-full bg-gray-100 animate-pulse" />}>
             <TrackerMap
-              height="72vh"
+              height="min(60vh, 480px)"
               path={trail}
               replayIndex={replayIndex}
               markers={
@@ -814,7 +818,7 @@ export default function Trackers() {
             />
             </Suspense>
             {trail.length > 1 && (
-              <div className="flex items-center gap-3 px-4 py-3 border-t">
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-t">
                 <button
                   onClick={() => {
                     if (replaying) {
@@ -826,11 +830,11 @@ export default function Trackers() {
                       setReplaying(true)
                     }
                   }}
-                  className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                  className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shrink-0"
                 >
                   {replaying ? '⏸ Pause' : '▶ Replay'}
                 </button>
-                <div className="relative flex-1">
+                <div className="relative flex-1 min-w-[140px]">
                   {/* Clickable stop ticks: jump the scrubber straight to a stop. */}
                   <div className="absolute inset-x-0 -top-1.5 h-3 pointer-events-none">
                     {stops.map((s, i) => {
@@ -865,13 +869,14 @@ export default function Trackers() {
                     className="w-full"
                   />
                 </div>
-                <span className="text-xs text-gray-600 w-40 text-right tabular-nums">
+                <span className="text-xs text-gray-600 text-right tabular-nums shrink-0">
                   {replayIndex != null && trail[replayIndex]?.at
                     ? new Date(trail[replayIndex].at as string).toLocaleString()
                     : `${trail.length} points`}
                 </span>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
