@@ -156,13 +156,23 @@ function buildXlsxBase64(opts: {
   colWidths: number[]
   photoColStart: number
   currencyCols?: number[]
+  metaLines?: string[]
 }): string {
-  const aoa: CellValue[][] = [opts.header, ...opts.rows]
+  const metaLines = opts.metaLines || []
+  const metaRows: CellValue[][] = metaLines.map((line) => [line])
+  const headerRowIdx = metaRows.length
+  const aoa: CellValue[][] = [...metaRows, opts.header, ...opts.rows]
   const ws = XLSX.utils.aoa_to_sheet(aoa)
 
-  // Sort/filter controls across the whole used range.
+  // Sort/filter controls scoped to the header row through the last data row
+  // (skipping the info rows above the table).
   const ref = ws['!ref']
-  if (ref) ws['!autofilter'] = { ref }
+  if (ref) {
+    const full = XLSX.utils.decode_range(ref)
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({ s: { r: headerRowIdx, c: full.s.c }, e: full.e }),
+    }
+  }
   ws['!cols'] = opts.colWidths.map((w) => ({ wch: w }))
 
   // Make photo cells clickable links.
@@ -171,7 +181,7 @@ function buildXlsxBase64(opts: {
     for (let c = opts.photoColStart; c < opts.header.length; c++) {
       const val = row[c]
       if (typeof val === 'string' && val.startsWith('http')) {
-        const addr = XLSX.utils.encode_cell({ r: r + 1, c })
+        const addr = XLSX.utils.encode_cell({ r: r + 1 + headerRowIdx, c })
         ws[addr] = { t: 's', v: val, l: { Target: val, Tooltip: 'Open photo' } }
       }
     }
@@ -180,7 +190,7 @@ function buildXlsxBase64(opts: {
   // Currency formatting for numeric cost cells.
   for (const cc of opts.currencyCols || []) {
     for (let r = 0; r < opts.rows.length; r++) {
-      const addr = XLSX.utils.encode_cell({ r: r + 1, c: cc })
+      const addr = XLSX.utils.encode_cell({ r: r + 1 + headerRowIdx, c: cc })
       const cell = ws[addr]
       if (cell && typeof cell.v === 'number') cell.z = '$#,##0'
     }
@@ -318,13 +328,14 @@ async function exportPersonal(
 
   const colWidths = [22, 26, 8, 28, 16, 22, 22, 12, ...Array(photoCount).fill(44)]
   const dateLabel = new Date().toISOString().slice(0, 10)
-  const filename = `personal-tool-inventory-${slugify(companyName) || 'company'}-${dateLabel}.xlsx`
+  const filename = `${slugify(companyName) || 'company'}-personal-tool-inventory-${dateLabel}.xlsx`
   const contentBase64 = buildXlsxBase64({
     sheetName: 'Personal Tools',
     header,
     rows,
     colWidths,
     photoColStart: fixed.length,
+    metaLines: [`Company: ${companyName}`, `Generated: ${dateLabel}`],
   })
 
   const totalTools = tools.length
@@ -332,7 +343,7 @@ async function exportPersonal(
   const employeesWithTools = new Set(tools.map((t) => t.owner_id)).size
   const html = `
     <div style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#1f2937;">
-      <h2 style="margin:0 0 6px;">Personal Tool Inventory</h2>
+      <h2 style="margin:0 0 6px;">${escapeHtml(companyName)} — Personal Tool Inventory</h2>
       <p style="margin:0 0 2px;color:#6b7280;">${escapeHtml(companyName)}</p>
       <p style="margin:0 0 16px;color:#6b7280;">As of ${escapeHtml(dateLabel)}</p>
       <p style="margin:0 0 12px;">
@@ -347,7 +358,7 @@ async function exportPersonal(
 
   const sent = await sendReport({
     recipients,
-    subject: `Personal Tool Inventory — ${companyName} — ${dateLabel}`,
+    subject: `${companyName} — Personal Tool Inventory — ${dateLabel}`,
     html,
     filename,
     contentBase64,
@@ -452,7 +463,7 @@ async function exportCompanyTools(
 
   const colWidths = [22, 18, 8, 28, 36, 22, 10, 12, ...Array(photoCount).fill(44)]
   const dateLabel = new Date().toISOString().slice(0, 10)
-  const filename = `company-tool-inventory-${slugify(companyName) || 'company'}-${dateLabel}.xlsx`
+  const filename = `${slugify(companyName) || 'company'}-company-tool-inventory-${dateLabel}.xlsx`
   const contentBase64 = buildXlsxBase64({
     sheetName: 'Company Tools',
     header,
@@ -460,6 +471,7 @@ async function exportCompanyTools(
     colWidths,
     photoColStart: fixed.length,
     currencyCols: [6],
+    metaLines: [`Company: ${companyName}`, `Generated: ${dateLabel}`],
   })
 
   const totalTools = tools.length

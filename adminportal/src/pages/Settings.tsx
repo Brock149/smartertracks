@@ -711,7 +711,7 @@ export default function Settings() {
       <div className="bg-white rounded-lg shadow p-8 mt-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h3 className="text-2xl font-bold">Automated Inventory Reports</h3>
+            <h3 className="text-2xl font-bold">Automated Personal Tool Reports</h3>
             <p className="text-lg text-gray-500 mt-1">
               Email an itemized spreadsheet of every employee's personal tools to chosen recipients on a schedule
             </p>
