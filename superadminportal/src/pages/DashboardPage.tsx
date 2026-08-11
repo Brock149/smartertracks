@@ -114,15 +114,18 @@ export default function DashboardPage() {
     }
   }
 
-  const handleAliasBackfillAllCompanies = async () => {
+  const handleAliasBackfillAllCompanies = async (forceReplace: boolean) => {
     if (aliasBackfilling) return
     if (companies.length === 0) {
       setAliasBackfillMessage('Error: No companies loaded.')
       return
     }
     const ok = window.confirm(
-      `Generate AI search aliases for tools across all ${companies.length} companies?\n\n` +
-        'Skips tools that already have AI aliases. Uses Claude Haiku (~$1–5 per ~1,000 tools). Safe to re-run.'
+      forceReplace
+        ? `Regenerate AI keywords for ALL tools across ${companies.length} companies?\n\n` +
+            'Replaces existing AI keywords with the new slang/nickname prompt. Manual keywords are kept. Uses Claude Haiku (~$1–5 per ~1,000 tools).'
+        : `Generate AI keywords for tools that don't have them yet across all ${companies.length} companies?\n\n` +
+            'Skips tools that already have AI keywords. Uses Claude Haiku (~$1–5 per ~1,000 tools).'
     )
     if (!ok) return
 
@@ -149,7 +152,7 @@ export default function DashboardPage() {
               company_id: company.id,
               limit,
               offset,
-              only_missing: true,
+              only_missing: !forceReplace,
             },
           })
           if (error) throw error
@@ -175,7 +178,7 @@ export default function DashboardPage() {
       )
     } catch (err) {
       setAliasBackfillMessage(
-        err instanceof Error ? `Error: ${err.message}` : 'Failed to backfill aliases'
+        err instanceof Error ? `Error: ${err.message}` : 'Failed to backfill keywords'
       )
     } finally {
       setAliasBackfilling(false)
@@ -367,23 +370,31 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* AI search aliases — one-shot across every company */}
+          {/* AI search keywords — slang/nicknames across every company */}
           <div className="bg-white shadow rounded-lg p-4 mb-6 border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-1">🔍 Search aliases (AI)</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-1">🔍 Search keywords (AI)</h3>
             <p className="text-sm text-gray-500 mb-3">
-              Backfill slang / nickname search terms for tools in every company
-              (e.g. &quot;sawzall&quot;). New tools get aliases automatically on create.
+              Generate jobsite slang / nicknames for tools (e.g. &quot;sawzall&quot;), not word-reorders of the
+              catalog name. New tools get keywords automatically on create.
               Requires the <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY</code> Edge secret.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={handleAliasBackfillAllCompanies}
+                onClick={() => handleAliasBackfillAllCompanies(false)}
                 disabled={aliasBackfilling || companies.length === 0}
                 className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md"
               >
                 {aliasBackfilling
-                  ? 'Running backfill…'
-                  : `Generate search aliases (all ${companies.length} companies)`}
+                  ? 'Running…'
+                  : `Generate missing keywords (${companies.length} companies)`}
+              </button>
+              <button
+                onClick={() => handleAliasBackfillAllCompanies(true)}
+                disabled={aliasBackfilling || companies.length === 0}
+                className="inline-flex items-center px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md"
+                title="Replace existing AI keywords with the improved slang/nickname prompt"
+              >
+                Regenerate all AI keywords
               </button>
               {aliasBackfillMessage && (
                 <span

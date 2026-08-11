@@ -1,65 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { generateAliasesWithHaiku } from '../_shared/generateToolAliases.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
-
-async function generateAliasesWithHaiku(name: string, description: string): Promise<string[]> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not configured')
-  }
-
-  const prompt = `You generate search aliases for a construction / trades tool inventory system.
-Given a tool name and optional description, return ONLY a JSON array of short alternate search terms people might type.
-Include: common misspellings, brand nicknames, trade slang, abbreviations, and spacing/punctuation variants.
-Do NOT include the exact tool name itself. Max 12 aliases. Lowercase preferred. No explanations.
-
-Name: ${name}
-Description: ${description || '(none)'}`
-
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: HAIKU_MODEL,
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-
-  if (!resp.ok) {
-    const body = await resp.text()
-    throw new Error(`Anthropic API error (${resp.status}): ${body}`)
-  }
-
-  const json = await resp.json()
-  const text = (json?.content || [])
-    .filter((c: any) => c.type === 'text')
-    .map((c: any) => c.text)
-    .join('\n')
-    .trim()
-
-  const match = text.match(/\[[\s\S]*\]/)
-  if (!match) return []
-
-  const parsed = JSON.parse(match[0])
-  if (!Array.isArray(parsed)) return []
-
-  const cleaned = parsed
-    .map((a) => String(a || '').trim())
-    .filter((a) => a.length > 0 && a.length <= 80)
-    .slice(0, 12)
-
-  return [...new Set(cleaned)]
 }
 
 serve(async (req) => {
@@ -132,15 +77,14 @@ serve(async (req) => {
       })
     }
 
-    let query = supabaseClient
+    const { data: tools, error: toolsError } = await supabaseClient
       .from('tools')
-      .select('id, name, description')
+      .select('id, name')
       .eq('company_id', companyId)
       .or('is_deleted.is.null,is_deleted.eq.false')
       .order('number_numeric', { ascending: true })
       .range(offset, offset + limit - 1)
 
-    const { data: tools, error: toolsError } = await query
     if (toolsError) {
       throw new Error(toolsError.message)
     }
@@ -162,7 +106,7 @@ serve(async (req) => {
           }
         }
 
-        const aliases = await generateAliasesWithHaiku(tool.name || '', tool.description || '')
+        const aliases = await generateAliasesWithHaiku(tool.name || '')
         const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('replace_tool_ai_aliases', {
           p_tool_id: tool.id,
           p_aliases: aliases,
