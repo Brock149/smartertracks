@@ -4,6 +4,7 @@ import { fetchToolImages } from '../lib/uploadImage'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { searchTools } from '../lib/toolSearch'
 
 interface ToolCostRow {
   id: string
@@ -28,6 +29,7 @@ export default function ToolCosts() {
   const [sortField, setSortField] = useState<SortField>('cost')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [searchTerm, setSearchTerm] = useState('')
+  const [remoteIds, setRemoteIds] = useState<string[] | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
@@ -159,14 +161,20 @@ export default function ToolCosts() {
   const filtered = useMemo(() => {
     let list = tools
 
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase()
-      list = list.filter(t =>
-        t.number.toLowerCase().includes(lower) ||
-        t.name.toLowerCase().includes(lower) ||
-        t.owner_name.toLowerCase().includes(lower) ||
-        t.location.toLowerCase().includes(lower)
-      )
+    if (searchTerm.trim()) {
+      if (remoteIds) {
+        const idSet = new Set(remoteIds)
+        list = list.filter((t) => idSet.has(t.id))
+      } else {
+        const lower = searchTerm.toLowerCase()
+        list = list.filter(
+          (t) =>
+            t.number.toLowerCase().includes(lower) ||
+            t.name.toLowerCase().includes(lower) ||
+            t.owner_name.toLowerCase().includes(lower) ||
+            t.location.toLowerCase().includes(lower)
+        )
+      }
     }
 
     if (filter === 'costed') {
@@ -176,7 +184,44 @@ export default function ToolCosts() {
     }
 
     return list
-  }, [tools, searchTerm, filter])
+  }, [tools, searchTerm, filter, remoteIds])
+
+  useEffect(() => {
+    const term = searchTerm.trim()
+    if (!term) {
+      setRemoteIds(null)
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchTools({ q: term, limit: 100, scope: 'company' })
+        if (cancelled) return
+        setRemoteIds(results.map((r) => r.id))
+      } catch (err) {
+        console.error('Tool costs search failed', err)
+        if (!cancelled) {
+          // fallback local
+          const lower = term.toLowerCase()
+          setRemoteIds(
+            tools
+              .filter(
+                (t) =>
+                  t.number.toLowerCase().includes(lower) ||
+                  t.name.toLowerCase().includes(lower) ||
+                  t.owner_name.toLowerCase().includes(lower) ||
+                  t.location.toLowerCase().includes(lower)
+              )
+              .map((t) => t.id)
+          )
+        }
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [searchTerm, tools])
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {

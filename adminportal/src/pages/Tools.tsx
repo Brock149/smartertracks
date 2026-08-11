@@ -12,6 +12,15 @@ import {
 import { logCompanyEvent } from '../lib/companyEvents'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 import { getMyCompanySettings } from '../lib/companySettingsApi'
+import {
+  searchTools,
+  listToolSearchAliases,
+  upsertToolSearchAlias,
+  deleteToolSearchAlias,
+  setToolIncludeInGlobalSearch,
+  regenerateToolAliases,
+  type ToolSearchAlias,
+} from '../lib/toolSearch'
 
 interface Tool {
   id: string
@@ -24,6 +33,7 @@ interface Tool {
   deleted_owner_name?: string | null
   photo_url?: string
   estimated_cost?: number | null
+  include_in_global_search?: boolean
   owner?: {
     name: string
   }
@@ -51,6 +61,12 @@ export default function Tools() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [remoteSearchResults, setRemoteSearchResults] = useState<Tool[] | null>(null)
+  const [searchingRemote, setSearchingRemote] = useState(false)
+  const [editAliases, setEditAliases] = useState<ToolSearchAlias[]>([])
+  const [newAliasText, setNewAliasText] = useState('')
+  const [aliasesLoading, setAliasesLoading] = useState(false)
+  const [regenAliasesLoading, setRegenAliasesLoading] = useState(false)
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
@@ -398,8 +414,15 @@ export default function Tools() {
     setEditToolImages([])
     setEditImagesToDelete([])
     setEditImagesAdded([])
+    setEditAliases([])
+    setNewAliasText('')
     fetchToolImages(tool.id).then(setEditToolImages)
     fetchChecklist(tool.id)
+    setAliasesLoading(true)
+    listToolSearchAliases(tool.id)
+      .then(setEditAliases)
+      .catch((err) => console.error('Failed to load aliases', err))
+      .finally(() => setAliasesLoading(false))
     setIsEditModalOpen(true)
   }
 
@@ -431,12 +454,16 @@ export default function Tools() {
         alert(data.error || 'Failed to update tool');
         return;
       }
+      if (typeof editingTool.include_in_global_search === 'boolean') {
+        await setToolIncludeInGlobalSearch(editingTool.id, editingTool.include_in_global_search)
+      }
       setIsEditModalOpen(false);
       setEditingTool(null);
       setSelectedTool(null);
       setChecklistItems([]);
       setEditImagesToDelete([]);
       setEditImagesAdded([]);
+      setEditAliases([]);
       fetchTools();
     } catch (error: any) {
       alert(error.message || 'An unexpected error occurred');
@@ -618,22 +645,57 @@ export default function Tools() {
 
 
   // Add pagination function
-  const filteredTools = useMemo(() => {
-    const lowerSearch = searchTerm.toLowerCase()
-    return tools.filter(tool => {
-      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch)
-      const matchesName = tool.name.toLowerCase().includes(lowerSearch)
-      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch)
-      const matchesOwner = (tool.owner?.name || tool.deleted_owner_name || '').toLowerCase().includes(lowerSearch)
-      const latestLocation =
-        tool.latest_transaction && tool.latest_transaction.length > 0
-          ? tool.latest_transaction[0].location || ''
-          : ''
-      const matchesLocation = latestLocation.toLowerCase().includes(lowerSearch)
+  useEffect(() => {
+    const term = searchTerm.trim()
+    if (!term) {
+      setRemoteSearchResults(null)
+      setSearchingRemote(false)
+      return
+    }
 
-      return matchesNumber || matchesName || matchesDescription || matchesOwner || matchesLocation
-    })
-  }, [tools, searchTerm])
+    let cancelled = false
+    setSearchingRemote(true)
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchTools({ q: term, limit: 100, scope: 'company' })
+        if (cancelled) return
+        setRemoteSearchResults(
+          results.map((t) => ({
+            id: t.id,
+            number: t.number,
+            name: t.name,
+            description: t.description || '',
+            created_at: '',
+            company_id: t.company_id || '',
+            current_owner: t.current_owner ?? null,
+            include_in_global_search: t.include_in_global_search,
+            owner: t.owner_name ? { name: t.owner_name } : undefined,
+            latest_transaction: t.location
+              ? [{ location: t.location, stored_at: t.stored_at || '', timestamp: '' }]
+              : [],
+            photo_url: t.photo_url || undefined,
+          }))
+        )
+      } catch (err: any) {
+        console.error('Remote tool search failed', err)
+        if (!cancelled) setRemoteSearchResults([])
+      } finally {
+        if (!cancelled) setSearchingRemote(false)
+      }
+    }, 300)
+
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [searchTerm])
+
+  const filteredTools = useMemo(() => {
+    if (searchTerm.trim()) {
+      return remoteSearchResults ?? []
+    }
+    return tools
+  }, [tools, searchTerm, remoteSearchResults])
 
   const sortedTools = useMemo(() => {
     return [...filteredTools].sort((a, b) => {
@@ -800,6 +862,9 @@ export default function Tools() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+            {searchingRemote && (
+              <p className="text-xs text-gray-500 mt-1">Searching…</p>
+            )}
           </div>
 
           {error && (
@@ -1281,6 +1346,112 @@ export default function Tools() {
                     className="w-full border rounded-lg px-5 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   />
+                </div>
+
+                <label className="flex items-start gap-3 text-base">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300"
+                    checked={editingTool.include_in_global_search !== false}
+                    onChange={(e) =>
+                      setEditingTool({
+                        ...editingTool,
+                        include_in_global_search: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">Include in global search</span>
+                    <span className="block text-sm text-gray-500">
+                      When off, this tool stays out of All Tools / Transfer search (still findable in its group).
+                    </span>
+                  </span>
+                </label>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block font-medium text-lg">Search aliases</label>
+                    <button
+                      type="button"
+                      disabled={regenAliasesLoading}
+                      onClick={async () => {
+                        if (!editingTool) return
+                        try {
+                          setRegenAliasesLoading(true)
+                          await regenerateToolAliases(editingTool.id)
+                          const refreshed = await listToolSearchAliases(editingTool.id)
+                          setEditAliases(refreshed)
+                        } catch (err: any) {
+                          alert(err.message || 'Failed to regenerate aliases')
+                        } finally {
+                          setRegenAliasesLoading(false)
+                        }
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    >
+                      {regenAliasesLoading ? 'Generating…' : 'Regenerate AI aliases'}
+                    </button>
+                  </div>
+                  {aliasesLoading ? (
+                    <p className="text-sm text-gray-500">Loading aliases…</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {editAliases.length === 0 && (
+                        <p className="text-sm text-gray-500">No aliases yet.</p>
+                      )}
+                      {editAliases.map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex items-center justify-between gap-2 border rounded px-3 py-2 text-sm"
+                        >
+                          <span>
+                            {a.alias}{' '}
+                            <span className="text-gray-400">({a.source})</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="text-red-600 hover:text-red-800"
+                            onClick={async () => {
+                              try {
+                                await deleteToolSearchAlias(a.id)
+                                setEditAliases((prev) => prev.filter((x) => x.id !== a.id))
+                              } catch (err: any) {
+                                alert(err.message || 'Failed to delete alias')
+                              }
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newAliasText}
+                          onChange={(e) => setNewAliasText(e.target.value)}
+                          placeholder="Add manual alias"
+                          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          className="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
+                          onClick={async () => {
+                            if (!editingTool || !newAliasText.trim()) return
+                            try {
+                              await upsertToolSearchAlias(editingTool.id, newAliasText.trim())
+                              const refreshed = await listToolSearchAliases(editingTool.id)
+                              setEditAliases(refreshed)
+                              setNewAliasText('')
+                            } catch (err: any) {
+                              alert(err.message || 'Failed to add alias')
+                            }
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {features.toolCostingEnabled && (

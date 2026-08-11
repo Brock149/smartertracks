@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { ToolImageGallery } from '../components/ToolImageGallery'
 import { uploadToolImageToStorage, insertToolImageRecord, removeStorageObject } from '../lib/uploadImage'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
+import { searchTools } from '../lib/toolSearch'
 
 type OwnerMode = 'specific' | 'company_default' | 'unassigned'
 
@@ -13,6 +14,7 @@ type ToolGroup = {
   created_at: string
   default_owner_id: string | null
   default_owner_mode: OwnerMode
+  default_include_in_global_search?: boolean
 }
 
 type ToolSummary = {
@@ -72,7 +74,11 @@ export default function ToolGroups() {
   const groupsPerPage = 15
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isAddToolsOpen, setIsAddToolsOpen] = useState(false)
-  const [newGroup, setNewGroup] = useState({ name: '', description: '' })
+  const [newGroup, setNewGroup] = useState({
+    name: '',
+    description: '',
+    default_include_in_global_search: false,
+  })
   const [newGroupOwnerMode, setNewGroupOwnerMode] = useState<OwnerMode>('company_default')
   const [newGroupOwnerId, setNewGroupOwnerId] = useState('')
   const [companyOwnerDefault, setCompanyOwnerDefault] = useState<CompanyOwnerDefault>({
@@ -87,6 +93,7 @@ export default function ToolGroups() {
     location: '',
     estimated_cost: null as number | null,
     checklist: [] as NewGroupToolChecklistItem[],
+    include_in_global_search: false,
   })
   const [groupToolLocationIsDefault, setGroupToolLocationIsDefault] = useState(true)
   const [pendingGroupToolImages, setPendingGroupToolImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
@@ -109,9 +116,15 @@ export default function ToolGroups() {
   const [groupActivity, setGroupActivity] = useState<GroupActivity[]>([])
   const [activeView, setActiveView] = useState<'groups' | 'activity'>('groups')
   const [isEditGroupOpen, setIsEditGroupOpen] = useState(false)
-  const [editGroupForm, setEditGroupForm] = useState({ name: '', description: '' })
+  const [editGroupForm, setEditGroupForm] = useState({
+    name: '',
+    description: '',
+    default_include_in_global_search: false,
+  })
   const [editGroupOwnerMode, setEditGroupOwnerMode] = useState<OwnerMode>('company_default')
   const [editGroupOwnerId, setEditGroupOwnerId] = useState('')
+  const [remoteAddToolIds, setRemoteAddToolIds] = useState<string[] | null>(null)
+  const [remoteMemberIds, setRemoteMemberIds] = useState<string[] | null>(null)
   const [editingMemberTool, setEditingMemberTool] = useState<ToolSummary | null>(null)
   const [editToolForm, setEditToolForm] = useState({ name: '', description: '' })
   const [editToolLoading, setEditToolLoading] = useState(false)
@@ -174,7 +187,7 @@ export default function ToolGroups() {
       setError(null)
       const { data, error } = await supabase
         .from('tool_groups')
-        .select('id, name, description, created_at, default_owner_id, default_owner_mode')
+        .select('id, name, description, created_at, default_owner_id, default_owner_mode, default_include_in_global_search')
         .eq('is_deleted', false)
         .order('name', { ascending: true })
 
@@ -428,10 +441,11 @@ export default function ToolGroups() {
           created_by: authData.user.id,
           default_owner_mode: newGroupOwnerMode,
           default_owner_id: newGroupOwnerMode === 'specific' ? (newGroupOwnerId || null) : null,
+          default_include_in_global_search: !!newGroup.default_include_in_global_search,
         }])
 
       if (error) throw error
-      setNewGroup({ name: '', description: '' })
+      setNewGroup({ name: '', description: '', default_include_in_global_search: false })
       setNewGroupOwnerMode('company_default')
       setNewGroupOwnerId('')
       setIsCreateOpen(false)
@@ -492,6 +506,7 @@ export default function ToolGroups() {
       location: selectedGroup.name,
       estimated_cost: null,
       checklist: [{ item_name: 'Overall Tool Condition', required: true }],
+      include_in_global_search: !!selectedGroup.default_include_in_global_search,
     })
     setGroupToolLocationIsDefault(true)
     setPendingGroupToolImages([])
@@ -503,7 +518,14 @@ export default function ToolGroups() {
     for (const img of pendingGroupToolImages) {
       await removeStorageObject(img.filePath)
     }
-    setNewGroupTool({ name: '', description: '', location: '', estimated_cost: null, checklist: [] })
+    setNewGroupTool({
+      name: '',
+      description: '',
+      location: '',
+      estimated_cost: null,
+      checklist: [],
+      include_in_global_search: false,
+    })
     setGroupToolLocationIsDefault(true)
     setPendingGroupToolImages([])
     setGroupToolImageError(null)
@@ -586,6 +608,7 @@ export default function ToolGroups() {
             location: newGroupTool.location.trim(),
             estimated_cost: newGroupTool.estimated_cost,
             checklist: checklistToSend,
+            include_in_global_search: !!newGroupTool.include_in_global_search,
           }),
         }
       )
@@ -647,6 +670,7 @@ export default function ToolGroups() {
           description: editGroupForm.description.trim() || null,
           default_owner_mode: editGroupOwnerMode,
           default_owner_id: resolvedOwnerId,
+          default_include_in_global_search: !!editGroupForm.default_include_in_global_search,
         })
         .eq('id', selectedGroup.id)
 
@@ -658,6 +682,7 @@ export default function ToolGroups() {
         description: editGroupForm.description.trim() || null,
         default_owner_mode: editGroupOwnerMode,
         default_owner_id: resolvedOwnerId,
+        default_include_in_global_search: !!editGroupForm.default_include_in_global_search,
       }
       setSelectedGroup(updatedGroup)
       await Promise.all([fetchGroups(), fetchAllGroupTools()])
@@ -670,7 +695,11 @@ export default function ToolGroups() {
 
   function openEditGroup() {
     if (!selectedGroup) return
-    setEditGroupForm({ name: selectedGroup.name, description: selectedGroup.description || '' })
+    setEditGroupForm({
+      name: selectedGroup.name,
+      description: selectedGroup.description || '',
+      default_include_in_global_search: !!selectedGroup.default_include_in_global_search,
+    })
     setEditGroupOwnerMode(selectedGroup.default_owner_mode || 'company_default')
     setEditGroupOwnerId(selectedGroup.default_owner_id || '')
     setIsEditGroupOpen(true)
@@ -842,31 +871,98 @@ export default function ToolGroups() {
   }, [groupMembers])
 
   const filteredTools = useMemo(() => {
-    const lower = toolSearch.trim().toLowerCase()
-    return tools.filter((tool) => {
-      if (membersByToolId.has(tool.id)) return false
-      if (!lower) return true
-      return (
-        tool.number.toLowerCase().includes(lower) ||
-        tool.name.toLowerCase().includes(lower)
-      )
-    })
-  }, [tools, toolSearch, membersByToolId])
+    const term = toolSearch.trim()
+    const base = tools.filter((tool) => !membersByToolId.has(tool.id))
+    if (!term) return base
+    if (!remoteAddToolIds) return []
+    const idSet = new Set(remoteAddToolIds)
+    return base.filter((tool) => idSet.has(tool.id))
+  }, [tools, toolSearch, membersByToolId, remoteAddToolIds])
 
   const filteredMembers = useMemo(() => {
-    const term = memberSearch.trim().toLowerCase()
+    const term = memberSearch.trim()
     if (!term) return groupMembers
-    return groupMembers.filter((member) => {
-      const t = member.tools
-      if (!t) return false
-      return (
-        (t.name || '').toLowerCase().includes(term) ||
-        (t.number || '').toLowerCase().includes(term) ||
-        (t.owner_name || '').toLowerCase().includes(term) ||
-        (t.location || '').toLowerCase().includes(term)
-      )
-    })
-  }, [groupMembers, memberSearch])
+    if (!remoteMemberIds) return []
+    const idSet = new Set(remoteMemberIds)
+    return groupMembers.filter((member) => idSet.has(member.tool_id))
+  }, [groupMembers, memberSearch, remoteMemberIds])
+
+  useEffect(() => {
+    const term = toolSearch.trim()
+    if (!term) {
+      setRemoteAddToolIds(null)
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchTools({ q: term, limit: 100, scope: 'company' })
+        if (cancelled) return
+        setRemoteAddToolIds(results.map((r) => r.id))
+      } catch (err) {
+        console.error('Add-tools search failed', err)
+        if (!cancelled) {
+          const lower = term.toLowerCase()
+          setRemoteAddToolIds(
+            tools
+              .filter(
+                (t) =>
+                  t.number.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)
+              )
+              .map((t) => t.id)
+          )
+        }
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [toolSearch, tools])
+
+  useEffect(() => {
+    const term = memberSearch.trim()
+    if (!term || !selectedGroup) {
+      setRemoteMemberIds(null)
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchTools({
+          q: term,
+          limit: 100,
+          scope: 'group',
+          groupId: selectedGroup.id,
+        })
+        if (cancelled) return
+        setRemoteMemberIds(results.map((r) => r.id))
+      } catch (err) {
+        console.error('Member search failed', err)
+        if (!cancelled) {
+          const lower = term.toLowerCase()
+          setRemoteMemberIds(
+            groupMembers
+              .filter((member) => {
+                const t = member.tools
+                if (!t) return false
+                return (
+                  (t.name || '').toLowerCase().includes(lower) ||
+                  (t.number || '').toLowerCase().includes(lower) ||
+                  (t.owner_name || '').toLowerCase().includes(lower) ||
+                  (t.location || '').toLowerCase().includes(lower)
+                )
+              })
+              .map((m) => m.tool_id)
+          )
+        }
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [memberSearch, selectedGroup, groupMembers])
 
   return (
     <div className="space-y-6">
@@ -1251,6 +1347,26 @@ export default function ToolGroups() {
                   )}
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-gray-300"
+                  checked={!!newGroup.default_include_in_global_search}
+                  onChange={(e) =>
+                    setNewGroup((prev) => ({
+                      ...prev,
+                      default_include_in_global_search: e.target.checked,
+                    }))
+                  }
+                />
+                <span>
+                  <span className="font-medium">New tools appear in global search</span>
+                  <span className="block text-gray-500">
+                    Off by default so van/warehouse group tools don’t flood All Tools. You can still override per tool.
+                  </span>
+                </span>
+              </label>
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
               <button
@@ -1414,6 +1530,26 @@ export default function ToolGroups() {
                   rows={3}
                 />
               </div>
+
+              <label className="flex items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-gray-300"
+                  checked={!!newGroupTool.include_in_global_search}
+                  onChange={(e) =>
+                    setNewGroupTool((prev) => ({
+                      ...prev,
+                      include_in_global_search: e.target.checked,
+                    }))
+                  }
+                />
+                <span>
+                  <span className="font-medium">Include in global All Tools / Transfer search</span>
+                  <span className="block text-gray-500">
+                    Defaults from the group setting. Leave off for van inventory tools.
+                  </span>
+                </span>
+              </label>
 
               {features.toolCostingEnabled && (
                 <div>
@@ -1829,6 +1965,26 @@ export default function ToolGroups() {
                   )}
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-gray-300"
+                  checked={!!editGroupForm.default_include_in_global_search}
+                  onChange={(e) =>
+                    setEditGroupForm((prev) => ({
+                      ...prev,
+                      default_include_in_global_search: e.target.checked,
+                    }))
+                  }
+                />
+                <span>
+                  <span className="font-medium">New tools appear in global search</span>
+                  <span className="block text-gray-500">
+                    Controls the default for tools created into this group going forward.
+                  </span>
+                </span>
+              </label>
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
               <button

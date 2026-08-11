@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { computeStops } from '../components/trackerMapUtils'
+import { searchTools } from '../lib/toolSearch'
 
 // Leaflet touches `window` at import time, which crashes the SSR/prerender
 // build. Loading the map lazily keeps it in a client-only chunk that the
@@ -77,6 +78,7 @@ export default function Trackers() {
 
   // Search + sort over the tools list.
   const [searchTerm, setSearchTerm] = useState('')
+  const [remoteToolIds, setRemoteToolIds] = useState<Set<string> | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('number')
 
   const fetchAll = async (silent = false) => {
@@ -300,6 +302,29 @@ export default function Trackers() {
   const stops = useMemo(() => computeStops(trail), [trail])
   const fmtStop = (d: string | null) => (d ? new Date(d).toLocaleString() : '—')
 
+  useEffect(() => {
+    const term = searchTerm.trim()
+    if (!term) {
+      setRemoteToolIds(null)
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchTools({ q: term, limit: 100, scope: 'company' })
+        if (cancelled) return
+        setRemoteToolIds(new Set(results.map((r) => r.id)))
+      } catch (err) {
+        console.error('Trackers tool search failed', err)
+        if (!cancelled) setRemoteToolIds(new Set())
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [searchTerm])
+
   // Filter by name / number / attached tracker serial, then sort.
   const visibleTools = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -307,12 +332,13 @@ export default function Trackers() {
       ? tools.filter((t) => {
           const a = assignments[t.id]
           const trackerLabel = a ? trackerName(a.serial).toLowerCase() : ''
-          return (
+          const matchesTracker =
+            (a?.serial || '').toLowerCase().includes(term) || trackerLabel.includes(term)
+          const matchesRemote = remoteToolIds ? remoteToolIds.has(t.id) : false
+          const matchesLocalName =
             (t.name || '').toLowerCase().includes(term) ||
-            (t.number || '').toLowerCase().includes(term) ||
-            (a?.serial || '').toLowerCase().includes(term) ||
-            trackerLabel.includes(term)
-          )
+            (t.number || '').toLowerCase().includes(term)
+          return matchesRemote || matchesTracker || matchesLocalName
         })
       : tools
 
@@ -352,7 +378,7 @@ export default function Trackers() {
       if (aTracked !== bTracked) return bTracked - aTracked
       return bySortMode(a, b)
     })
-  }, [tools, assignments, searchTerm, sortMode, trackerNumbers])
+  }, [tools, assignments, searchTerm, sortMode, trackerNumbers, remoteToolIds])
 
   if (loading) {
     return (

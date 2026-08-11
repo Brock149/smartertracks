@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { fetchCompanyEvents } from '../lib/companyEvents'
 import type { CompanyEvent } from '../lib/companyEvents'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
+import { searchTools } from '../lib/toolSearch'
 
 // A unified feed row: either a tool transaction or a company activity event.
 type FeedItem =
@@ -64,6 +65,7 @@ interface Tool {
   number: string
   name: string
   company_id: string
+  current_owner?: string | null
   owner_name?: string | null
   location?: string | null
 }
@@ -317,18 +319,46 @@ export default function Transactions() {
   }, [newTransaction.to_user_id, users])
 
   // Filtered results for search dropdowns
+  const [remoteToolResults, setRemoteToolResults] = useState<Tool[] | null>(null)
+
+  useEffect(() => {
+    const term = toolSearchTerm.trim()
+    if (!term) {
+      setRemoteToolResults(null)
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchTools({ q: term, limit: 50, scope: 'company' })
+        if (cancelled) return
+        setRemoteToolResults(
+          results.map((t) => ({
+            id: t.id,
+            number: t.number,
+            name: t.name,
+            company_id: t.company_id || '',
+            current_owner: t.current_owner ?? null,
+            owner_name: t.owner_name || undefined,
+            location: t.location || undefined,
+          }))
+        )
+      } catch (err) {
+        console.error('Tool search failed', err)
+        if (!cancelled) setRemoteToolResults([])
+      }
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [toolSearchTerm])
+
   const filteredToolResults = useMemo(() => {
-    const term = toolSearchTerm.trim().toLowerCase()
+    const term = toolSearchTerm.trim()
     if (!term) return tools.slice(0, 50)
-    return tools
-      .filter(t =>
-        t.number.toLowerCase().includes(term) ||
-        (t.name || '').toLowerCase().includes(term) ||
-        (t.owner_name || '').toLowerCase().includes(term) ||
-        (t.location || '').toLowerCase().includes(term)
-      )
-      .slice(0, 50)
-  }, [toolSearchTerm, tools])
+    return remoteToolResults ?? []
+  }, [toolSearchTerm, tools, remoteToolResults])
 
   const filteredUserResults = useMemo(() => {
     const term = userSearchTerm.trim().toLowerCase()
