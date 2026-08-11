@@ -25,6 +25,9 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'companies' | 'app-versions' | 'trackers'>('companies')
   const [purging, setPurging] = useState(false)
   const [purgeMessage, setPurgeMessage] = useState('')
+  // AI search-alias backfill across all companies.
+  const [aliasBackfilling, setAliasBackfilling] = useState(false)
+  const [aliasBackfillMessage, setAliasBackfillMessage] = useState('')
   // One-off "test the scheduler" controls.
   const [schedCompanyId, setSchedCompanyId] = useState('')
   const [schedType, setSchedType] = useState<'personal' | 'company'>('personal')
@@ -108,6 +111,74 @@ export default function DashboardPage() {
       setPurgeMessage(err instanceof Error ? `Error: ${err.message}` : 'Failed to purge')
     } finally {
       setPurging(false)
+    }
+  }
+
+  const handleAliasBackfillAllCompanies = async () => {
+    if (aliasBackfilling) return
+    if (companies.length === 0) {
+      setAliasBackfillMessage('Error: No companies loaded.')
+      return
+    }
+    const ok = window.confirm(
+      `Generate AI search aliases for tools across all ${companies.length} companies?\n\n` +
+        'Skips tools that already have AI aliases. Uses Claude Haiku (~$1–5 per ~1,000 tools). Safe to re-run.'
+    )
+    if (!ok) return
+
+    setAliasBackfilling(true)
+    setAliasBackfillMessage('Starting…')
+
+    let totalSucceeded = 0
+    let totalFailed = 0
+    let totalSkipped = 0
+    const limit = 25
+
+    try {
+      for (let i = 0; i < companies.length; i++) {
+        const company = companies[i]
+        let offset = 0
+        setAliasBackfillMessage(
+          `Company ${i + 1}/${companies.length}: ${company.name}…`
+        )
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { data, error } = await supabase.functions.invoke('backfill-tool-aliases', {
+            body: {
+              company_id: company.id,
+              limit,
+              offset,
+              only_missing: true,
+            },
+          })
+          if (error) throw error
+          if (data?.error) throw new Error(data.error)
+
+          totalSucceeded += data?.succeeded || 0
+          totalFailed += data?.failed || 0
+          totalSkipped += data?.skipped || 0
+
+          setAliasBackfillMessage(
+            `Company ${i + 1}/${companies.length}: ${company.name} — ` +
+              `generated ${totalSucceeded}, skipped ${totalSkipped}, failed ${totalFailed}`
+          )
+
+          if (!data?.has_more) break
+          offset = data?.next_offset ?? offset + limit
+        }
+      }
+
+      setAliasBackfillMessage(
+        `Done across ${companies.length} companies. ` +
+          `Generated ${totalSucceeded}, skipped ${totalSkipped}, failed ${totalFailed}.`
+      )
+    } catch (err) {
+      setAliasBackfillMessage(
+        err instanceof Error ? `Error: ${err.message}` : 'Failed to backfill aliases'
+      )
+    } finally {
+      setAliasBackfilling(false)
     }
   }
 
@@ -294,6 +365,36 @@ export default function DashboardPage() {
             >
               + Add Company
             </button>
+          </div>
+
+          {/* AI search aliases — one-shot across every company */}
+          <div className="bg-white shadow rounded-lg p-4 mb-6 border border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">🔍 Search aliases (AI)</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              Backfill slang / nickname search terms for tools in every company
+              (e.g. &quot;sawzall&quot;). New tools get aliases automatically on create.
+              Requires the <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY</code> Edge secret.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleAliasBackfillAllCompanies}
+                disabled={aliasBackfilling || companies.length === 0}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md"
+              >
+                {aliasBackfilling
+                  ? 'Running backfill…'
+                  : `Generate search aliases (all ${companies.length} companies)`}
+              </button>
+              {aliasBackfillMessage && (
+                <span
+                  className={`text-sm ${
+                    aliasBackfillMessage.startsWith('Error') ? 'text-red-600' : 'text-gray-600'
+                  }`}
+                >
+                  {aliasBackfillMessage}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Weekly automated-report schedule (when the recurring job fires) */}
