@@ -16,9 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
+import { searchTools } from '../services/toolSearch';
 import { useAuth } from '../context/AuthContext';
 import { resize } from '../utils';
-import Constants from 'expo-constants';
 import NoCompanyBanner from '../components/NoCompanyBanner';
 
 interface Tool {
@@ -352,29 +352,14 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
     setSearching(true);
     setSearchError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error('No active session');
-
-      const { SUPABASE_URL, SUPABASE_ANON_KEY } = (Constants.expoConfig?.extra || {}) as Record<string, string>;
-      const supabaseUrl = SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL!;
-      const supabaseAnonKey = SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-
-      const url = `${supabaseUrl}/functions/v1/search-tools?q=${encodeURIComponent(term)}&limit=${SEARCH_LIMIT}&offset=${offset}`;
-      const resp = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          apikey: supabaseAnonKey,
-        },
+      const raw = await searchTools({
+        q: term,
+        limit: SEARCH_LIMIT,
+        offset,
+        scope: 'global',
       });
 
-      if (!resp.ok) {
-        throw new Error(`Search failed (${resp.status})`);
-      }
-
-      const json = await resp.json();
-      const results = (json?.results || []).map((t: any) => {
+      const results = raw.map((t: any) => {
         const images =
           t.primary_thumb_url || t.primary_image_url
             ? [

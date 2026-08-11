@@ -624,7 +624,14 @@ export default function ToolGroups() {
         }
       }
 
-      setNewGroupTool({ name: '', description: '', location: '', estimated_cost: null, checklist: [] })
+      setNewGroupTool({
+        name: '',
+        description: '',
+        location: '',
+        estimated_cost: null,
+        checklist: [],
+        include_in_global_search: false,
+      })
       setGroupToolLocationIsDefault(true)
       setPendingGroupToolImages([])
       setGroupToolImageError(null)

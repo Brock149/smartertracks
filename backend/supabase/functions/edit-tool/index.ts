@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { triggerAliasGeneration } from '../_shared/triggerAliasGeneration.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,7 +63,7 @@ serve(async (req) => {
     // Verify the tool belongs to the same company
     const { data: toolData, error: toolError } = await supabaseClient
       .from('tools')
-      .select('company_id')
+      .select('company_id, name, description')
       .eq('id', id)
       .single()
 
@@ -72,6 +73,10 @@ serve(async (req) => {
         { status: 400, headers: corsHeaders }
       )
     }
+
+    const nameChanged = typeof name === 'string' && name !== toolData.name
+    const descriptionChanged =
+      typeof description === 'string' && description !== (toolData.description || '')
 
     // Build update fields — only include estimated_cost when explicitly sent
     const updateFields: Record<string, any> = { number, name, description, photo_url }
@@ -108,6 +113,12 @@ serve(async (req) => {
           }))
         )
       if (insertError) throw insertError
+    }
+
+    if (nameChanged || descriptionChanged) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+      const serviceKey = Deno.env.get('SERVICE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      triggerAliasGeneration(supabaseUrl, serviceKey, token, id)
     }
 
     return new Response(JSON.stringify({ success: true }), {

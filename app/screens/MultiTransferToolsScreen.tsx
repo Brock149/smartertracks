@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
 import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
+import { searchTools as searchToolsRemote } from '../services/toolSearch';
 
 interface Tool {
   id: string;
@@ -170,71 +171,25 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
 
     setSearching(true);
     try {
-      const term = searchQuery.toLowerCase();
-
-      const { data: toolsData, error: toolsError } = await supabase
-        .from('tools')
-        .select(`
-          *,
-          owner:users!tools_current_owner_fkey(name)
-        `)
-        .order('number_numeric', { ascending: true });
-
-      if (toolsError) {
-        console.error('Error fetching tools for search:', toolsError);
-        return;
-      }
-
-      const toolIds = (toolsData || []).map(t => t.id);
-
-      const { data: transactionsData, error: txError } = await supabase
-        .from('tool_transactions')
-        .select('tool_id, location, timestamp')
-        .in('tool_id', toolIds)
-        .order('timestamp', { ascending: false });
-
-      if (txError) {
-        console.error('Error fetching transactions for search:', txError);
-      }
-
-      const latestLocationByTool: Record<string, string> = {};
-      (transactionsData || []).forEach(tx => {
-        if (!latestLocationByTool[tx.tool_id]) {
-          latestLocationByTool[tx.tool_id] = tx.location || '';
-        }
+      const results = await searchToolsRemote({
+        q: searchQuery.trim(),
+        limit: 50,
+        offset: 0,
+        scope: 'global',
       });
 
-      const transformed = (toolsData || []).map(tool => ({
-        ...tool,
-        owner_name: tool.owner?.name || null,
-        latest_location: latestLocationByTool[tool.id] || ''
+      const transformed = results.map((tool) => ({
+        id: tool.id,
+        number: tool.number,
+        name: tool.name,
+        description: tool.description || '',
+        current_owner: tool.current_owner ?? null,
+        company_id: tool.company_id || '',
+        owner_name: tool.owner_name || null,
+        latest_location: tool.location || '',
       }));
 
-      transformed.sort((a, b) => {
-        const an = parseInt(String(a.number), 10);
-        const bn = parseInt(String(b.number), 10);
-        if (Number.isNaN(an) && Number.isNaN(bn)) return String(a.number).localeCompare(String(b.number));
-        if (Number.isNaN(an)) return 1;
-        if (Number.isNaN(bn)) return -1;
-        return an - bn;
-      });
-
-      const filtered = transformed.filter(tool => {
-        const matchesNumber = tool.number.toLowerCase().includes(term);
-        const matchesName = tool.name.toLowerCase().includes(term);
-        const matchesDescription = (tool.description || '').toLowerCase().includes(term);
-        const matchesOwner = (tool.owner_name || '').toLowerCase().includes(term);
-        const matchesLocation = (tool.latest_location || '').toLowerCase().includes(term);
-        return (
-          matchesNumber ||
-          matchesName ||
-          matchesDescription ||
-          matchesOwner ||
-          matchesLocation
-        );
-      });
-
-      setSearchResults(filtered);
+      setSearchResults(transformed);
     } catch (error) {
       console.error('Error searching tools:', error);
     } finally {

@@ -25,6 +25,7 @@ import {
   fetchLastPersonalExport,
   PersonalTool,
 } from '../services/personalTools';
+import { searchTools as searchToolsRemote } from '../services/toolSearch';
 
 interface Tool {
   id: string;
@@ -147,7 +148,67 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
   );
 
   useEffect(() => {
-    filterTools();
+    const term = searchQuery.trim();
+    if (!term) {
+      setFilteredTools(tools);
+      return;
+    }
+
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchToolsRemote({
+          q: term,
+          limit: 50,
+          scope: 'mine',
+        });
+        if (cancelled) return;
+        setFilteredTools(
+          results.map((t) => ({
+            id: t.id,
+            number: t.number,
+            name: t.name,
+            description: t.description || '',
+            current_owner: t.current_owner ?? null,
+            photo_url: t.photo_url,
+            created_at: '',
+            company_id: t.company_id || '',
+            latest_location: t.location || '',
+            latest_stored_at: t.stored_at || '',
+            owner_name: t.owner_name || undefined,
+            images:
+              t.primary_thumb_url || t.primary_image_url
+                ? [
+                    {
+                      thumb_url: t.primary_thumb_url || null,
+                      image_url: t.primary_image_url || t.primary_thumb_url || '',
+                    },
+                  ]
+                : undefined,
+          }))
+        );
+      } catch (err) {
+        console.error('My tools search failed, falling back to local filter', err);
+        if (cancelled) return;
+        const lowerSearch = term.toLowerCase();
+        setFilteredTools(
+          tools.filter((tool) => {
+            return (
+              tool.number.toLowerCase().includes(lowerSearch) ||
+              tool.name.toLowerCase().includes(lowerSearch) ||
+              (tool.description || '').toLowerCase().includes(lowerSearch) ||
+              (tool.latest_location || '').toLowerCase().includes(lowerSearch) ||
+              ((tool as any).owner_name || '').toLowerCase().includes(lowerSearch)
+            );
+          })
+        );
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
   }, [searchQuery, tools]);
 
   const loadDismissedNotifications = async () => {
@@ -414,31 +475,11 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     }
   };
 
-  const filterTools = () => {
-    if (!searchQuery.trim()) {
-      setFilteredTools(tools);
-      return;
-    }
-
-    const lowerSearch = searchQuery.toLowerCase();
-
-    const filtered = tools.filter(tool => {
-      const matchesNumber = tool.number.toLowerCase().includes(lowerSearch);
-      const matchesName = tool.name.toLowerCase().includes(lowerSearch);
-      const matchesDescription = (tool.description || '').toLowerCase().includes(lowerSearch);
-      const matchesLocation = (tool.latest_location || '').toLowerCase().includes(lowerSearch);
-      const matchesOwner = ((tool as any).owner_name || '').toLowerCase().includes(lowerSearch);
-
-      return (
-        matchesNumber ||
-        matchesName ||
-        matchesDescription ||
-        matchesLocation ||
-        matchesOwner
-      );
-    });
-
-    setFilteredTools(filtered);
+  const dismissNotification = async (notificationId: string) => {
+    const newDismissed = new Set(dismissedNotifications);
+    newDismissed.add(notificationId);
+    setDismissedNotifications(newDismissed);
+    await saveDismissedNotifications(newDismissed);
   };
 
   const onRefresh = () => {

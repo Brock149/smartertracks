@@ -6,7 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Decode a JWT payload without making a network call
 function decodeJwtPayload(token: string): Record<string, any> | null {
   try {
     const parts = token.split('.')
@@ -19,7 +18,6 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
 }
 
 serve(async (req) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -27,7 +25,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
 
-    // Require auth header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
@@ -36,7 +33,6 @@ serve(async (req) => {
       })
     }
 
-    // Decode the JWT locally to get the user ID — no auth.getUser() network call needed
     const token = authHeader.replace('Bearer ', '')
     const payload = decodeJwtPayload(token)
     const userId = payload?.sub
@@ -47,13 +43,11 @@ serve(async (req) => {
       })
     }
 
-    // Service role client for privileged DB operations
     const supabaseClient = createClient(
       supabaseUrl,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_KEY') ?? ''
     )
 
-    // Get company_id for isolation
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
       .select('company_id')
@@ -67,11 +61,15 @@ serve(async (req) => {
       })
     }
 
-    // Parse query params
     const url = new URL(req.url)
     const term = (url.searchParams.get('q') || '').trim()
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 100)
     const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10) || 0, 0)
+    const scope = (url.searchParams.get('scope') || 'global').trim().toLowerCase()
+    const groupId = url.searchParams.get('group_id') || null
+    // Optional override; default for scope=mine is the caller
+    const ownerIdParam = url.searchParams.get('owner_id')
+    const ownerId = scope === 'mine' ? (ownerIdParam || userId) : (ownerIdParam || null)
 
     if (term.length < 1) {
       return new Response(JSON.stringify({ error: 'Query too short' }), {
@@ -80,12 +78,21 @@ serve(async (req) => {
       })
     }
 
-    // Call RPC that leverages indexes and company_id filtering
+    if (scope === 'group' && !groupId) {
+      return new Response(JSON.stringify({ error: 'group_id required for scope=group' }), {
+        status: 400,
+        headers: corsHeaders,
+      })
+    }
+
     const { data, error } = await supabaseClient.rpc('search_tools', {
       p_company_id: userData.company_id,
       p_term: term,
       p_limit: limit,
       p_offset: offset,
+      p_scope: scope,
+      p_group_id: groupId,
+      p_owner_id: ownerId,
     })
 
     if (error) {
@@ -98,7 +105,6 @@ serve(async (req) => {
 
     const toolIds = (data || []).map((t: any) => t.id)
 
-    // Fetch latest stored_at for each result — search_tools RPC only returns location, not stored_at
     let storedAtByTool: Record<string, string> = {}
     if (toolIds.length > 0) {
       const { data: txData } = await supabaseClient
@@ -109,7 +115,6 @@ serve(async (req) => {
           storedAtByTool[tx.tool_id] = tx.stored_at ?? ''
         }
       } else {
-        // Fallback: direct query if RPC not available
         const { data: fallbackTx } = await supabaseClient
           .from('tool_transactions')
           .select('tool_id, stored_at, timestamp')
@@ -126,7 +131,6 @@ serve(async (req) => {
       }
     }
 
-    // Attach company_id and stored_at to every result
     const results = (data || []).map((tool: any) => ({
       ...tool,
       company_id: userData.company_id,
@@ -145,4 +149,3 @@ serve(async (req) => {
     })
   }
 })
-

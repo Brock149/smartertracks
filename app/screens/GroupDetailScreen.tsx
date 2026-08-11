@@ -14,6 +14,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 import { resize } from '../utils';
+import { searchTools as searchToolsRemote } from '../services/toolSearch';
 
 interface ToolGroup {
   id: string;
@@ -45,6 +46,8 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toolSearch, setToolSearch] = useState('');
+  const [remoteFilteredTools, setRemoteFilteredTools] = useState<ToolSummary[] | null>(null);
+  const [searchingTools, setSearchingTools] = useState(false);
 
   const getThumbnailUrl = (url: string) => resize(url, 48, 45);
 
@@ -166,23 +169,75 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
     navigation.navigate('TransferMultiple', { groupId });
   };
 
+  useEffect(() => {
+    const term = toolSearch.trim();
+    if (!term) {
+      setRemoteFilteredTools(null);
+      setSearchingTools(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchingTools(true);
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchToolsRemote({
+          q: term,
+          limit: 100,
+          scope: 'group',
+          groupId,
+        });
+        if (cancelled) return;
+        setRemoteFilteredTools(
+          results.map((t) => ({
+            id: t.id,
+            number: t.number,
+            name: t.name,
+            description: t.description,
+            current_owner: t.current_owner,
+            company_id: t.company_id,
+            owner_name: t.owner_name,
+            location: t.location,
+            thumbnail_url: t.primary_thumb_url || t.primary_image_url || null,
+          }))
+        );
+      } catch (err) {
+        console.error('Group tool search failed, using local filter', err);
+        if (cancelled) return;
+        const lower = term.toLowerCase();
+        setRemoteFilteredTools(
+          groupTools.filter(
+            (tool) =>
+              tool.name.toLowerCase().includes(lower) ||
+              tool.number.toLowerCase().includes(lower) ||
+              (tool.owner_name || '').toLowerCase().includes(lower) ||
+              (tool.location || '').toLowerCase().includes(lower)
+          )
+        );
+      } finally {
+        if (!cancelled) setSearchingTools(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [toolSearch, groupId, groupTools]);
+
   const filteredGroupTools = useMemo(() => {
-    const term = toolSearch.trim().toLowerCase();
-    if (!term) return groupTools;
-    return groupTools.filter((tool) =>
-      tool.name.toLowerCase().includes(term) ||
-      tool.number.toLowerCase().includes(term) ||
-      (tool.owner_name || '').toLowerCase().includes(term) ||
-      (tool.location || '').toLowerCase().includes(term)
-    );
-  }, [groupTools, toolSearch]);
+    if (!toolSearch.trim()) return groupTools;
+    return remoteFilteredTools ?? groupTools;
+  }, [groupTools, toolSearch, remoteFilteredTools]);
 
   const groupCountText = useMemo(() => {
     if (toolSearch.trim()) {
-      return `Showing ${filteredGroupTools.length} of ${groupTools.length} tools`;
+      return searchingTools
+        ? 'Searching…'
+        : `Showing ${filteredGroupTools.length} of ${groupTools.length} tools`;
     }
     return `Tools in Group (${groupTools.length})`;
-  }, [groupTools.length, filteredGroupTools.length, toolSearch]);
+  }, [groupTools.length, filteredGroupTools.length, toolSearch, searchingTools]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

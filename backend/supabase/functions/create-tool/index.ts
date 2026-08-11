@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { triggerAliasGeneration } from '../_shared/triggerAliasGeneration.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -134,6 +135,12 @@ serve(async (req) => {
     } catch (_e) {
       // company_events table not present yet — ignore.
     }
+
+    // Non-blocking: generate AI search aliases (does not delay tool save)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const serviceKey = Deno.env.get('SERVICE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    // Do not await — fire and forget
+    triggerAliasGeneration(supabaseUrl, serviceKey, token, toolId)
 
     // Get the created tool data to return
     const { data: toolData, error: fetchError } = await supabaseClient

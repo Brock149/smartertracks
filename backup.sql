@@ -2702,16 +2702,6 @@ ALTER TABLE ONLY "public"."tool_transactions"
 
 
 ALTER TABLE ONLY "public"."tools"
-    ADD CONSTRAINT "tools_number_key" UNIQUE ("number");
-
-
-
-ALTER TABLE ONLY "public"."tools"
-    ADD CONSTRAINT "tools_number_unique" UNIQUE ("number");
-
-
-
-ALTER TABLE ONLY "public"."tools"
     ADD CONSTRAINT "tools_pkey" PRIMARY KEY ("id");
 
 
@@ -2892,6 +2882,10 @@ CREATE INDEX "scheduled_export_runs_due_idx" ON "public"."scheduled_export_runs"
 
 
 CREATE UNIQUE INDEX "tool_images_one_primary_per_tool" ON "public"."tool_images" USING "btree" ("tool_id") WHERE ("is_primary" = true);
+
+
+
+CREATE UNIQUE INDEX "tools_company_id_number_active_idx" ON "public"."tools" USING "btree" ("company_id", "number") WHERE ("is_deleted" IS NOT TRUE);
 
 
 

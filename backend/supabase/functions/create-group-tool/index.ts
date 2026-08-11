@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { triggerAliasGeneration } from '../_shared/triggerAliasGeneration.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,7 +73,16 @@ serve(async (req) => {
     }
 
     // Get the request body
-    const { group_id, name, description, photo_url, checklist, estimated_cost, location } = await req.json()
+    const {
+      group_id,
+      name,
+      description,
+      photo_url,
+      checklist,
+      estimated_cost,
+      location,
+      include_in_global_search,
+    } = await req.json()
 
     // Validate required fields
     if (!group_id || !name) {
@@ -88,7 +98,7 @@ serve(async (req) => {
     // Fetch the group and confirm it belongs to this company and isn't deleted
     const { data: group, error: groupError } = await supabaseClient
       .from('tool_groups')
-      .select('id, name, is_deleted, default_owner_id, default_owner_mode')
+      .select('id, name, is_deleted, default_owner_id, default_owner_mode, default_include_in_global_search')
       .eq('id', group_id)
       .eq('company_id', userData.company_id)
       .single()
@@ -174,6 +184,11 @@ serve(async (req) => {
     // location (which defaults to the group's name) before submitting.
     const resolvedLocation = typeof location === 'string' && location.trim() ? location.trim() : group.name
 
+    const includeInGlobal =
+      typeof include_in_global_search === 'boolean'
+        ? include_in_global_search
+        : (group.default_include_in_global_search ?? false)
+
     const { data: toolId, error: toolError } = await supabaseClient
       .rpc('create_group_tool_with_checklist', {
         p_group_id: group_id,
@@ -184,7 +199,8 @@ serve(async (req) => {
         p_company_id: userData.company_id,
         p_checklist: checklist || [],
         p_owner_id: ownerId,
-        p_location: resolvedLocation
+        p_location: resolvedLocation,
+        p_include_in_global_search: includeInGlobal,
       })
 
     if (toolError) {
@@ -224,6 +240,11 @@ serve(async (req) => {
     } catch (_e) {
       // company_events table not present yet — ignore.
     }
+
+    // Non-blocking: generate AI search aliases
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const serviceKey = Deno.env.get('SERVICE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    triggerAliasGeneration(supabaseUrl, serviceKey, token, toolId)
 
     // Get the created tool data to return
     const { data: toolData, error: fetchError } = await supabaseClient
