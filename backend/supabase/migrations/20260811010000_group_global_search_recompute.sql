@@ -7,10 +7,19 @@
 --   • Tool in ANY active group with flag = true        → true
 --   • Tool ONLY in active groups with flag = false     → false
 -- Soft-deleted groups are ignored (treated as not a membership for this purpose).
+-- Default for NEW groups: tools appear in global search (ON).
 -- =============================================================================
 
+ALTER TABLE public.tool_groups
+  ALTER COLUMN default_include_in_global_search SET DEFAULT true;
+
+-- Backfill: turn ON for existing groups created while the old default was false
+UPDATE public.tool_groups
+SET default_include_in_global_search = true
+WHERE default_include_in_global_search IS DISTINCT FROM true;
+
 COMMENT ON COLUMN public.tool_groups.default_include_in_global_search IS
-  'When true, tools that are members of this (active) group are eligible for global search. A tool in multiple groups is visible if ANY of those groups has this set true. Tools in no active groups default to visible.';
+  'When true (default), tools that are members of this (active) group are eligible for global search. A tool in multiple groups is visible if ANY of those groups has this set true. Tools in no active groups default to visible.';
 
 -- ---------------------------------------------------------------------------
 -- Recompute one tool from its active group memberships
@@ -119,7 +128,7 @@ BEGIN
   END IF;
 
   UPDATE tool_groups
-  SET default_include_in_global_search = coalesce(p_include, false)
+  SET default_include_in_global_search = coalesce(p_include, true)
   WHERE id = p_group_id;
 
   -- Trigger also fires on UPDATE; call explicitly so callers get a count even if
@@ -128,7 +137,7 @@ BEGIN
 
   RETURN json_build_object(
     'success', true,
-    'include', coalesce(p_include, false),
+    'include', coalesce(p_include, true),
     'members_recomputed', v_count
   );
 END;

@@ -13,7 +13,7 @@ Paste into the Supabase SQL Editor and run. Do not run from CI against prod unti
 |---|---|
 | `tools.search_norm` | Backfilled from name+description; trigger keeps it updated |
 | `tools.include_in_global_search` | Defaults **true** — existing tools stay in All Tools |
-| `tool_groups.default_include_in_global_search` | When true, **all** tools in this active group are eligible for global search. Multi-group: visible if **any** active group has this true. No active groups → visible. See `20260811010000_group_global_search_recompute.sql`. |
+| `tool_groups.default_include_in_global_search` | Defaults **true** (on). When true, **all** tools in this active group are eligible for global search. Multi-group: visible if **any** active group has this true. No active groups → visible. See `20260811010000_group_global_search_recompute.sql`. |
 | `tool_search_aliases` table + RLS | Empty until Haiku/manual aliases |
 | Rewritten `search_tools` | Same name; new optional args `p_scope`, `p_group_id`, `p_owner_id`; returns `match_rank`, `include_in_global_search` |
 | Alias helper RPCs | list / upsert / delete / replace AI / set global flag |
@@ -25,4 +25,4 @@ Paste into the Supabase SQL Editor and run. Do not run from CI against prod unti
 2. Set secret `ANTHROPIC_API_KEY` on the project
 3. Deploy updated `create-tool` / `create-group-tool`
 4. Ship app + admin clients
-5. Run backfill once (admin): call `backfill-tool-aliases`
+5. Run backfill once (superadmin portal): **Generate search aliases (all companies)**

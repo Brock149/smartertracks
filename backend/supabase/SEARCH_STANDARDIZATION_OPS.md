@@ -34,20 +34,20 @@ supabase functions deploy edit-tool
 
 ## 4. Backfill AI aliases (after SQL + deploy)
 
-From browser console while logged in as admin on the portal, or via curl:
+**Easiest:** Super Admin portal → companies dashboard → **Generate search aliases (all companies)**.  
+It loops every company in batches (skips tools that already have AI aliases).
+
+Requires `ANTHROPIC_API_KEY` set as an Edge Function secret.
+
+Manual curl (optional):
 
 ```bash
-# Repeat until has_more is false; bump offset each time (or use next_offset)
 curl -X POST "$SUPABASE_URL/functions/v1/backfill-tool-aliases" \
   -H "Authorization: Bearer $USER_JWT" \
   -H "apikey: $ANON_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"limit":25,"offset":0,"only_missing":true}'
+  -d '{"limit":25,"offset":0,"only_missing":true,"company_id":"<uuid>"}'
 ```
-
-From admin portal code you can also call `backfillToolAliases()` in [`adminportal/src/lib/toolSearch.ts`](../../adminportal/src/lib/toolSearch.ts).
-
-`only_missing: true` skips tools that already have AI aliases (safe to re-run).
 
 ## 5. Verify
 

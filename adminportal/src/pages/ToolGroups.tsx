@@ -77,7 +77,7 @@ export default function ToolGroups() {
   const [newGroup, setNewGroup] = useState({
     name: '',
     description: '',
-    default_include_in_global_search: false,
+    default_include_in_global_search: true,
   })
   const [newGroupOwnerMode, setNewGroupOwnerMode] = useState<OwnerMode>('company_default')
   const [newGroupOwnerId, setNewGroupOwnerId] = useState('')
@@ -118,7 +118,7 @@ export default function ToolGroups() {
   const [editGroupForm, setEditGroupForm] = useState({
     name: '',
     description: '',
-    default_include_in_global_search: false,
+    default_include_in_global_search: true,
   })
   const [editGroupOwnerMode, setEditGroupOwnerMode] = useState<OwnerMode>('company_default')
   const [editGroupOwnerId, setEditGroupOwnerId] = useState('')
@@ -444,7 +444,7 @@ export default function ToolGroups() {
         }])
 
       if (error) throw error
-      setNewGroup({ name: '', description: '', default_include_in_global_search: false })
+      setNewGroup({ name: '', description: '', default_include_in_global_search: true })
       setNewGroupOwnerMode('company_default')
       setNewGroupOwnerId('')
       setIsCreateOpen(false)

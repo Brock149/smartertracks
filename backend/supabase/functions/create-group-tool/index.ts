@@ -196,7 +196,7 @@ serve(async (req) => {
         p_checklist: checklist || [],
         p_owner_id: ownerId,
         p_location: resolvedLocation,
-        p_include_in_global_search: group.default_include_in_global_search ?? false,
+        p_include_in_global_search: group.default_include_in_global_search ?? true,
       })
 
     if (toolError) {

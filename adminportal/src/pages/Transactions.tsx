@@ -247,6 +247,8 @@ export default function Transactions() {
       const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
         .select('id, number, name, company_id, current_owner')
+        .eq('is_deleted', false)
+        .eq('include_in_global_search', true)
         .order('number_numeric', { ascending: true })
 
       if (toolsError) throw toolsError
@@ -330,7 +332,7 @@ export default function Transactions() {
     let cancelled = false
     const handle = setTimeout(async () => {
       try {
-        const results = await searchTools({ q: term, limit: 50, scope: 'company' })
+        const results = await searchTools({ q: term, limit: 50, scope: 'global' })
         if (cancelled) return
         setRemoteToolResults(
           results.map((t) => ({

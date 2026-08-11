@@ -67,6 +67,7 @@ export default function Tools() {
   const [newAliasText, setNewAliasText] = useState('')
   const [aliasesLoading, setAliasesLoading] = useState(false)
   const [regenAliasesLoading, setRegenAliasesLoading] = useState(false)
+  const [showKeywords, setShowKeywords] = useState(false)
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
@@ -183,11 +184,12 @@ export default function Tools() {
       setError(null)
       console.log('Fetching tools...')
       
-      // First get all tools, excluding deleted tools
+      // Browse list matches global search: hide tools opted out via group / flag
       const { data: toolsData, error: toolsError } = await supabase
         .from('tools')
         .select('*')
-        .eq('is_deleted', false)  // Only show non-deleted tools
+        .eq('is_deleted', false)
+        .eq('include_in_global_search', true)
         .order('number_numeric', { ascending: true })
 
       if (toolsError) throw toolsError
@@ -416,12 +418,13 @@ export default function Tools() {
     setEditImagesAdded([])
     setEditAliases([])
     setNewAliasText('')
+    setShowKeywords(false)
     fetchToolImages(tool.id).then(setEditToolImages)
     fetchChecklist(tool.id)
     setAliasesLoading(true)
     listToolSearchAliases(tool.id)
       .then(setEditAliases)
-      .catch((err) => console.error('Failed to load aliases', err))
+      .catch((err) => console.error('Failed to load keywords', err))
       .finally(() => setAliasesLoading(false))
     setIsEditModalOpen(true)
   }
@@ -464,6 +467,7 @@ export default function Tools() {
       setEditImagesToDelete([]);
       setEditImagesAdded([]);
       setEditAliases([]);
+      setShowKeywords(false);
       fetchTools();
     } catch (error: any) {
       alert(error.message || 'An unexpected error occurred');
@@ -483,6 +487,8 @@ export default function Tools() {
     setChecklistItems([]);
     setEditImagesToDelete([]);
     setEditImagesAdded([]);
+    setEditAliases([]);
+    setShowKeywords(false);
     setIsAddingItem(false);
     setNewChecklistItem({ item_name: '', required: true });
   };
@@ -657,7 +663,7 @@ export default function Tools() {
     setSearchingRemote(true)
     const handle = setTimeout(async () => {
       try {
-        const results = await searchTools({ q: term, limit: 100, scope: 'company' })
+        const results = await searchTools({ q: term, limit: 100, scope: 'global' })
         if (cancelled) return
         setRemoteSearchResults(
           results.map((t) => ({
@@ -1369,86 +1375,110 @@ export default function Tools() {
                 </label>
 
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block font-medium text-lg">Search aliases</label>
+                  {aliasesLoading ? (
+                    <p className="text-sm text-gray-500">Loading keywords…</p>
+                  ) : !showKeywords ? (
                     <button
                       type="button"
-                      disabled={regenAliasesLoading}
-                      onClick={async () => {
-                        if (!editingTool) return
-                        try {
-                          setRegenAliasesLoading(true)
-                          await regenerateToolAliases(editingTool.id)
-                          const refreshed = await listToolSearchAliases(editingTool.id)
-                          setEditAliases(refreshed)
-                        } catch (err: any) {
-                          alert(err.message || 'Failed to regenerate aliases')
-                        } finally {
-                          setRegenAliasesLoading(false)
-                        }
-                      }}
-                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      onClick={() => setShowKeywords(true)}
+                      className="text-blue-600 hover:text-blue-800 text-base font-medium underline-offset-2 hover:underline"
                     >
-                      {regenAliasesLoading ? 'Generating…' : 'Regenerate AI aliases'}
+                      Click here to show {editAliases.length} keyword
+                      {editAliases.length === 1 ? '' : 's'}
                     </button>
-                  </div>
-                  {aliasesLoading ? (
-                    <p className="text-sm text-gray-500">Loading aliases…</p>
                   ) : (
-                    <div className="space-y-2">
-                      {editAliases.length === 0 && (
-                        <p className="text-sm text-gray-500">No aliases yet.</p>
-                      )}
-                      {editAliases.map((a) => (
-                        <div
-                          key={a.id}
-                          className="flex items-center justify-between gap-2 border rounded px-3 py-2 text-sm"
-                        >
-                          <span>
-                            {a.alias}{' '}
-                            <span className="text-gray-400">({a.source})</span>
-                          </span>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="block font-medium text-lg">Keywords</label>
+                        <div className="flex items-center gap-3 shrink-0">
                           <button
                             type="button"
-                            className="text-red-600 hover:text-red-800"
+                            disabled={regenAliasesLoading}
                             onClick={async () => {
+                              if (!editingTool) return
                               try {
-                                await deleteToolSearchAlias(a.id)
-                                setEditAliases((prev) => prev.filter((x) => x.id !== a.id))
+                                setRegenAliasesLoading(true)
+                                await regenerateToolAliases(editingTool.id)
+                                const refreshed = await listToolSearchAliases(editingTool.id)
+                                setEditAliases(refreshed)
                               } catch (err: any) {
-                                alert(err.message || 'Failed to delete alias')
+                                alert(err.message || 'Failed to regenerate keywords')
+                              } finally {
+                                setRegenAliasesLoading(false)
+                              }
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          >
+                            {regenAliasesLoading ? 'Generating…' : 'Regenerate AI keywords'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowKeywords(false)}
+                            className="text-sm text-gray-500 hover:text-gray-700"
+                          >
+                            Hide
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        This tool will show up whenever any of these keywords are searched. If you
+                        would like it to pop up for other nicknames, slang, etc., add those keywords.
+                      </p>
+                      <div className="space-y-2">
+                        {editAliases.length === 0 && (
+                          <p className="text-sm text-gray-500">No keywords yet.</p>
+                        )}
+                        {editAliases.map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center justify-between gap-2 border rounded px-3 py-2 text-sm"
+                          >
+                            <span>
+                              {a.alias}{' '}
+                              <span className="text-gray-400">({a.source})</span>
+                            </span>
+                            <button
+                              type="button"
+                              className="text-red-600 hover:text-red-800"
+                              onClick={async () => {
+                                try {
+                                  await deleteToolSearchAlias(a.id)
+                                  setEditAliases((prev) => prev.filter((x) => x.id !== a.id))
+                                } catch (err: any) {
+                                  alert(err.message || 'Failed to delete keyword')
+                                }
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newAliasText}
+                            onChange={(e) => setNewAliasText(e.target.value)}
+                            placeholder="Add keyword"
+                            className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            className="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
+                            onClick={async () => {
+                              if (!editingTool || !newAliasText.trim()) return
+                              try {
+                                await upsertToolSearchAlias(editingTool.id, newAliasText.trim())
+                                const refreshed = await listToolSearchAliases(editingTool.id)
+                                setEditAliases(refreshed)
+                                setNewAliasText('')
+                              } catch (err: any) {
+                                alert(err.message || 'Failed to add keyword')
                               }
                             }}
                           >
-                            Remove
+                            Add
                           </button>
                         </div>
-                      ))}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newAliasText}
-                          onChange={(e) => setNewAliasText(e.target.value)}
-                          placeholder="Add manual alias"
-                          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <button
-                          type="button"
-                          className="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
-                          onClick={async () => {
-                            if (!editingTool || !newAliasText.trim()) return
-                            try {
-                              await upsertToolSearchAlias(editingTool.id, newAliasText.trim())
-                              const refreshed = await listToolSearchAliases(editingTool.id)
-                              setEditAliases(refreshed)
-                              setNewAliasText('')
-                            } catch (err: any) {
-                              alert(err.message || 'Failed to add alias')
-                            }
-                          }}
-                        >
-                          Add
-                        </button>
                       </div>
                     </div>
                   )}

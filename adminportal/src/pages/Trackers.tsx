@@ -53,7 +53,10 @@ interface MapTool {
 
 export default function Trackers() {
   const [pool, setPool] = useState<PoolTracker[]>([])
+  // Default list = tools that already have a tracker. Search loads matching
+  // tools on demand (no full-catalog download).
   const [tools, setTools] = useState<Tool[]>([])
+  const [searchHitTools, setSearchHitTools] = useState<Tool[]>([])
   const [assignments, setAssignments] = useState<Record<string, ActiveAssignment>>({})
   const [mapTools, setMapTools] = useState<MapTool[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,22 +81,18 @@ export default function Trackers() {
 
   // Search + sort over the tools list.
   const [searchTerm, setSearchTerm] = useState('')
-  const [remoteToolIds, setRemoteToolIds] = useState<Set<string> | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('number')
+
+  const TOOL_SELECT =
+    'id, number, name, created_at, tracker_required, last_latitude, last_longitude, last_location_recorded_at, last_location_updated_at, last_location_serial, last_battery'
 
   const fetchAll = async (silent = false) => {
     try {
       if (!silent) setLoading(true)
       setError('')
-      const [poolRes, toolsRes, assignRes, mapRes, numbersRes] = await Promise.all([
+      const [poolRes, assignRes, mapRes, numbersRes] = await Promise.all([
         supabase.rpc('company_tracker_pool'),
-        supabase
-          .from('tools')
-          .select(
-            'id, number, name, created_at, tracker_required, last_latitude, last_longitude, last_location_recorded_at, last_location_updated_at, last_location_serial, last_battery'
-          )
-          .eq('is_deleted', false)
-          .order('number_numeric', { ascending: true }),
         supabase
           .from('tracker_tool_assignments')
           .select('tool_id, serial, mount_type')
@@ -105,16 +104,28 @@ export default function Trackers() {
           .is('released_at', null),
       ])
       if (poolRes.error) throw poolRes.error
-      if (toolsRes.error) throw toolsRes.error
       if (assignRes.error) throw assignRes.error
       if (mapRes.error) throw mapRes.error
 
-      setPool(poolRes.data || [])
-      setTools(toolsRes.data || [])
-      setMapTools(mapRes.data || [])
       const map: Record<string, ActiveAssignment> = {}
       for (const a of assignRes.data || []) map[a.tool_id] = a as ActiveAssignment
       setAssignments(map)
+
+      const assignedIds = Object.keys(map)
+      let loadedTools: Tool[] = []
+      if (assignedIds.length > 0) {
+        const toolsRes = await supabase
+          .from('tools')
+          .select(TOOL_SELECT)
+          .eq('is_deleted', false)
+          .in('id', assignedIds)
+          .order('number_numeric', { ascending: true })
+        if (toolsRes.error) throw toolsRes.error
+        loadedTools = (toolsRes.data || []) as Tool[]
+      }
+      setTools(loadedTools)
+      setPool(poolRes.data || [])
+      setMapTools(mapRes.data || [])
       const numMap: Record<string, number> = {}
       for (const r of numbersRes.data || []) {
         if (r.company_number != null) numMap[r.serial] = r.company_number
@@ -305,18 +316,33 @@ export default function Trackers() {
   useEffect(() => {
     const term = searchTerm.trim()
     if (!term) {
-      setRemoteToolIds(null)
+      setSearchHitTools([])
+      setSearchLoading(false)
       return
     }
     let cancelled = false
+    setSearchLoading(true)
     const handle = setTimeout(async () => {
       try {
         const results = await searchTools({ q: term, limit: 100, scope: 'company' })
         if (cancelled) return
-        setRemoteToolIds(new Set(results.map((r) => r.id)))
+        const ids = results.map((r) => r.id)
+        if (ids.length === 0) {
+          setSearchHitTools([])
+          return
+        }
+        const { data, error } = await supabase
+          .from('tools')
+          .select(TOOL_SELECT)
+          .eq('is_deleted', false)
+          .in('id', ids)
+        if (error) throw error
+        if (!cancelled) setSearchHitTools((data || []) as Tool[])
       } catch (err) {
         console.error('Trackers tool search failed', err)
-        if (!cancelled) setRemoteToolIds(new Set())
+        if (!cancelled) setSearchHitTools([])
+      } finally {
+        if (!cancelled) setSearchLoading(false)
       }
     }, 300)
     return () => {
@@ -325,22 +351,25 @@ export default function Trackers() {
     }
   }, [searchTerm])
 
-  // Filter by name / number / attached tracker serial, then sort.
+  // Default: tools that already have a tracker. With a search term: remote
+  // matches + any assigned tool whose tracker serial/label matches.
   const visibleTools = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
-    const filtered = term
-      ? tools.filter((t) => {
-          const a = assignments[t.id]
-          const trackerLabel = a ? trackerName(a.serial).toLowerCase() : ''
-          const matchesTracker =
-            (a?.serial || '').toLowerCase().includes(term) || trackerLabel.includes(term)
-          const matchesRemote = remoteToolIds ? remoteToolIds.has(t.id) : false
-          const matchesLocalName =
-            (t.name || '').toLowerCase().includes(term) ||
-            (t.number || '').toLowerCase().includes(term)
-          return matchesRemote || matchesTracker || matchesLocalName
-        })
-      : tools
+    let filtered: Tool[]
+    if (!term) {
+      filtered = tools
+    } else {
+      const byId = new Map<string, Tool>()
+      for (const t of searchHitTools) byId.set(t.id, t)
+      for (const t of tools) {
+        const a = assignments[t.id]
+        const trackerLabel = a ? trackerName(a.serial).toLowerCase() : ''
+        const matchesTracker =
+          (a?.serial || '').toLowerCase().includes(term) || trackerLabel.includes(term)
+        if (matchesTracker) byId.set(t.id, t)
+      }
+      filtered = [...byId.values()]
+    }
 
     const byNumber = (a: Tool, b: Tool) => {
       const an = parseInt(String(a.number), 10)
@@ -370,15 +399,14 @@ export default function Trackers() {
     }
 
     // Tools with a tracker attached always sort ahead of tools without one —
-    // otherwise the handful of tracked tools get buried under 100+ untracked
-    // ones. Within each group, the chosen sort mode still applies.
+    // otherwise search hits without trackers bury the ones you're managing.
     return [...filtered].sort((a, b) => {
       const aTracked = assignments[a.id] ? 1 : 0
       const bTracked = assignments[b.id] ? 1 : 0
       if (aTracked !== bTracked) return bTracked - aTracked
       return bySortMode(a, b)
     })
-  }, [tools, assignments, searchTerm, sortMode, trackerNumbers, remoteToolIds])
+  }, [tools, searchHitTools, assignments, searchTerm, sortMode, trackerNumbers])
 
   if (loading) {
     return (
@@ -450,12 +478,14 @@ export default function Trackers() {
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Tools ({visibleTools.length})
+              {searchTerm.trim()
+                ? `Search results (${visibleTools.length})`
+                : `Tools with trackers (${visibleTools.length})`}
             </h3>
           </div>
           <input
             type="text"
-            placeholder="Search by tool name, number, or tracker…"
+            placeholder="Search any tool by name or number to attach a tracker…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -488,8 +518,14 @@ export default function Trackers() {
         </div>
 
         <div className="divide-y divide-gray-100">
-          {visibleTools.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-400">No tools match your search.</div>
+          {searchLoading ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-400">Searching…</div>
+          ) : visibleTools.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-400">
+              {searchTerm.trim()
+                ? 'No tools match your search.'
+                : 'No tools have a tracker yet. Search above to find a tool and attach one.'}
+            </div>
           ) : (
             visibleTools.map((tool) => {
               const a = assignments[tool.id]

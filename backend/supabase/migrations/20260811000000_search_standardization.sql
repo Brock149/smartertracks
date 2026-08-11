@@ -56,7 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_tools_company_global_search
 -- 3) tool_groups: default for NEW tools created into the group
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.tool_groups
-  ADD COLUMN IF NOT EXISTS default_include_in_global_search boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS default_include_in_global_search boolean NOT NULL DEFAULT true;
 
 -- ---------------------------------------------------------------------------
 -- 4) tool_search_aliases
@@ -343,11 +343,11 @@ BEGIN
   IF p_include_in_global_search IS NOT NULL THEN
     v_include := p_include_in_global_search;
   ELSE
-    SELECT coalesce(default_include_in_global_search, false)
+    SELECT coalesce(default_include_in_global_search, true)
       INTO v_include
     FROM tool_groups
     WHERE id = p_group_id;
-    v_include := coalesce(v_include, false);
+    v_include := coalesce(v_include, true);
   END IF;
 
   INSERT INTO tools (
