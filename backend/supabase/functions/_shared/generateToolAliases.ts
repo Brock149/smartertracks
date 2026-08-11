@@ -1,7 +1,9 @@
 /**
  * Shared Haiku keyword generation for tool search.
- * Focus: slang / nicknames someone might type — NOT rearrangements of the name
- * (pg_trgm already covers typos and word-order variants of the real name).
+ * Best of both worlds:
+ *  - slang / nicknames workers actually type
+ *  - useful name reorderings / short forms (trigram helps typos, but word-order
+ *    swaps and distinctive short phrases are more reliable as keywords)
  */
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
@@ -14,15 +16,71 @@ function normalizeTokens(text: string): string[] {
     .filter((t) => t.length > 0)
 }
 
-/** Drop keywords that are only subsets/reorderings of the tool name. */
-export function filterNameReorders(aliases: string[], name: string): string[] {
-  const nameTokens = new Set(normalizeTokens(name))
-  return aliases.filter((alias) => {
-    const tokens = normalizeTokens(alias)
-    if (tokens.length === 0) return false
-    // If every token already appears in the name, trigram search covers it.
-    return !tokens.every((t) => nameTokens.has(t))
-  })
+function normalizePhrase(text: string): string {
+  return normalizeTokens(text).join(' ')
+}
+
+/** Looks like warehouse/location storage text, not a tool nickname. */
+function looksLikeLocationJunk(alias: string): boolean {
+  const t = alias.toLowerCase()
+  if (/\b(rack|shelf|aisle|bin|bay|row)\s*\d+/i.test(t)) return true
+  if (/\b(wh|tr|wrh|warehouse|tool\s*room)\b/i.test(t) && /\b(rack|shelf|aisle|bin)\b/i.test(t)) {
+    return true
+  }
+  // Pure location-code style: "wh tr", "tr floor"
+  if (/^(wh|tr|wrh)(\s+(wh|tr|wrh|floor|rack|shelf))+$/i.test(t.trim())) return true
+  return false
+}
+
+/**
+ * Deterministic word-order / short-form variants for multi-word names.
+ * e.g. "propress ridgid" → "ridgid propress"
+ */
+export function nameOrderVariants(name: string): string[] {
+  const tokens = normalizeTokens(name)
+  if (tokens.length < 2 || tokens.length > 4) return []
+
+  const full = tokens.join(' ')
+  const out: string[] = []
+
+  if (tokens.length === 2) {
+    out.push(`${tokens[1]} ${tokens[0]}`)
+  } else if (tokens.length === 3) {
+    out.push(`${tokens[1]} ${tokens[2]} ${tokens[0]}`)
+    out.push(`${tokens[2]} ${tokens[0]} ${tokens[1]}`)
+    out.push(`${tokens[1]} ${tokens[0]} ${tokens[2]}`)
+    out.push(`${tokens[0]} ${tokens[1]}`)
+    out.push(`${tokens[1]} ${tokens[2]}`)
+    out.push(`${tokens[0]} ${tokens[2]}`)
+  } else {
+    // 4 words: reverse halves + adjacent pairs (keep it light)
+    out.push([...tokens].reverse().join(' '))
+    out.push(`${tokens[0]} ${tokens[1]}`)
+    out.push(`${tokens[2]} ${tokens[3]}`)
+    out.push(`${tokens[1]} ${tokens[2]} ${tokens[3]}`)
+  }
+
+  return [...new Set(out.filter((v) => v && v !== full))]
+}
+
+export function cleanAliasList(aliases: string[], name: string, max = 12): string[] {
+  const nameNorm = normalizePhrase(name)
+  const seen = new Set<string>()
+  const out: string[] = []
+
+  for (const raw of aliases) {
+    const alias = String(raw || '').trim().toLowerCase()
+    if (!alias || alias.length > 80) continue
+    const norm = normalizePhrase(alias)
+    if (!norm || norm === nameNorm) continue
+    if (looksLikeLocationJunk(alias)) continue
+    if (seen.has(norm)) continue
+    seen.add(norm)
+    out.push(alias)
+    if (out.length >= max) break
+  }
+
+  return out
 }
 
 export async function generateAliasesWithHaiku(name: string): Promise<string[]> {
@@ -36,18 +94,29 @@ export async function generateAliasesWithHaiku(name: string): Promise<string[]> 
 
   const prompt = `You generate search KEYWORDS for a construction / trades tool inventory app.
 
-Workers search by what they CALL the tool on the jobsite — slang, nicknames, brand nicknames, and common short names — NOT by rearranging the catalog title.
+Workers type what they remember: slang, nicknames, brand+product in any order, or a short phrase from the tool name.
 
 Tool name: "${toolName}"
 
-Return ONLY a JSON array of short lowercase keywords (max 10). Rules:
-- FOCUS on slang / nicknames / alternate common names people actually say or type (e.g. "sawzall" for a reciprocating saw, "skilsaw" for a circular saw, "channel locks" for tongue-and-groove pliers, "crescent wrench" for an adjustable wrench).
-- Include well-known brand nicknames and trade shorthand when they apply.
-- A few common misspellings of those nicknames are OK.
-- Do NOT include the exact tool name.
-- Do NOT invent keywords by reordering, dropping, or reshuffling words from the tool name (e.g. do not turn "Metal spring clamps" into "spring metal clamps", "metal clamps", "clamps spring"). Fuzzy search already handles that.
-- Do NOT use location codes, rack/shelf labels, warehouse abbreviations, or storage notes (e.g. "WH TR", "Rack 6", "Shelf A").
-- If you are not confident there is real slang for this tool, return fewer keywords or []. Prefer fewer good nicknames over filler.
+Return ONLY a JSON array of short lowercase keywords (max 12). Mix BOTH of these:
+
+1) SLANG / NICKNAMES (highest value when they exist)
+   - Jobsite slang, brand nicknames, trade shorthand people actually say/type
+   - Examples: "sawzall" for reciprocating saw, "skilsaw" for circular saw,
+     "channel locks" for tongue-and-groove pliers, "crescent wrench" for adjustable wrench,
+     "propress" / "press tool" style short names when relevant
+   - Common misspellings of those nicknames are OK
+
+2) USEFUL NAME VARIANTS (always valuable for multi-word names)
+   - Different word orders of brand + product (e.g. name "ProPress Ridgid" → "ridgid propress")
+   - Natural short forms / distinctive phrases from the name (drop filler words, keep the words people type)
+   - Stemming / ending variants of distinctive words (clamp/clamps, press/pressing) when helpful
+
+Rules:
+- Do NOT include the exact tool name unchanged.
+- Do NOT invent keywords from location/storage text. Ignore anything like rack/shelf/warehouse/tool-room codes (WH, TR, Rack 6, Shelf A). You are only given the tool name — stay on the tool itself.
+- Prefer concrete searchable phrases (2–4 words or a strong single nickname) over tiny weak fragments.
+- If slang is scarce, lean harder on useful name reorderings and short forms so the list is still helpful — aim for about 6–12 when the name has enough words to work with.
 - No explanations — JSON array only.`
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -59,7 +128,7 @@ Return ONLY a JSON array of short lowercase keywords (max 10). Rules:
     },
     body: JSON.stringify({
       model: HAIKU_MODEL,
-      max_tokens: 300,
+      max_tokens: 350,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -77,15 +146,19 @@ Return ONLY a JSON array of short lowercase keywords (max 10). Rules:
     .trim()
 
   const match = text.match(/\[[\s\S]*\]/)
-  if (!match) return []
+  const fromAi: string[] = []
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0])
+      if (Array.isArray(parsed)) {
+        for (const a of parsed) fromAi.push(String(a || ''))
+      }
+    } catch {
+      // ignore bad JSON; still keep deterministic variants
+    }
+  }
 
-  const parsed = JSON.parse(match[0])
-  if (!Array.isArray(parsed)) return []
-
-  const cleaned = parsed
-    .map((a) => String(a || '').trim().toLowerCase())
-    .filter((a) => a.length > 0 && a.length <= 80)
-    .slice(0, 10)
-
-  return [...new Set(filterNameReorders(cleaned, toolName))]
+  // Guarantee word-order coverage even if the model under-delivers.
+  const merged = [...fromAi, ...nameOrderVariants(toolName)]
+  return cleanAliasList(merged, toolName, 12)
 }
