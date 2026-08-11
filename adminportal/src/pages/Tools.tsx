@@ -898,8 +898,12 @@ export default function Tools() {
                   {getPaginatedTools().map((tool) => (
                     <tr key={tool.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tool.number}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tool.name}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{tool.description}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-[16rem] break-words whitespace-normal">
+                        {tool.name}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-[20rem] break-words whitespace-normal">
+                        {tool.description}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {tool.owner?.name || (tool.deleted_owner_name ? `${tool.deleted_owner_name} (removed)` : 'None')}
                       </td>
