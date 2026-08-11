@@ -81,7 +81,6 @@ serve(async (req) => {
       checklist,
       estimated_cost,
       location,
-      include_in_global_search,
     } = await req.json()
 
     // Validate required fields
@@ -184,11 +183,8 @@ serve(async (req) => {
     // location (which defaults to the group's name) before submitting.
     const resolvedLocation = typeof location === 'string' && location.trim() ? location.trim() : group.name
 
-    const includeInGlobal =
-      typeof include_in_global_search === 'boolean'
-        ? include_in_global_search
-        : (group.default_include_in_global_search ?? false)
-
+    // Visibility is recomputed by DB triggers from the group's
+    // default_include_in_global_search + multi-group rules after membership insert.
     const { data: toolId, error: toolError } = await supabaseClient
       .rpc('create_group_tool_with_checklist', {
         p_group_id: group_id,
@@ -200,7 +196,7 @@ serve(async (req) => {
         p_checklist: checklist || [],
         p_owner_id: ownerId,
         p_location: resolvedLocation,
-        p_include_in_global_search: includeInGlobal,
+        p_include_in_global_search: group.default_include_in_global_search ?? false,
       })
 
     if (toolError) {

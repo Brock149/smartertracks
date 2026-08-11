@@ -1363,7 +1363,7 @@ export default function Tools() {
                   <span>
                     <span className="font-medium">Include in global search</span>
                     <span className="block text-sm text-gray-500">
-                      When off, this tool stays out of All Tools / Transfer search (still findable in its group).
+                      When off, this tool stays out of All Tools / Transfer search. Group membership can override this: a tool in any group marked “appear in global search” stays visible; if it only sits in hidden groups, it becomes hidden.
                     </span>
                   </span>
                 </label>

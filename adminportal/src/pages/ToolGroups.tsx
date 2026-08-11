@@ -93,7 +93,6 @@ export default function ToolGroups() {
     location: '',
     estimated_cost: null as number | null,
     checklist: [] as NewGroupToolChecklistItem[],
-    include_in_global_search: false,
   })
   const [groupToolLocationIsDefault, setGroupToolLocationIsDefault] = useState(true)
   const [pendingGroupToolImages, setPendingGroupToolImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
@@ -506,7 +505,6 @@ export default function ToolGroups() {
       location: selectedGroup.name,
       estimated_cost: null,
       checklist: [{ item_name: 'Overall Tool Condition', required: true }],
-      include_in_global_search: !!selectedGroup.default_include_in_global_search,
     })
     setGroupToolLocationIsDefault(true)
     setPendingGroupToolImages([])
@@ -524,7 +522,6 @@ export default function ToolGroups() {
       location: '',
       estimated_cost: null,
       checklist: [],
-      include_in_global_search: false,
     })
     setGroupToolLocationIsDefault(true)
     setPendingGroupToolImages([])
@@ -608,7 +605,6 @@ export default function ToolGroups() {
             location: newGroupTool.location.trim(),
             estimated_cost: newGroupTool.estimated_cost,
             checklist: checklistToSend,
-            include_in_global_search: !!newGroupTool.include_in_global_search,
           }),
         }
       )
@@ -630,7 +626,6 @@ export default function ToolGroups() {
         location: '',
         estimated_cost: null,
         checklist: [],
-        include_in_global_search: false,
       })
       setGroupToolLocationIsDefault(true)
       setPendingGroupToolImages([])
@@ -1368,9 +1363,9 @@ export default function ToolGroups() {
                   }
                 />
                 <span>
-                  <span className="font-medium">New tools appear in global search</span>
+                  <span className="font-medium">Tools in this group appear in global search</span>
                   <span className="block text-gray-500">
-                    Off by default so van/warehouse group tools don’t flood All Tools. You can still override per tool.
+                    Off = van/warehouse inventory stays out of All Tools / Transfer. Applies to every tool in the group. If a tool is also in another group that is visible, it stays visible.
                   </span>
                 </span>
               </label>
@@ -1537,26 +1532,6 @@ export default function ToolGroups() {
                   rows={3}
                 />
               </div>
-
-              <label className="flex items-start gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 rounded border-gray-300"
-                  checked={!!newGroupTool.include_in_global_search}
-                  onChange={(e) =>
-                    setNewGroupTool((prev) => ({
-                      ...prev,
-                      include_in_global_search: e.target.checked,
-                    }))
-                  }
-                />
-                <span>
-                  <span className="font-medium">Include in global All Tools / Transfer search</span>
-                  <span className="block text-gray-500">
-                    Defaults from the group setting. Leave off for van inventory tools.
-                  </span>
-                </span>
-              </label>
 
               {features.toolCostingEnabled && (
                 <div>
@@ -1986,9 +1961,9 @@ export default function ToolGroups() {
                   }
                 />
                 <span>
-                  <span className="font-medium">New tools appear in global search</span>
+                  <span className="font-medium">Tools in this group appear in global search</span>
                   <span className="block text-gray-500">
-                    Controls the default for tools created into this group going forward.
+                    Toggles visibility for every tool currently in this group. Tools also in another visible group stay visible. Tools that leave this group become visible again unless they only remain in other hidden groups.
                   </span>
                 </span>
               </label>
