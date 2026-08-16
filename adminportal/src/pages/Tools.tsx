@@ -34,6 +34,7 @@ interface Tool {
   photo_url?: string
   estimated_cost?: number | null
   include_in_global_search?: boolean
+  match_rank?: number
   owner?: {
     name: string
   }
@@ -675,6 +676,7 @@ export default function Tools() {
             company_id: t.company_id || '',
             current_owner: t.current_owner ?? null,
             include_in_global_search: t.include_in_global_search,
+            match_rank: t.match_rank ?? 0,
             owner: t.owner_name ? { name: t.owner_name } : undefined,
             latest_transaction: t.location
               ? [{ location: t.location, stored_at: t.stored_at || '', timestamp: '' }]
@@ -704,6 +706,22 @@ export default function Tools() {
   }, [tools, searchTerm, remoteSearchResults])
 
   const sortedTools = useMemo(() => {
+    // While searching, keep server relevance order (do not re-sort by number/name).
+    if (searchTerm.trim()) {
+      // Prefer match_rank when present; otherwise keep API order as returned.
+      const hasRanks = filteredTools.some((t) => (t.match_rank ?? 0) > 0)
+      if (!hasRanks) return filteredTools
+      return filteredTools
+        .map((t, i) => ({ t, i }))
+        .sort((a, b) => {
+          const ar = a.t.match_rank ?? 0
+          const br = b.t.match_rank ?? 0
+          if (br !== ar) return br - ar
+          return a.i - b.i
+        })
+        .map(({ t }) => t)
+    }
+
     return [...filteredTools].sort((a, b) => {
       if (sortMode === 'number') {
         const an = parseInt(String(a.number), 10)
@@ -734,7 +752,7 @@ export default function Tools() {
       if (Number.isNaN(bn)) return -1
       return an - bn
     })
-  }, [filteredTools, sortMode])
+  }, [filteredTools, sortMode, searchTerm])
 
   const totalPages = useMemo(
     () => Math.max(Math.ceil(sortedTools.length / itemsPerPage), 1),
@@ -815,6 +833,12 @@ export default function Tools() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Sort by:</span>
                 <div className="inline-flex rounded-md shadow-sm overflow-hidden border border-gray-200">
+                  {searchTerm.trim() ? (
+                    <span className="px-3 py-1 text-sm font-medium bg-blue-600 text-white">
+                      Relevance
+                    </span>
+                  ) : (
+                    <>
                   <button
                     type="button"
                     onClick={() => { setSortMode('number'); setCurrentPage(1); }}
@@ -848,6 +872,8 @@ export default function Tools() {
                   >
                     Newest
                   </button>
+                    </>
+                  )}
                 </div>
               </div>
               <button
