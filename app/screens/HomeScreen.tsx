@@ -85,7 +85,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
       const { count: companyCount } = await supabase
         .from('tools')
-        .select('id', { count: 'exact', head: true });
+        .select('id', { count: 'exact', head: true })
+        .eq('is_deleted', false)
+        .eq('include_in_global_search', true);
       setCompanyToolsCount(companyCount ?? 0);
 
       const { count: groupCount } = await supabase

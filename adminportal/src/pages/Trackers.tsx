@@ -31,6 +31,25 @@ interface Tool {
 }
 
 type SortMode = 'number' | 'name_asc' | 'name_desc' | 'newest' | 'oldest'
+type TrailUnit = 'hours' | 'days'
+
+const TRAIL_PRESETS = [
+  { v: 6, label: '6h' },
+  { v: 24, label: '24h' },
+  { v: 168, label: '7d' },
+  { v: 720, label: '30d' },
+  { v: 0, label: 'All' },
+] as const
+
+const TRAIL_PRESET_HOURS = new Set<number>(TRAIL_PRESETS.map((p) => p.v))
+
+function formatTrailHours(hours: number): string {
+  if (hours > 0 && hours % 24 === 0) {
+    const days = hours / 24
+    return `${days}d`
+  }
+  return `${hours}h`
+}
 
 interface ActiveAssignment {
   tool_id: string
@@ -68,9 +87,13 @@ export default function Trackers() {
   >(null)
   const [trail, setTrail] = useState<{ lat: number; lng: number; at: string | null }[]>([])
   const [trailHours, setTrailHours] = useState<number>(24)
+  const [customTrailOpen, setCustomTrailOpen] = useState(false)
+  const [customTrailAmount, setCustomTrailAmount] = useState('2')
+  const [customTrailUnit, setCustomTrailUnit] = useState<TrailUnit>('days')
   const [trailLoading, setTrailLoading] = useState(false)
   const [replayIndex, setReplayIndex] = useState<number | null>(null)
   const [replaying, setReplaying] = useState(false)
+  const [liveMapFull, setLiveMapFull] = useState(false)
 
   // Tracker editor modal: the tool being edited + the tracker chosen to attach.
   const [editTool, setEditTool] = useState<Tool | null>(null)
@@ -248,11 +271,40 @@ export default function Trackers() {
     return { label: 'Offline', color: '#9ca3af' }
   }
 
+  const isCustomTrail = trailHours > 0 && !TRAIL_PRESET_HOURS.has(trailHours)
+
+  const applyCustomTrail = () => {
+    const amount = Number(customTrailAmount)
+    if (!Number.isFinite(amount) || amount <= 0) return
+    const maxAmount = customTrailUnit === 'days' ? 365 : 8760
+    const clamped = Math.min(amount, maxAmount)
+    const hours = customTrailUnit === 'days' ? clamped * 24 : clamped
+    setTrailHours(hours)
+    setCustomTrailOpen(false)
+  }
+
+  const openCustomTrail = () => {
+    if (!customTrailOpen) {
+      if (trailHours > 0 && trailHours % 24 === 0) {
+        setCustomTrailAmount(String(trailHours / 24))
+        setCustomTrailUnit('days')
+      } else if (trailHours > 0) {
+        setCustomTrailAmount(String(trailHours))
+        setCustomTrailUnit('hours')
+      } else {
+        setCustomTrailAmount('2')
+        setCustomTrailUnit('days')
+      }
+    }
+    setCustomTrailOpen((open) => !open)
+  }
+
   // Load the breadcrumb trail whenever a tool's map is opened or the range
   // changes. trailHours = 0 means "all history".
   useEffect(() => {
     if (!mapTool) {
       setTrail([])
+      setCustomTrailOpen(false)
       return
     }
     let active = true
@@ -307,6 +359,24 @@ export default function Trackers() {
     }, 600)
     return () => clearInterval(timer)
   }, [replaying, trail.length])
+
+  useEffect(() => {
+    if (!mapTool && !liveMapFull) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mapTool, liveMapFull])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = () => {
+      if (mq.matches) setLiveMapFull(false)
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   // Deduped stops along the trail, shared with the map so the timeline ticks
   // line up with the on-map stop dots.
@@ -605,20 +675,45 @@ export default function Trackers() {
         </div>
         {/* End left column */}
 
-        {/* Right column: live fleet map (sticky + tall on PC, top on mobile) */}
-        <div className="border border-gray-200 rounded-lg p-4 order-1 lg:order-2 lg:sticky lg:top-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
-            Live map ({mapTools.length})
-          </h3>
-          <p className="text-sm text-gray-500 mb-3">
-            Every tool with an attached tracker that has reported a position.
-            {mapTools.length === 0 && ' No tracked tools have reported a position yet.'}
-          </p>
-          <div style={{ height: 'calc(100vh - 220px)', minHeight: 480 }}>
+        {/* Right column: live fleet map (sticky + tall on PC, compact on mobile) */}
+        <div
+          className={
+            liveMapFull
+              ? 'fixed inset-0 z-[10000] bg-white flex flex-col'
+              : 'border border-gray-200 rounded-lg p-4 order-1 lg:order-2 lg:sticky lg:top-4'
+          }
+        >
+          <div className={`flex items-start justify-between gap-3 ${liveMapFull ? 'px-4 py-3 border-b shrink-0' : ''}`}>
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                Live map ({mapTools.length})
+              </h3>
+              {!liveMapFull && (
+                <p className="text-sm text-gray-500 mb-3">
+                  Every tool with an attached tracker that has reported a position.
+                  {mapTools.length === 0 && ' No tracked tools have reported a position yet.'}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setLiveMapFull((open) => !open)}
+              className={`${liveMapFull ? '' : 'lg:hidden'} shrink-0 px-3 py-1.5 rounded-md text-sm font-semibold border border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}
+            >
+              {liveMapFull ? 'Close' : 'Full screen'}
+            </button>
+          </div>
+          <div
+            className={liveMapFull ? 'flex-1 min-h-0' : 'h-[280px] lg:h-[calc(100vh-220px)] lg:min-h-[480px]'}
+          >
             <Suspense fallback={<div className="h-full w-full bg-gray-100 animate-pulse rounded" />}>
             <TrackerMap
               height="100%"
-              onTripHistory={openTripHistory}
+              layoutKey={liveMapFull ? 'live-full' : 'live-card'}
+              onTripHistory={(toolId) => {
+                setLiveMapFull(false)
+                openTripHistory(toolId)
+              }}
               markers={mapTools.map((m) => ({
                 lat: m.latitude,
                 lng: m.longitude,
@@ -785,23 +880,23 @@ export default function Trackers() {
       {/* Map preview modal */}
       {mapTool && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-stretch sm:items-center justify-center sm:p-4"
           onClick={() => setMapTool(null)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden"
+            className="bg-white shadow-xl w-full max-w-6xl h-[100dvh] sm:h-[92vh] sm:max-h-[92vh] sm:rounded-lg flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
+            <div className="relative z-20 flex items-center justify-between px-4 py-3 border-b bg-white shrink-0">
               <div className="min-w-0">
                 <div className="font-semibold text-gray-900 truncate text-sm">{mapTool.name}</div>
                 <div className="text-xs text-gray-500 truncate">{mapTool.sublabel}</div>
               </div>
               <button
                 onClick={() => setMapTool(null)}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-3 shrink-0"
+                className="ml-3 shrink-0 px-3 py-2 rounded-md text-sm font-semibold bg-gray-100 text-gray-800 hover:bg-gray-200"
               >
-                ×
+                Close
               </button>
             </div>
             {/* Everything below fits within the modal's max-height at once —
@@ -812,19 +907,16 @@ export default function Trackers() {
             {/* Prominent trail-range selector */}
             <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-blue-50 border-b border-blue-100 shrink-0">
               <span className="text-xs font-semibold text-gray-700 mr-1">Trail range:</span>
-              {([
-                { v: 6, label: '6h' },
-                { v: 24, label: '24h' },
-                { v: 168, label: '7d' },
-                { v: 720, label: '30d' },
-                { v: 0, label: 'All' },
-              ] as { v: number; label: string }[]).map((opt) => (
+              {TRAIL_PRESETS.map((opt) => (
                 <button
                   key={opt.v}
                   type="button"
-                  onClick={() => setTrailHours(opt.v)}
+                  onClick={() => {
+                    setTrailHours(opt.v)
+                    setCustomTrailOpen(false)
+                  }}
                   className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                    trailHours === opt.v
+                    !isCustomTrail && trailHours === opt.v
                       ? 'bg-blue-600 text-white shadow'
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                   }`}
@@ -832,6 +924,68 @@ export default function Trackers() {
                   {opt.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={openCustomTrail}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  isCustomTrail || customTrailOpen
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {isCustomTrail ? formatTrailHours(trailHours) : 'Custom'}
+              </button>
+              {customTrailOpen && (
+                <form
+                  className="flex flex-wrap items-center gap-1.5"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    applyCustomTrail()
+                  }}
+                >
+                  <input
+                    type="number"
+                    min={1}
+                    max={customTrailUnit === 'days' ? 365 : 8760}
+                    step={1}
+                    value={customTrailAmount}
+                    onChange={(e) => setCustomTrailAmount(e.target.value)}
+                    className="w-16 px-2 py-1 rounded-md border border-gray-300 text-xs font-semibold text-gray-900"
+                    aria-label="Custom trail range amount"
+                    autoFocus
+                  />
+                  <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setCustomTrailUnit('hours')}
+                      className={`px-2 py-1 text-xs font-semibold ${
+                        customTrailUnit === 'hours'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Hours
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomTrailUnit('days')}
+                      className={`px-2 py-1 text-xs font-semibold border-l border-gray-300 ${
+                        customTrailUnit === 'days'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Days
+                    </button>
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Apply
+                  </button>
+                </form>
+              )}
             </div>
             <div className="flex items-center justify-between gap-3 px-3 py-1 bg-gray-50 border-b shrink-0">
               {trail.length > 0 ? (
@@ -863,6 +1017,7 @@ export default function Trackers() {
             <Suspense fallback={<div className="w-full h-full bg-gray-100 animate-pulse" />}>
             <TrackerMap
               height="100%"
+              layoutKey={mapTool.tool_id}
               path={trail}
               replayIndex={replayIndex}
               markers={

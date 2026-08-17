@@ -475,13 +475,6 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
     }
   };
 
-  const dismissNotification = async (notificationId: string) => {
-    const newDismissed = new Set(dismissedNotifications);
-    newDismissed.add(notificationId);
-    setDismissedNotifications(newDismissed);
-    await saveDismissedNotifications(newDismissed);
-  };
-
   const onRefresh = () => {
     setRefreshing(true);
     fetchMyTools();

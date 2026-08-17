@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Tooltip } from 'react-leaflet'
+import { useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { computeStops } from './trackerMapUtils'
@@ -19,6 +20,22 @@ interface TrackerMapProps {
   className?: string
   /** Called from a pin popup's "See trip history" button (marker.toolId). */
   onTripHistory?: (toolId: string) => void
+  /** Change this when the map container is resized (fullscreen, modal, etc.). */
+  layoutKey?: string | number
+}
+
+function InvalidateSize({ layoutKey }: { layoutKey?: string | number }) {
+  const map = useMap()
+  useEffect(() => {
+    const sync = () => map.invalidateSize()
+    const t = window.setTimeout(sync, 80)
+    window.addEventListener('resize', sync)
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener('resize', sync)
+    }
+  }, [map, layoutKey])
+  return null
 }
 
 function fmtTime(at?: string | null): string {
@@ -78,6 +95,7 @@ export default function TrackerMap({
   zoom,
   className,
   onTripHistory,
+  layoutKey,
 }: TrackerMapProps) {
   const valid = markers.filter(
     (m) => typeof m.lat === 'number' && typeof m.lng === 'number' && !isNaN(m.lat) && !isNaN(m.lng)
@@ -107,7 +125,10 @@ export default function TrackerMap({
   }
 
   return (
-    <div className={className} style={{ height, borderRadius: 8, overflow: 'hidden' }}>
+    <div
+      className={`tracker-map-root ${className || ''}`}
+      style={{ height, borderRadius: 8, overflow: 'hidden' }}
+    >
       <MapContainer
         center={center}
         zoom={zoom ?? defaultZoom}
@@ -122,6 +143,7 @@ export default function TrackerMap({
         maxZoom={19}
         style={{ height: '100%', width: '100%' }}
       >
+        <InvalidateSize layoutKey={layoutKey} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -197,11 +219,12 @@ export default function TrackerMap({
           })()}
         {valid.map((m, i) => (
           <Marker key={i} position={[m.lat, m.lng]} icon={buildIcon(m)}>
-            <Popup>
+            <Popup maxWidth={280} autoPanPadding={[24, 48]}>
               <div style={{ fontSize: 13, textAlign: 'center' }}>
                 {m.thumbUrl && (
                   <img
                     src={m.thumbUrl}
+                    className="tracker-map-popup-img"
                     style={{
                       width: 192,
                       height: 192,

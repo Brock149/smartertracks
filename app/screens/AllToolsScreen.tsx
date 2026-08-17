@@ -200,6 +200,8 @@ export default function AllToolsScreen({ navigation, route }: AllToolsScreenProp
       const { data: toolsData, error: toolsError, count } = await supabase
         .from('tools')
         .select('*', { count: 'exact' })
+        .eq('is_deleted', false)
+        .eq('include_in_global_search', true)
         .order('number_numeric', { ascending: true })
         .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 

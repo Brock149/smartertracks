@@ -2,9 +2,11 @@
 
 ## 1. Paste SQL (required first)
 
-Review and run in Supabase SQL Editor:
+Review and run in Supabase SQL Editor (in order):
 
-[`migrations/20260811000000_search_standardization.sql`](./migrations/20260811000000_search_standardization.sql)
+1. [`migrations/20260811000000_search_standardization.sql`](./migrations/20260811000000_search_standardization.sql)
+2. Group global-search recompute migrations (if not already applied)
+3. [`migrations/20260816000000_search_relevance_ranking.sql`](./migrations/20260816000000_search_relevance_ranking.sql) — name-first relevance + keyword count scoring
 
 Notes: [`migrations/SEARCH_STANDARDIZATION_REVIEW.md`](./migrations/SEARCH_STANDARDIZATION_REVIEW.md)
 
@@ -67,5 +69,6 @@ curl -X POST "$SUPABASE_URL/functions/v1/backfill-tool-aliases" \
 | Mobile All Tools, Transfer, MultiTransfer | `global` |
 | Mobile My Tools | `mine` |
 | Mobile Group Detail | `group` + `group_id` |
-| Admin Tools / Transactions / ToolCosts / Trackers / add-to-group | `company` |
+| Admin Tools / Transactions | `global` |
+| Admin Trackers / ToolCosts / add-to-group | `company` |
 | Admin group members | `group` + `group_id` |
