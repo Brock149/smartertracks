@@ -32,6 +32,7 @@ interface Tool {
 
 type SortMode = 'number' | 'name_asc' | 'name_desc' | 'newest' | 'oldest'
 type TrailUnit = 'hours' | 'days'
+type CustomTrailMode = 'last' | 'between'
 
 const TRAIL_PRESETS = [
   { v: 6, label: '6h' },
@@ -49,6 +50,30 @@ function formatTrailHours(hours: number): string {
     return `${days}d`
   }
   return `${hours}h`
+}
+
+function toLocalISODate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function startOfLocalDay(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d, 0, 0, 0, 0)
+}
+
+function endOfLocalDay(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d, 23, 59, 59, 999)
+}
+
+function formatTrailDateRange(from: string, to: string): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+  const a = startOfLocalDay(from).toLocaleDateString(undefined, opts)
+  const b = startOfLocalDay(to).toLocaleDateString(undefined, opts)
+  return a === b ? a : `${a}–${b}`
 }
 
 interface ActiveAssignment {
@@ -88,8 +113,12 @@ export default function Trackers() {
   const [trail, setTrail] = useState<{ lat: number; lng: number; at: string | null }[]>([])
   const [trailHours, setTrailHours] = useState<number>(24)
   const [customTrailOpen, setCustomTrailOpen] = useState(false)
+  const [customTrailMode, setCustomTrailMode] = useState<CustomTrailMode>('between')
   const [customTrailAmount, setCustomTrailAmount] = useState('2')
   const [customTrailUnit, setCustomTrailUnit] = useState<TrailUnit>('days')
+  const [customFromDate, setCustomFromDate] = useState('')
+  const [customToDate, setCustomToDate] = useState('')
+  const [trailWindow, setTrailWindow] = useState<{ from: string; to: string } | null>(null)
   const [trailLoading, setTrailLoading] = useState(false)
   const [replayIndex, setReplayIndex] = useState<number | null>(null)
   const [replaying, setReplaying] = useState(false)
@@ -271,29 +300,51 @@ export default function Trackers() {
     return { label: 'Offline', color: '#9ca3af' }
   }
 
-  const isCustomTrail = trailHours > 0 && !TRAIL_PRESET_HOURS.has(trailHours)
+  const isCustomTrail =
+    trailWindow != null || (trailHours > 0 && !TRAIL_PRESET_HOURS.has(trailHours))
 
-  const applyCustomTrail = () => {
+  const applyCustomLast = () => {
     const amount = Number(customTrailAmount)
     if (!Number.isFinite(amount) || amount <= 0) return
     const maxAmount = customTrailUnit === 'days' ? 365 : 8760
     const clamped = Math.min(amount, maxAmount)
     const hours = customTrailUnit === 'days' ? clamped * 24 : clamped
+    setTrailWindow(null)
     setTrailHours(hours)
+    setCustomTrailOpen(false)
+  }
+
+  const applyCustomBetween = () => {
+    if (!customFromDate || !customToDate) return
+    const from = customFromDate <= customToDate ? customFromDate : customToDate
+    const to = customFromDate <= customToDate ? customToDate : customFromDate
+    setTrailWindow({ from, to })
     setCustomTrailOpen(false)
   }
 
   const openCustomTrail = () => {
     if (!customTrailOpen) {
-      if (trailHours > 0 && trailHours % 24 === 0) {
-        setCustomTrailAmount(String(trailHours / 24))
-        setCustomTrailUnit('days')
-      } else if (trailHours > 0) {
-        setCustomTrailAmount(String(trailHours))
-        setCustomTrailUnit('hours')
+      if (trailWindow) {
+        setCustomTrailMode('between')
+        setCustomFromDate(trailWindow.from)
+        setCustomToDate(trailWindow.to)
       } else {
-        setCustomTrailAmount('2')
-        setCustomTrailUnit('days')
+        if (trailHours > 0 && trailHours % 24 === 0) {
+          setCustomTrailAmount(String(trailHours / 24))
+          setCustomTrailUnit('days')
+        } else if (trailHours > 0) {
+          setCustomTrailAmount(String(trailHours))
+          setCustomTrailUnit('hours')
+        } else {
+          setCustomTrailAmount('2')
+          setCustomTrailUnit('days')
+        }
+        const today = new Date()
+        const weekAgo = new Date(today)
+        weekAgo.setDate(today.getDate() - 7)
+        setCustomFromDate(toLocalISODate(weekAgo))
+        setCustomToDate(toLocalISODate(today))
+        setCustomTrailMode(isCustomTrail ? 'last' : 'between')
       }
     }
     setCustomTrailOpen((open) => !open)
@@ -311,20 +362,42 @@ export default function Trackers() {
     ;(async () => {
       try {
         setTrailLoading(true)
-        const since =
-          trailHours > 0 ? new Date(Date.now() - trailHours * 3600_000).toISOString() : null
-        const { data, error } = await supabase.rpc('tool_breadcrumb', {
+        let since: string | null = null
+        let until: string | null = null
+        if (trailWindow) {
+          since = startOfLocalDay(trailWindow.from).toISOString()
+          until = endOfLocalDay(trailWindow.to).toISOString()
+        } else if (trailHours > 0) {
+          since = new Date(Date.now() - trailHours * 3600_000).toISOString()
+        }
+        let { data, error } = await supabase.rpc('tool_breadcrumb', {
           p_tool_id: mapTool.tool_id,
           p_since: since,
+          p_until: until,
         })
+        // Older DBs without p_until still work: fetch from start, clip locally.
+        if (error && until) {
+          const fallback = await supabase.rpc('tool_breadcrumb', {
+            p_tool_id: mapTool.tool_id,
+            p_since: since,
+          })
+          data = fallback.data
+          error = fallback.error
+        }
         if (error) throw error
         if (active) {
+          const untilMs = until ? new Date(until).getTime() : null
           setTrail(
-            (data || []).map((p: any) => ({
-              lat: p.latitude,
-              lng: p.longitude,
-              at: p.recorded_at ?? null,
-            }))
+            (data || [])
+              .filter((p: any) => {
+                if (untilMs == null || !p.recorded_at) return true
+                return new Date(p.recorded_at).getTime() <= untilMs
+              })
+              .map((p: any) => ({
+                lat: p.latitude,
+                lng: p.longitude,
+                at: p.recorded_at ?? null,
+              }))
           )
         }
       } catch {
@@ -336,13 +409,13 @@ export default function Trackers() {
     return () => {
       active = false
     }
-  }, [mapTool, trailHours])
+  }, [mapTool, trailHours, trailWindow])
 
   // Reset the replay scrubber whenever the trail or modal changes.
   useEffect(() => {
     setReplayIndex(null)
     setReplaying(false)
-  }, [mapTool, trailHours, trail.length])
+  }, [mapTool, trailHours, trailWindow, trail.length])
 
   // Advance the replay marker while playing.
   useEffect(() => {
@@ -912,6 +985,7 @@ export default function Trackers() {
                   key={opt.v}
                   type="button"
                   onClick={() => {
+                    setTrailWindow(null)
                     setTrailHours(opt.v)
                     setCustomTrailOpen(false)
                   }}
@@ -933,51 +1007,107 @@ export default function Trackers() {
                     : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                {isCustomTrail ? formatTrailHours(trailHours) : 'Custom'}
+                {trailWindow
+                  ? formatTrailDateRange(trailWindow.from, trailWindow.to)
+                  : isCustomTrail
+                    ? formatTrailHours(trailHours)
+                    : 'Custom'}
               </button>
               {customTrailOpen && (
                 <form
-                  className="flex flex-wrap items-center gap-1.5"
+                  className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto"
                   onSubmit={(e) => {
                     e.preventDefault()
-                    applyCustomTrail()
+                    if (customTrailMode === 'between') applyCustomBetween()
+                    else applyCustomLast()
                   }}
                 >
-                  <input
-                    type="number"
-                    min={1}
-                    max={customTrailUnit === 'days' ? 365 : 8760}
-                    step={1}
-                    value={customTrailAmount}
-                    onChange={(e) => setCustomTrailAmount(e.target.value)}
-                    className="w-16 px-2 py-1 rounded-md border border-gray-300 text-xs font-semibold text-gray-900"
-                    aria-label="Custom trail range amount"
-                    autoFocus
-                  />
                   <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
                     <button
                       type="button"
-                      onClick={() => setCustomTrailUnit('hours')}
+                      onClick={() => setCustomTrailMode('last')}
                       className={`px-2 py-1 text-xs font-semibold ${
-                        customTrailUnit === 'hours'
+                        customTrailMode === 'last'
                           ? 'bg-blue-600 text-white'
                           : 'bg-white text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      Hours
+                      Last
                     </button>
                     <button
                       type="button"
-                      onClick={() => setCustomTrailUnit('days')}
+                      onClick={() => setCustomTrailMode('between')}
                       className={`px-2 py-1 text-xs font-semibold border-l border-gray-300 ${
-                        customTrailUnit === 'days'
+                        customTrailMode === 'between'
                           ? 'bg-blue-600 text-white'
                           : 'bg-white text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      Days
+                      Dates
                     </button>
                   </div>
+                  {customTrailMode === 'last' ? (
+                    <>
+                      <input
+                        type="number"
+                        min={1}
+                        max={customTrailUnit === 'days' ? 365 : 8760}
+                        step={1}
+                        value={customTrailAmount}
+                        onChange={(e) => setCustomTrailAmount(e.target.value)}
+                        className="w-16 px-2 py-1 rounded-md border border-gray-300 text-xs font-semibold text-gray-900"
+                        aria-label="Custom trail range amount"
+                        autoFocus
+                      />
+                      <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setCustomTrailUnit('hours')}
+                          className={`px-2 py-1 text-xs font-semibold ${
+                            customTrailUnit === 'hours'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Hours
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCustomTrailUnit('days')}
+                          className={`px-2 py-1 text-xs font-semibold border-l border-gray-300 ${
+                            customTrailUnit === 'days'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Days
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-1 text-xs text-gray-600">
+                        <span className="font-semibold text-gray-700">From</span>
+                        <input
+                          type="date"
+                          value={customFromDate}
+                          onChange={(e) => setCustomFromDate(e.target.value)}
+                          className="px-2 py-1 rounded-md border border-gray-300 text-xs font-semibold text-gray-900"
+                          aria-label="Trail start date"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-gray-600">
+                        <span className="font-semibold text-gray-700">To</span>
+                        <input
+                          type="date"
+                          value={customToDate}
+                          onChange={(e) => setCustomToDate(e.target.value)}
+                          className="px-2 py-1 rounded-md border border-gray-300 text-xs font-semibold text-gray-900"
+                          aria-label="Trail end date"
+                        />
+                      </label>
+                    </>
+                  )}
                   <button
                     type="submit"
                     className="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700"
