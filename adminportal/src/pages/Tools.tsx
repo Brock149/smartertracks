@@ -9,7 +9,6 @@ import {
   insertToolImageRecord,
   removeStorageObject,
 } from '../lib/uploadImage'
-import { logCompanyEvent } from '../lib/companyEvents'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 import { getMyCompanySettings } from '../lib/companySettingsApi'
 import {
@@ -539,15 +538,6 @@ export default function Tools() {
         })
 
       if (error) throw error
-
-      // Record this as a company activity event (the RPC can't log it itself).
-      await logCompanyEvent({
-        event_type: 'tool_deleted',
-        target_type: 'tool',
-        target_id: deleteTool.id,
-        target_label: `#${deleteTool.number} - ${deleteTool.name}`,
-        details: 'Tool deleted',
-      })
 
       setDeleteModalOpen(false)
       fetchTools() // Refresh the tools list

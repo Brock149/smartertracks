@@ -164,31 +164,31 @@ export default function Reports() {
         ) : filteredReports.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-lg">No reports found</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="w-full table-fixed divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[18%]">
                   Tool
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[14%]">
                   Item
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[14%]">
                   Status
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[8%]">
                   From
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[8%]">
                   To
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[12%]">
                   Date/Time
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[16%]">
                   Comments
                 </th>
-                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-base font-medium text-gray-500 uppercase tracking-wider w-[10%]">
                   Actions
                 </th>
               </tr>
@@ -196,21 +196,21 @@ export default function Reports() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredReports.map((report) => (
                 <tr key={report.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg font-medium text-gray-900">
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-lg font-medium text-gray-900 break-words">
                       #{report.transaction?.tool?.number} - {report.transaction?.tool?.name}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-lg text-gray-900 break-words">
                       {report.checklist_item?.item_name}
                       {report.checklist_item?.required && (
                         <span className="ml-2 text-base bg-blue-100 text-blue-800 px-3 py-1 rounded">Required</span>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-3 py-1 inline-flex text-base leading-5 font-semibold rounded-full ${
+                  <td className="px-6 py-4 align-top">
+                    <span className={`px-3 py-1 inline-flex text-base leading-5 font-semibold rounded-full whitespace-nowrap ${
                       report.status === 'Damaged/Needs Repair'
                         ? 'bg-yellow-100 text-yellow-800'
                         : report.status === 'Needs Replacement/Resupply'
@@ -220,27 +220,27 @@ export default function Reports() {
                       {report.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-lg text-gray-900 break-words">
                       {report.transaction?.deleted_from_user_name || report.transaction?.from_user?.name || 'System'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-lg text-gray-900 break-words">
                       {report.transaction?.deleted_to_user_name || report.transaction?.to_user?.name}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-lg text-gray-900 break-words">
                       {new Date(report.transaction?.timestamp || report.created_at).toLocaleString()}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-lg text-gray-900">
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-lg text-gray-900 whitespace-normal break-words">
                       {report.comments || '-'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-lg font-medium">
+                  <td className="px-6 py-4 align-top whitespace-nowrap text-lg font-medium">
                     <button
                       onClick={() => handleResolveOpen(report)}
                       className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-green-700 transition-colors"
@@ -318,9 +318,9 @@ export default function Reports() {
                   </div>
                   
                   {report.comments && (
-                    <div className="flex justify-between">
+                    <div className="flex flex-col gap-1">
                       <span className="text-gray-500">Comments:</span>
-                      <span className="text-gray-900 text-right max-w-48 truncate" title={report.comments}>
+                      <span className="text-gray-900 break-words">
                         {report.comments}
                       </span>
                     </div>
@@ -364,7 +364,7 @@ export default function Reports() {
                   </div>
                   <div>
                     <span className="text-sm md:text-base text-gray-500">Comments:</span>
-                    <p className="text-base md:text-lg text-gray-900">{reportToResolve.comments || '-'}</p>
+                    <p className="text-base md:text-lg text-gray-900 break-words">{reportToResolve.comments || '-'}</p>
                   </div>
                 </div>
               </div>

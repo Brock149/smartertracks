@@ -925,7 +925,7 @@ export default function Trackers() {
                     </div>
                     <p className="text-xs text-gray-500">
                       Attaching tags this tool's GPS location and records it in the tool's
-                      transaction history. Only an admin can detach it.
+                      transaction history.
                     </p>
                     <div className="flex justify-end gap-2">
                       <button

@@ -137,7 +137,11 @@ declare
   v_actor_name text;
   v_tool_number text;
   v_tool_name text;
+  v_tool_owner uuid;
   v_tracker_label text;
+  v_location text;
+  v_stored_at text;
+  v_notes text;
 begin
   if v_company_id is null then
     raise exception 'No company for current user';
@@ -175,9 +179,36 @@ begin
 
   select coalesce(u.name, 'Someone') into v_actor_name
     from public.users u where u.id = auth.uid();
-  select t.number, t.name into v_tool_number, v_tool_name
+  select t.number, t.name, t.current_owner
+    into v_tool_number, v_tool_name, v_tool_owner
     from public.tools t where t.id = p_tool_id;
   v_tracker_label := public.tracker_display_name(p_serial, v_company_id);
+
+  select tx.location, tx.stored_at into v_location, v_stored_at
+    from public.tool_transactions tx
+   where tx.tool_id = p_tool_id
+   order by tx.timestamp desc
+   limit 1;
+
+  v_notes := coalesce(v_tracker_label, p_serial)
+    || ' attached to #' || coalesce(v_tool_number, '?')
+    || ' - ' || coalesce(v_tool_name, 'Tool')
+    || ' by ' || coalesce(v_actor_name, 'Someone')
+    || ' (' || p_mount_type || ')';
+
+  insert into public.tool_transactions (
+    tool_id, from_user_id, to_user_id, location, stored_at,
+    notes, company_id, attribution
+  ) values (
+    p_tool_id,
+    null,
+    v_tool_owner,
+    coalesce(v_location, 'Not specified'),
+    coalesce(v_stored_at, 'N/A'),
+    v_notes,
+    v_company_id,
+    'Tracker attached'
+  );
 
   insert into public.company_events
     (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
@@ -189,7 +220,7 @@ begin
     'tool',
     p_tool_id,
     '#' || coalesce(v_tool_number, '?') || ' - ' || coalesce(v_tool_name, 'Tool'),
-    coalesce(v_tracker_label, p_serial) || ' attached'
+    v_notes
   );
 end;
 $$;
@@ -301,61 +332,63 @@ $$;
 ALTER FUNCTION "public"."company_tracker_pool"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text", "p_include_in_global_search" boolean DEFAULT NULL::boolean) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-declare
-    v_tool_id uuid;
-begin
-    insert into tools (number, name, description, photo_url, company_id, current_owner)
-    values (p_number, p_name, p_description, p_photo_url, p_company_id, p_owner_id)
-    returning id into v_tool_id;
+DECLARE
+  v_tool_id uuid;
+  v_include boolean;
+BEGIN
+  IF p_include_in_global_search IS NOT NULL THEN
+    v_include := p_include_in_global_search;
+  ELSE
+    SELECT coalesce(default_include_in_global_search, false)
+      INTO v_include
+    FROM tool_groups
+    WHERE id = p_group_id;
+    v_include := coalesce(v_include, false);
+  END IF;
 
-    if p_checklist is not null and jsonb_array_length(p_checklist) > 0 then
-        insert into tool_checklists (tool_id, item_name, required, company_id)
-        select
-            v_tool_id,
-            (item->>'item_name')::text,
-            (item->>'required')::boolean,
-            p_company_id
-        from jsonb_array_elements(p_checklist) as item;
-    end if;
+  INSERT INTO tools (
+    number, name, description, photo_url, company_id, current_owner, include_in_global_search
+  )
+  VALUES (
+    p_number, p_name, p_description, p_photo_url, p_company_id, p_owner_id, v_include
+  )
+  RETURNING id INTO v_tool_id;
 
-    insert into tool_transactions (
-        tool_id,
-        from_user_id,
-        to_user_id,
-        location,
-        stored_at,
-        notes,
-        company_id
-    ) values (
-        v_tool_id,
-        null,
-        p_owner_id,
-        normalize_location(p_company_id, coalesce(p_location, 'Not specified')),
-        'N/A',
-        'Initial assignment from system (created in group)' ||
-        case
-            when p_owner_id is not null then ' to owner'
-            else ''
-        end,
-        p_company_id
-    );
+  IF p_checklist IS NOT NULL AND jsonb_array_length(p_checklist) > 0 THEN
+    INSERT INTO tool_checklists (tool_id, item_name, required, company_id)
+    SELECT
+      v_tool_id,
+      (item->>'item_name')::text,
+      (item->>'required')::boolean,
+      p_company_id
+    FROM jsonb_array_elements(p_checklist) AS item;
+  END IF;
 
-    insert into tool_group_members (group_id, tool_id)
-    values (p_group_id, v_tool_id);
+  INSERT INTO tool_transactions (
+    tool_id, from_user_id, to_user_id, location, stored_at, notes, company_id
+  ) VALUES (
+    v_tool_id,
+    NULL,
+    p_owner_id,
+    normalize_location(p_company_id, coalesce(p_location, 'Not specified')),
+    'N/A',
+    'Initial assignment from system (created in group)' ||
+      CASE WHEN p_owner_id IS NOT NULL THEN ' to owner' ELSE '' END,
+    p_company_id
+  );
 
-    return v_tool_id;
-end;
+  INSERT INTO tool_group_members (group_id, tool_id)
+  VALUES (p_group_id, v_tool_id);
+
+  RETURN v_tool_id;
+END;
 $$;
 
 
-ALTER FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") IS 'p_location is caller-resolved: the admin-edited location if provided, otherwise the group name.';
-
+ALTER FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text", "p_include_in_global_search" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_tool_with_checklist"("p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb") RETURNS "uuid"
@@ -573,48 +606,119 @@ ALTER FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") OWNER TO "p
 
 CREATE OR REPLACE FUNCTION "public"."delete_tool"("p_tool_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    tool_number TEXT;
-    tool_name TEXT;
-BEGIN
-    -- First check if tool exists and get its details
-    SELECT number, name INTO tool_number, tool_name
-    FROM tools
-    WHERE id = p_tool_id;
+declare
+  tool_number text;
+  tool_name text;
+  v_company_id uuid;
+  v_owner_id uuid;
+  v_actor_name text;
+  v_location text;
+  v_stored_at text;
+  v_notes text;
+begin
+  select number, name, company_id, current_owner
+    into tool_number, tool_name, v_company_id, v_owner_id
+    from public.tools
+   where id = p_tool_id;
 
-    IF tool_number IS NULL THEN
-        RAISE EXCEPTION 'Tool not found';
-    END IF;
+  if tool_number is null then
+    raise exception 'Tool not found';
+  end if;
 
-    -- Start a transaction
-    BEGIN
-        -- First, update any transactions involving this tool
-        -- Store the tool's details and set tool_id to NULL
-        UPDATE tool_transactions
-        SET 
-            tool_id = NULL,
-            deleted_tool_number = tool_number,
-            deleted_tool_name = tool_name
-        WHERE tool_id = p_tool_id;
+  select coalesce(u.name, 'Someone') into v_actor_name
+    from public.users u where u.id = auth.uid();
 
-        -- Delete all checklist items for this tool
-        DELETE FROM tool_checklists
-        WHERE tool_id = p_tool_id;
+  select tx.location, tx.stored_at into v_location, v_stored_at
+    from public.tool_transactions tx
+   where tx.tool_id = p_tool_id
+   order by tx.timestamp desc
+   limit 1;
 
-        -- Actually delete the tool
-        DELETE FROM tools
-        WHERE id = p_tool_id;
-    EXCEPTION
-        WHEN OTHERS THEN
-            -- If anything fails, roll back the transaction
-            RAISE EXCEPTION 'Failed to delete tool: %', SQLERRM;
-    END;
-END;
+  v_notes := '#' || tool_number || ' - ' || tool_name
+    || ' deleted by ' || coalesce(v_actor_name, 'Someone');
+
+  insert into public.tool_transactions (
+    tool_id, from_user_id, to_user_id, location, stored_at,
+    notes, company_id, attribution
+  ) values (
+    p_tool_id,
+    null,
+    v_owner_id,
+    coalesce(v_location, 'Not specified'),
+    coalesce(v_stored_at, 'N/A'),
+    v_notes,
+    v_company_id,
+    'Tool deleted'
+  );
+
+  insert into public.company_events
+    (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
+  values (
+    v_company_id,
+    'tool_deleted',
+    auth.uid(),
+    coalesce(v_actor_name, 'Someone'),
+    'tool',
+    p_tool_id,
+    '#' || tool_number || ' - ' || tool_name,
+    v_notes
+  );
+
+  begin
+    update public.tool_transactions
+       set tool_id = null,
+           deleted_tool_number = tool_number,
+           deleted_tool_name = tool_name
+     where tool_id = p_tool_id;
+
+    delete from public.tool_checklists
+     where tool_id = p_tool_id;
+
+    delete from public.tools
+     where id = p_tool_id;
+  exception
+    when others then
+      raise exception 'Failed to delete tool: %', SQLERRM;
+  end;
+end;
 $$;
 
 
 ALTER FUNCTION "public"."delete_tool"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."delete_tool_search_alias"("p_alias_id" "uuid") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+BEGIN
+  IF NOT public.is_admin(auth.uid()) AND NOT public.is_superadmin(auth.uid()) THEN
+    RAISE EXCEPTION 'Only admins can manage tool search aliases';
+  END IF;
+
+  SELECT company_id INTO v_company_id
+  FROM tool_search_aliases WHERE id = p_alias_id;
+
+  IF v_company_id IS NULL THEN
+    RAISE EXCEPTION 'Alias not found';
+  END IF;
+
+  IF NOT public.is_superadmin(auth.uid())
+     AND v_company_id IS DISTINCT FROM public.get_user_company_id(auth.uid()) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+
+  DELETE FROM tool_search_aliases WHERE id = p_alias_id;
+  RETURN json_build_object('success', true, 'message', 'Alias deleted');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."delete_tool_search_alias"("p_alias_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."delete_user"("user_id" "uuid") RETURNS "void"
@@ -665,12 +769,17 @@ CREATE OR REPLACE FUNCTION "public"."detach_tracker_from_tool"("p_tool_id" "uuid
 declare
   v_company_id uuid := public.get_user_company_id(auth.uid());
   v_serial text;
+  v_mount_type text;
   v_actor_name text;
   v_tool_number text;
   v_tool_name text;
+  v_tool_owner uuid;
   v_tracker_label text;
+  v_location text;
+  v_stored_at text;
+  v_notes text;
 begin
-  select tta.serial into v_serial
+  select tta.serial, tta.mount_type into v_serial, v_mount_type
     from public.tracker_tool_assignments tta
    where tta.tool_id = p_tool_id
      and tta.company_id = v_company_id
@@ -698,9 +807,36 @@ begin
 
   select coalesce(u.name, 'Someone') into v_actor_name
     from public.users u where u.id = auth.uid();
-  select t.number, t.name into v_tool_number, v_tool_name
+  select t.number, t.name, t.current_owner
+    into v_tool_number, v_tool_name, v_tool_owner
     from public.tools t where t.id = p_tool_id;
   v_tracker_label := public.tracker_display_name(v_serial, v_company_id);
+
+  select tx.location, tx.stored_at into v_location, v_stored_at
+    from public.tool_transactions tx
+   where tx.tool_id = p_tool_id
+   order by tx.timestamp desc
+   limit 1;
+
+  v_notes := coalesce(v_tracker_label, v_serial)
+    || ' detached from #' || coalesce(v_tool_number, '?')
+    || ' - ' || coalesce(v_tool_name, 'Tool')
+    || ' by ' || coalesce(v_actor_name, 'Someone')
+    || ' (' || coalesce(v_mount_type, 'temporary') || ')';
+
+  insert into public.tool_transactions (
+    tool_id, from_user_id, to_user_id, location, stored_at,
+    notes, company_id, attribution
+  ) values (
+    p_tool_id,
+    null,
+    v_tool_owner,
+    coalesce(v_location, 'Not specified'),
+    coalesce(v_stored_at, 'N/A'),
+    v_notes,
+    v_company_id,
+    'Tracker detached'
+  );
 
   insert into public.company_events
     (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)
@@ -712,7 +848,7 @@ begin
     'tool',
     p_tool_id,
     '#' || coalesce(v_tool_number, '?') || ' - ' || coalesce(v_tool_name, 'Tool'),
-    coalesce(v_tracker_label, v_serial) || ' detached'
+    v_notes
   );
 end;
 $$;
@@ -1060,6 +1196,37 @@ $$;
 ALTER FUNCTION "public"."is_superadmin"("uid" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."list_tool_search_aliases"("p_tool_id" "uuid") RETURNS TABLE("id" "uuid", "alias" "text", "source" "text", "created_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid := public.get_user_company_id(auth.uid());
+BEGIN
+  IF v_company_id IS NULL AND NOT public.is_superadmin(auth.uid()) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM tools t
+    WHERE t.id = p_tool_id
+      AND (t.company_id = v_company_id OR public.is_superadmin(auth.uid()))
+  ) THEN
+    RAISE EXCEPTION 'Tool not found';
+  END IF;
+
+  RETURN QUERY
+  SELECT a.id, a.alias, a.source, a.created_at
+  FROM tool_search_aliases a
+  WHERE a.tool_id = p_tool_id
+  ORDER BY a.source, lower(a.alias);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."list_tool_search_aliases"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."log_group_activity"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1219,6 +1386,16 @@ $$;
 ALTER FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_input_location" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."normalize_search_text"("p_input" "text") RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+  SELECT lower(regexp_replace(coalesce(p_input, ''), '[^a-zA-Z0-9]+', '', 'g'));
+$$;
+
+
+ALTER FUNCTION "public"."normalize_search_text"("p_input" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1290,6 +1467,79 @@ $$;
 
 
 ALTER FUNCTION "public"."recompute_company_active_on_delete"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recompute_group_members_global_search"("p_group_id" "uuid") RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_tool_id uuid;
+  v_count integer := 0;
+BEGIN
+  FOR v_tool_id IN
+    SELECT m.tool_id
+    FROM tool_group_members m
+    WHERE m.group_id = p_group_id
+  LOOP
+    PERFORM public.recompute_tool_include_in_global_search(v_tool_id);
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recompute_group_members_global_search"("p_group_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recompute_tool_include_in_global_search"("p_tool_id" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_include boolean;
+BEGIN
+  -- Visible if: no active group memberships OR any active group opts into global search.
+  -- Default / ambiguous → true.
+  SELECT COALESCE(
+    (
+      -- No active memberships → visible
+      NOT EXISTS (
+        SELECT 1
+        FROM tool_group_members m
+        JOIN tool_groups g ON g.id = m.group_id
+        WHERE m.tool_id = p_tool_id
+          AND g.is_deleted IS NOT TRUE
+      )
+    )
+    OR
+    (
+      -- Any active group that includes members in global search → visible
+      EXISTS (
+        SELECT 1
+        FROM tool_group_members m
+        JOIN tool_groups g ON g.id = m.group_id
+        WHERE m.tool_id = p_tool_id
+          AND g.is_deleted IS NOT TRUE
+          AND g.default_include_in_global_search = true
+      )
+    ),
+    true
+  )
+  INTO v_include;
+
+  UPDATE tools
+  SET include_in_global_search = v_include
+  WHERE id = p_tool_id
+    AND include_in_global_search IS DISTINCT FROM v_include;
+
+  RETURN v_include;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."recompute_tool_include_in_global_search"("p_tool_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."refresh_tool_current_location"("p_tool_id" "uuid") RETURNS "void"
@@ -1381,71 +1631,293 @@ $$;
 ALTER FUNCTION "public"."remove_user_from_company"("p_user_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text")
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."replace_tool_ai_aliases"("p_tool_id" "uuid", "p_aliases" "text"[]) RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-  with latest_tx as (
-    select distinct on (tool_id) tool_id, location
-    from tool_transactions where company_id = p_company_id
-    order by tool_id, timestamp desc
-  )
-  select t.id, t.number, t.name, t.description, t.photo_url,
-    coalesce(u.name, case when t.deleted_owner_name is not null then t.deleted_owner_name || ' (removed)' end) as owner_name,
-    coalesce(l.location, '') as location
-  from tools t
-  left join users u on u.id = t.current_owner
-  left join latest_tx l on l.tool_id = t.id
-  where t.company_id = p_company_id
-    and (
-      lower(t.number) like '%' || lower(p_term) || '%'
-      or lower(t.name) like '%' || lower(p_term) || '%'
-      or lower(coalesce(t.description, '')) like '%' || lower(p_term) || '%'
-      or lower(coalesce(l.location, '')) like '%' || lower(p_term) || '%'
-      or lower(coalesce(u.name, t.deleted_owner_name, '')) like '%' || lower(p_term) || '%'
-    )
-  order by t.number
-  limit least(p_limit, 100);
+DECLARE
+  v_company_id uuid;
+  v_alias text;
+  v_count int := 0;
+BEGIN
+  -- Intended for service_role / edge functions (SECURITY DEFINER).
+  SELECT company_id INTO v_company_id FROM tools WHERE id = p_tool_id;
+  IF v_company_id IS NULL THEN
+    RAISE EXCEPTION 'Tool not found';
+  END IF;
+
+  DELETE FROM tool_search_aliases
+  WHERE tool_id = p_tool_id AND source = 'ai';
+
+  IF p_aliases IS NOT NULL THEN
+    FOREACH v_alias IN ARRAY p_aliases LOOP
+      IF trim(coalesce(v_alias, '')) = '' THEN
+        CONTINUE;
+      END IF;
+      INSERT INTO tool_search_aliases (tool_id, company_id, alias, source)
+      VALUES (p_tool_id, v_company_id, trim(v_alias), 'ai')
+      ON CONFLICT (tool_id, (lower(alias))) DO NOTHING;
+      v_count := v_count + 1;
+    END LOOP;
+  END IF;
+
+  RETURN json_build_object('success', true, 'count', v_count);
+END;
 $$;
 
 
-ALTER FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."replace_tool_ai_aliases"("p_tool_id" "uuid", "p_aliases" "text"[]) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text", "primary_thumb_url" "text", "primary_image_url" "text")
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0, "p_scope" "text" DEFAULT 'global'::"text", "p_group_id" "uuid" DEFAULT NULL::"uuid", "p_owner_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "number" "text", "name" "text", "description" "text", "photo_url" "text", "owner_name" "text", "location" "text", "primary_thumb_url" "text", "primary_image_url" "text", "match_rank" integer, "include_in_global_search" boolean, "current_owner" "uuid")
+    LANGUAGE "plpgsql" STABLE
     AS $$
-  with latest_tx as (
-    select distinct on (tool_id) tool_id, location
-    from tool_transactions where company_id = p_company_id
-    order by tool_id, timestamp desc
+DECLARE
+  v_term text := trim(coalesce(p_term, ''));
+  v_term_lower text := lower(trim(coalesce(p_term, '')));
+  v_norm text := public.normalize_search_text(p_term);
+  v_limit int := least(greatest(coalesce(p_limit, 50), 1), 100);
+  v_offset int := greatest(coalesce(p_offset, 0), 0);
+  v_scope text := lower(coalesce(nullif(trim(p_scope), ''), 'global'));
+  v_sim_threshold real := 0.25;
+BEGIN
+  IF v_term = '' THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  WITH scoped AS (
+    SELECT t.*
+    FROM tools t
+    WHERE t.company_id = p_company_id
+      AND t.is_deleted IS NOT TRUE
+      AND (
+        CASE v_scope
+          WHEN 'global' THEN t.include_in_global_search = true
+          WHEN 'company' THEN true
+          WHEN 'group' THEN EXISTS (
+            SELECT 1 FROM tool_group_members m
+            WHERE m.tool_id = t.id AND m.group_id = p_group_id
+          )
+          WHEN 'mine' THEN t.current_owner = p_owner_id
+          ELSE t.include_in_global_search = true
+        END
+      )
   ),
-  primary_img as (
-    select ti.tool_id, ti.thumb_url, ti.image_url
-    from tool_images ti where ti.is_primary = true
+  -- Inclusive keyword stats (same loose rules as original search inclusion)
+  alias_stats AS (
+    SELECT
+      a.tool_id,
+      COUNT(*) FILTER (
+        WHERE
+          lower(a.alias) = v_term_lower
+          OR lower(a.alias) LIKE '%' || v_term_lower || '%'
+          OR (v_norm <> '' AND public.normalize_search_text(a.alias) LIKE '%' || v_norm || '%')
+          OR (
+            length(v_term_lower) >= 3
+            AND (
+              similarity(lower(a.alias), v_term_lower) >= v_sim_threshold
+              OR lower(a.alias) % v_term_lower
+            )
+          )
+      )::int AS match_count,
+      MAX(
+        GREATEST(
+          CASE WHEN lower(a.alias) = v_term_lower THEN 100 ELSE 0 END,
+          CASE WHEN lower(a.alias) LIKE v_term_lower || '%' THEN 90 ELSE 0 END,
+          CASE WHEN lower(a.alias) LIKE '%' || v_term_lower || '%' THEN 80 ELSE 0 END,
+          CASE
+            WHEN v_norm <> ''
+              AND public.normalize_search_text(a.alias) LIKE '%' || v_norm || '%'
+            THEN 75 ELSE 0
+          END,
+          CASE
+            WHEN length(v_term_lower) >= 3
+              AND similarity(lower(a.alias), v_term_lower) >= 0.40
+            THEN (55 + round(similarity(lower(a.alias), v_term_lower) * 30))::int
+            ELSE 0
+          END,
+          -- Weak fuzzy still counts for inclusion/ranking, just scored lower
+          CASE
+            WHEN length(v_term_lower) >= 3
+              AND similarity(lower(a.alias), v_term_lower) >= v_sim_threshold
+            THEN (25 + round(similarity(lower(a.alias), v_term_lower) * 25))::int
+            ELSE 0
+          END
+        )
+      )::int AS best_quality
+    FROM tool_search_aliases a
+    INNER JOIN scoped s ON s.id = a.tool_id
+    GROUP BY a.tool_id
+  ),
+  matched AS (
+    SELECT
+      s.id AS tool_id,
+      GREATEST(
+        -- Number
+        CASE WHEN lower(s.number) = v_term_lower THEN 1000 ELSE 0 END,
+        CASE WHEN lower(s.number) LIKE v_term_lower || '%' THEN 920 ELSE 0 END,
+
+        -- Name always outranks keyword-only (keywords cap ~450)
+        CASE WHEN lower(s.name) = v_term_lower THEN 980 ELSE 0 END,
+        CASE WHEN lower(s.name) LIKE v_term_lower || '%' THEN 940 ELSE 0 END,
+        CASE WHEN lower(s.name) LIKE '%' || v_term_lower || '%' THEN 880 ELSE 0 END,
+        CASE
+          WHEN v_norm <> ''
+            AND public.normalize_search_text(coalesce(s.name, '')) LIKE '%' || v_norm || '%'
+          THEN 860 ELSE 0
+        END,
+        CASE
+          WHEN length(v_term_lower) >= 3
+            AND similarity(lower(s.name), v_term_lower) >= v_sim_threshold
+          THEN (700 + round(similarity(lower(s.name), v_term_lower) * 150))::int
+          ELSE 0
+        END,
+
+        -- search_norm (name+description)
+        CASE
+          WHEN v_norm <> '' AND coalesce(s.search_norm, '') LIKE '%' || v_norm || '%'
+          THEN 650 ELSE 0
+        END,
+        CASE
+          WHEN v_norm <> ''
+            AND length(v_norm) >= 3
+            AND similarity(coalesce(s.search_norm, ''), v_norm) >= v_sim_threshold
+          THEN (520 + round(similarity(coalesce(s.search_norm, ''), v_norm) * 100))::int
+          ELSE 0
+        END,
+
+        -- Keywords: quality + count bonus (weak fuzzy lands near the bottom)
+        CASE
+          WHEN coalesce(als.match_count, 0) > 0 THEN
+            LEAST(
+              450,
+              (
+                CASE
+                  WHEN als.best_quality >= 100 THEN 320
+                  WHEN als.best_quality >= 80 THEN 260
+                  WHEN als.best_quality >= 75 THEN 230
+                  WHEN als.best_quality >= 55 THEN 180
+                  ELSE 90
+                END
+                + LEAST(120, als.match_count * 25)
+              )
+            )
+          ELSE 0
+        END,
+
+        -- Weaker non-name signals
+        CASE WHEN lower(s.number) LIKE '%' || v_term_lower || '%' THEN 400 ELSE 0 END,
+        CASE WHEN lower(coalesce(s.description, '')) LIKE '%' || v_term_lower || '%' THEN 120 ELSE 0 END,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.id = s.current_owner AND lower(u.name) LIKE '%' || v_term_lower || '%'
+        ) THEN 80 ELSE 0 END,
+        CASE WHEN s.deleted_owner_name IS NOT NULL
+              AND lower(s.deleted_owner_name) LIKE '%' || v_term_lower || '%' THEN 80 ELSE 0 END,
+        CASE WHEN EXISTS (
+          SELECT 1
+          FROM tool_transactions tx
+          WHERE tx.tool_id = s.id
+            AND tx.company_id = p_company_id
+            AND lower(tx.location) LIKE '%' || v_term_lower || '%'
+          LIMIT 1
+        ) THEN 60 ELSE 0 END
+      ) AS rank_score
+    FROM scoped s
+    LEFT JOIN alias_stats als ON als.tool_id = s.id
+    WHERE
+      -- Same inclusion surface as original search_standardization (do not shrink)
+      lower(s.number) LIKE '%' || v_term_lower || '%'
+      OR lower(s.name) LIKE '%' || v_term_lower || '%'
+      OR lower(coalesce(s.description, '')) LIKE '%' || v_term_lower || '%'
+      OR (v_norm <> '' AND coalesce(s.search_norm, '') LIKE '%' || v_norm || '%')
+      OR (length(v_term_lower) >= 3 AND (
+           similarity(lower(s.name), v_term_lower) >= v_sim_threshold
+           OR lower(s.name) % v_term_lower
+           OR lower(s.number) % v_term_lower
+         ))
+      OR (v_norm <> '' AND length(v_norm) >= 3 AND similarity(coalesce(s.search_norm, ''), v_norm) >= v_sim_threshold)
+      OR EXISTS (
+        SELECT 1 FROM tool_search_aliases a
+        WHERE a.tool_id = s.id AND (
+          lower(a.alias) LIKE '%' || v_term_lower || '%'
+          OR (v_norm <> '' AND public.normalize_search_text(a.alias) LIKE '%' || v_norm || '%')
+          OR (length(v_term_lower) >= 3 AND (
+            similarity(lower(a.alias), v_term_lower) >= v_sim_threshold
+            OR lower(a.alias) % v_term_lower
+          ))
+        )
+      )
+      OR EXISTS (
+        SELECT 1 FROM users u
+        WHERE u.id = s.current_owner AND lower(u.name) LIKE '%' || v_term_lower || '%'
+      )
+      OR (
+        s.deleted_owner_name IS NOT NULL
+        AND lower(s.deleted_owner_name) LIKE '%' || v_term_lower || '%'
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM tool_transactions tx
+        WHERE tx.tool_id = s.id
+          AND tx.company_id = p_company_id
+          AND lower(tx.location) LIKE '%' || v_term_lower || '%'
+        LIMIT 1
+      )
+  ),
+  page AS (
+    SELECT m.tool_id, m.rank_score
+    FROM matched m
+    WHERE m.rank_score > 0
+    ORDER BY m.rank_score DESC, m.tool_id
+    LIMIT v_limit
+    OFFSET v_offset
+  ),
+  latest_tx AS (
+    SELECT DISTINCT ON (tx.tool_id) tx.tool_id, tx.location
+    FROM tool_transactions tx
+    INNER JOIN page p ON p.tool_id = tx.tool_id
+    WHERE tx.company_id = p_company_id
+    ORDER BY tx.tool_id, tx.timestamp DESC
+  ),
+  primary_img AS (
+    SELECT ti.tool_id, ti.thumb_url, ti.image_url
+    FROM tool_images ti
+    INNER JOIN page p ON p.tool_id = ti.tool_id
+    WHERE ti.is_primary = true
   )
-  select t.id, t.number, t.name, t.description, t.photo_url,
-    coalesce(u.name, case when t.deleted_owner_name is not null then t.deleted_owner_name || ' (removed)' end) as owner_name,
-    coalesce(l.location, '') as location,
-    pi.thumb_url as primary_thumb_url, pi.image_url as primary_image_url
-  from tools t
-  left join users u on u.id = t.current_owner
-  left join latest_tx l on l.tool_id = t.id
-  left join primary_img pi on pi.tool_id = t.id
-  where t.company_id = p_company_id
-    and (
-      lower(t.number) like '%' || lower(p_term) || '%'
-      or lower(t.name) like '%' || lower(p_term) || '%'
-      or lower(coalesce(t.description, '')) like '%' || lower(p_term) || '%'
-      or lower(coalesce(l.location, '')) like '%' || lower(p_term) || '%'
-      or lower(coalesce(u.name, t.deleted_owner_name, '')) like '%' || lower(p_term) || '%'
-    )
-  order by t.number
-  limit least(p_limit, 100)
-  offset greatest(p_offset, 0);
+  SELECT
+    t.id,
+    t.number,
+    t.name,
+    t.description,
+    t.photo_url,
+    coalesce(
+      u.name,
+      CASE WHEN t.deleted_owner_name IS NOT NULL THEN t.deleted_owner_name || ' (removed)' END
+    ) AS owner_name,
+    coalesce(l.location, '') AS location,
+    pi.thumb_url AS primary_thumb_url,
+    pi.image_url AS primary_image_url,
+    p.rank_score AS match_rank,
+    t.include_in_global_search,
+    t.current_owner
+  FROM page p
+  JOIN tools t ON t.id = p.tool_id
+  LEFT JOIN users u ON u.id = t.current_owner
+  LEFT JOIN latest_tx l ON l.tool_id = t.id
+  LEFT JOIN primary_img pi ON pi.tool_id = t.id
+  ORDER BY p.rank_score DESC, t.number_numeric NULLS LAST, t.number;
+END;
 $$;
 
 
-ALTER FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer, "p_scope" "text", "p_group_id" "uuid", "p_owner_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer, "p_scope" "text", "p_group_id" "uuid", "p_owner_id" "uuid") IS 'Scoped tool search: inclusive matches, ordered by relevance (name first, then keywords)';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."set_checklist_items"("items" "jsonb") RETURNS "void"
@@ -1465,6 +1937,84 @@ $$;
 
 
 ALTER FUNCTION "public"."set_checklist_items"("items" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."set_group_include_members_in_global_search"("p_group_id" "uuid", "p_include" boolean) RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+  v_count integer;
+BEGIN
+  IF NOT public.is_admin(auth.uid()) AND NOT public.is_superadmin(auth.uid()) THEN
+    RAISE EXCEPTION 'Only admins can update this setting';
+  END IF;
+
+  SELECT company_id INTO v_company_id
+  FROM tool_groups
+  WHERE id = p_group_id;
+
+  IF v_company_id IS NULL THEN
+    RAISE EXCEPTION 'Group not found';
+  END IF;
+
+  IF NOT public.is_superadmin(auth.uid())
+     AND v_company_id IS DISTINCT FROM public.get_user_company_id(auth.uid()) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+
+  UPDATE tool_groups
+  SET default_include_in_global_search = coalesce(p_include, true)
+  WHERE id = p_group_id;
+
+  -- Trigger also fires on UPDATE; call explicitly so callers get a count even if
+  -- the value was unchanged (IS DISTINCT FROM won't fire trigger).
+  v_count := public.recompute_group_members_global_search(p_group_id);
+
+  RETURN json_build_object(
+    'success', true,
+    'include', coalesce(p_include, true),
+    'members_recomputed', v_count
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."set_group_include_members_in_global_search"("p_group_id" "uuid", "p_include" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."set_tool_include_in_global_search"("p_tool_id" "uuid", "p_include" boolean) RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+BEGIN
+  IF NOT public.is_admin(auth.uid()) AND NOT public.is_superadmin(auth.uid()) THEN
+    RAISE EXCEPTION 'Only admins can update this setting';
+  END IF;
+
+  SELECT company_id INTO v_company_id FROM tools WHERE id = p_tool_id;
+  IF v_company_id IS NULL THEN
+    RAISE EXCEPTION 'Tool not found';
+  END IF;
+
+  IF NOT public.is_superadmin(auth.uid())
+     AND v_company_id IS DISTINCT FROM public.get_user_company_id(auth.uid()) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+
+  UPDATE tools
+  SET include_in_global_search = coalesce(p_include, true)
+  WHERE id = p_tool_id;
+
+  RETURN json_build_object('success', true);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."set_tool_include_in_global_search"("p_tool_id" "uuid", "p_include" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."store_deleted_user_name"() RETURNS "trigger"
@@ -1554,7 +2104,7 @@ $$;
 ALTER FUNCTION "public"."superadmin_global_tracker_pool"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE("serial" "text", "latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_until" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE("serial" "text", "latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -1574,11 +2124,12 @@ CREATE OR REPLACE FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_sin
       or public.is_superadmin(auth.uid())
     )
     and (p_since is null or coalesce(tl.recorded_at, tl.received_at) >= p_since)
+    and (p_until is null or coalesce(tl.recorded_at, tl.received_at) <= p_until)
   order by recorded_at asc;
 $$;
 
 
-ALTER FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) OWNER TO "postgres";
+ALTER FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone, "p_until" timestamp with time zone) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") RETURNS TABLE("serial" "text", "latitude" double precision, "longitude" double precision, "recorded_at" timestamp with time zone, "battery" double precision)
@@ -1624,6 +2175,21 @@ $$;
 
 
 ALTER FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."tools_set_search_norm"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.search_norm := public.normalize_search_text(
+    coalesce(NEW.name, '') || ' ' || coalesce(NEW.description, '')
+  );
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."tools_set_search_norm"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."tracker_display_name"("p_serial" "text", "p_company_id" "uuid") RETURNS "text"
@@ -1714,6 +2280,53 @@ $$;
 
 
 ALTER FUNCTION "public"."tracker_locations_sync_current"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."trg_tool_group_members_recompute_global_search"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM public.recompute_tool_include_in_global_search(NEW.tool_id);
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM public.recompute_tool_include_in_global_search(OLD.tool_id);
+    RETURN OLD;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF NEW.tool_id IS DISTINCT FROM OLD.tool_id THEN
+      PERFORM public.recompute_tool_include_in_global_search(OLD.tool_id);
+      PERFORM public.recompute_tool_include_in_global_search(NEW.tool_id);
+    ELSE
+      PERFORM public.recompute_tool_include_in_global_search(NEW.tool_id);
+    END IF;
+    RETURN NEW;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."trg_tool_group_members_recompute_global_search"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."trg_tool_groups_recompute_global_search"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.default_include_in_global_search IS DISTINCT FROM OLD.default_include_in_global_search
+       OR NEW.is_deleted IS DISTINCT FROM OLD.is_deleted THEN
+      PERFORM public.recompute_group_members_global_search(NEW.id);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."trg_tool_groups_recompute_global_search"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_app_version_control_updated_at"() RETURNS "trigger"
@@ -2100,6 +2713,57 @@ $$;
 ALTER FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."upsert_tool_search_alias"("p_tool_id" "uuid", "p_alias" "text", "p_source" "text" DEFAULT 'manual'::"text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+  v_alias_id uuid;
+  v_source text := coalesce(nullif(trim(p_source), ''), 'manual');
+BEGIN
+  IF NOT public.is_admin(auth.uid()) AND NOT public.is_superadmin(auth.uid()) THEN
+    RAISE EXCEPTION 'Only admins can manage tool search aliases';
+  END IF;
+
+  SELECT company_id INTO v_company_id FROM tools WHERE id = p_tool_id;
+  IF v_company_id IS NULL THEN
+    RAISE EXCEPTION 'Tool not found';
+  END IF;
+
+  IF NOT public.is_superadmin(auth.uid())
+     AND v_company_id IS DISTINCT FROM public.get_user_company_id(auth.uid()) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+
+  IF trim(coalesce(p_alias, '')) = '' THEN
+    RAISE EXCEPTION 'Alias cannot be empty';
+  END IF;
+
+  IF v_source NOT IN ('ai', 'manual', 'system') THEN
+    RAISE EXCEPTION 'Invalid alias source';
+  END IF;
+
+  INSERT INTO tool_search_aliases (tool_id, company_id, alias, source, created_by)
+  VALUES (p_tool_id, v_company_id, trim(p_alias), v_source, auth.uid())
+  ON CONFLICT (tool_id, (lower(alias)))
+  DO UPDATE SET
+    alias = EXCLUDED.alias,
+    -- Never downgrade manual to ai on conflict
+    source = CASE
+      WHEN tool_search_aliases.source = 'manual' THEN tool_search_aliases.source
+      ELSE EXCLUDED.source
+    END
+  RETURNING id INTO v_alias_id;
+
+  RETURN json_build_object('success', true, 'id', v_alias_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."upsert_tool_search_alias"("p_tool_id" "uuid", "p_alias" "text", "p_source" "text") OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."app_version_control" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "platform" "text" NOT NULL,
@@ -2393,12 +3057,17 @@ CREATE TABLE IF NOT EXISTS "public"."tool_groups" (
     "is_deleted" boolean DEFAULT false NOT NULL,
     "default_owner_id" "uuid",
     "default_owner_mode" "text" DEFAULT 'company_default'::"text" NOT NULL,
+    "default_include_in_global_search" boolean DEFAULT true NOT NULL,
     CONSTRAINT "ck_tool_groups_company_active" CHECK ("public"."is_company_active"("company_id")),
     CONSTRAINT "ck_tool_groups_default_owner_mode" CHECK (("default_owner_mode" = ANY (ARRAY['specific'::"text", 'company_default'::"text", 'unassigned'::"text"])))
 );
 
 
 ALTER TABLE "public"."tool_groups" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."tool_groups"."default_include_in_global_search" IS 'When true (default), tools that are members of this (active) group are eligible for global search. A tool in multiple groups is visible if ANY of those groups has this set true. Tools in no active groups default to visible.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."tool_images" (
@@ -2414,6 +3083,26 @@ CREATE TABLE IF NOT EXISTS "public"."tool_images" (
 
 
 ALTER TABLE "public"."tool_images" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."tool_search_aliases" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "tool_id" "uuid" NOT NULL,
+    "company_id" "uuid" NOT NULL,
+    "alias" "text" NOT NULL,
+    "source" "text" DEFAULT 'manual'::"text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "created_by" "uuid",
+    CONSTRAINT "ck_tool_search_aliases_company_active" CHECK ("public"."is_company_active"("company_id")),
+    CONSTRAINT "tool_search_aliases_source_check" CHECK (("source" = ANY (ARRAY['ai'::"text", 'manual'::"text", 'system'::"text"])))
+);
+
+
+ALTER TABLE "public"."tool_search_aliases" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."tool_search_aliases" IS 'Alternate search terms (AI/manual) for tools';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."tool_transactions" (
@@ -2464,11 +3153,21 @@ CREATE TABLE IF NOT EXISTS "public"."tools" (
     "last_location_updated_at" timestamp with time zone,
     "last_location_serial" "text",
     "last_battery" double precision,
+    "search_norm" "text",
+    "include_in_global_search" boolean DEFAULT true NOT NULL,
     CONSTRAINT "ck_tools_company_active" CHECK ("public"."is_company_active"("company_id"))
 );
 
 
 ALTER TABLE "public"."tools" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."tools"."search_norm" IS 'Normalized name+description for punctuation/spacing-tolerant search';
+
+
+
+COMMENT ON COLUMN "public"."tools"."include_in_global_search" IS 'When false, tool is hidden from global All Tools / Transfer search scopes';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."tracker_company_assignments" (
@@ -2696,6 +3395,11 @@ ALTER TABLE ONLY "public"."tool_images"
 
 
 
+ALTER TABLE ONLY "public"."tool_search_aliases"
+    ADD CONSTRAINT "tool_search_aliases_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."tool_transactions"
     ADD CONSTRAINT "tool_transactions_pkey" PRIMARY KEY ("id");
 
@@ -2813,6 +3517,22 @@ CREATE UNIQUE INDEX "idx_tool_groups_company_name" ON "public"."tool_groups" USI
 
 
 
+CREATE INDEX "idx_tool_search_aliases_alias_trgm" ON "public"."tool_search_aliases" USING "gin" ("lower"("alias") "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_tool_search_aliases_company" ON "public"."tool_search_aliases" USING "btree" ("company_id");
+
+
+
+CREATE INDEX "idx_tool_search_aliases_tool" ON "public"."tool_search_aliases" USING "btree" ("tool_id");
+
+
+
+CREATE UNIQUE INDEX "idx_tool_search_aliases_unique" ON "public"."tool_search_aliases" USING "btree" ("tool_id", "lower"("alias"));
+
+
+
 CREATE INDEX "idx_tool_transactions_batch_id" ON "public"."tool_transactions" USING "btree" ("batch_id");
 
 
@@ -2841,6 +3561,10 @@ CREATE INDEX "idx_tool_tx_tool_time" ON "public"."tool_transactions" USING "btre
 
 
 
+CREATE INDEX "idx_tools_company_global_search" ON "public"."tools" USING "btree" ("company_id") WHERE (("is_deleted" IS NOT TRUE) AND ("include_in_global_search" = true));
+
+
+
 CREATE INDEX "idx_tools_company_id" ON "public"."tools" USING "btree" ("company_id");
 
 
@@ -2858,6 +3582,10 @@ CREATE INDEX "idx_tools_number_numeric" ON "public"."tools" USING "btree" ("publ
 
 
 CREATE INDEX "idx_tools_number_trgm" ON "public"."tools" USING "gin" ("lower"("number") "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_tools_search_norm_trgm" ON "public"."tools" USING "gin" ("search_norm" "public"."gin_trgm_ops");
 
 
 
@@ -2997,6 +3725,10 @@ CREATE OR REPLACE TRIGGER "trg_single_primary" BEFORE INSERT OR UPDATE ON "publi
 
 
 
+CREATE OR REPLACE TRIGGER "trg_tool_group_members_recompute_global_search" AFTER INSERT OR DELETE OR UPDATE ON "public"."tool_group_members" FOR EACH ROW EXECUTE FUNCTION "public"."trg_tool_group_members_recompute_global_search"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_tool_groups_active" BEFORE INSERT OR UPDATE ON "public"."tool_groups" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
 
 
@@ -3009,7 +3741,19 @@ CREATE OR REPLACE TRIGGER "trg_tool_groups_log_delete" AFTER DELETE ON "public".
 
 
 
+CREATE OR REPLACE TRIGGER "trg_tool_groups_recompute_global_search" AFTER UPDATE OF "default_include_in_global_search", "is_deleted" ON "public"."tool_groups" FOR EACH ROW EXECUTE FUNCTION "public"."trg_tool_groups_recompute_global_search"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tool_search_aliases_active" BEFORE INSERT OR UPDATE ON "public"."tool_search_aliases" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_tools_active" BEFORE INSERT OR UPDATE ON "public"."tools" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_company_active"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_tools_set_search_norm" BEFORE INSERT OR UPDATE OF "name", "description" ON "public"."tools" FOR EACH ROW EXECUTE FUNCTION "public"."tools_set_search_norm"();
 
 
 
@@ -3180,6 +3924,21 @@ ALTER TABLE ONLY "public"."tool_images"
 
 
 
+ALTER TABLE ONLY "public"."tool_search_aliases"
+    ADD CONSTRAINT "tool_search_aliases_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."tool_search_aliases"
+    ADD CONSTRAINT "tool_search_aliases_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."tool_search_aliases"
+    ADD CONSTRAINT "tool_search_aliases_tool_id_fkey" FOREIGN KEY ("tool_id") REFERENCES "public"."tools"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."tool_transactions"
     ADD CONSTRAINT "tool_transactions_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "public"."transaction_batches"("id") ON DELETE SET NULL;
 
@@ -3331,6 +4090,10 @@ CREATE POLICY "Admins can manage tool group members in their company" ON "public
 
 
 CREATE POLICY "Admins can manage tool groups in their company" ON "public"."tool_groups" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id"))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id")));
+
+
+
+CREATE POLICY "Admins can manage tool search aliases" ON "public"."tool_search_aliases" TO "authenticated" USING (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id"))) WITH CHECK (("public"."is_admin"("auth"."uid"()) AND ("company_id" = "public"."get_user_company_id"("auth"."uid"())) AND "public"."is_company_active"("company_id")));
 
 
 
@@ -3496,6 +4259,10 @@ CREATE POLICY "Service role personal tx" ON "public"."personal_tool_transactions
 
 
 
+CREATE POLICY "Service role tool_search_aliases" ON "public"."tool_search_aliases" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Superadmins can create access codes" ON "public"."company_access_codes" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_superadmin"("auth"."uid"()));
 
 
@@ -3622,6 +4389,10 @@ CREATE POLICY "Users can view tool groups in their company" ON "public"."tool_gr
 
 
 
+CREATE POLICY "Users can view tool search aliases in their company" ON "public"."tool_search_aliases" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
+
+
+
 CREATE POLICY "Users can view tools in their company" ON "public"."tools" FOR SELECT TO "authenticated" USING (("company_id" = "public"."get_user_company_id"("auth"."uid"())));
 
 
@@ -3698,6 +4469,9 @@ ALTER TABLE "public"."tool_groups" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tool_images" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."tool_search_aliases" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tool_transactions" ENABLE ROW LEVEL SECURITY;
@@ -3950,9 +4724,9 @@ GRANT ALL ON FUNCTION "public"."company_tracker_pool"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text", "p_include_in_global_search" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text", "p_include_in_global_search" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_group_tool_with_checklist"("p_group_id" "uuid", "p_number" "text", "p_name" "text", "p_description" "text", "p_photo_url" "text", "p_company_id" "uuid", "p_checklist" "jsonb", "p_owner_id" "uuid", "p_location" "text", "p_include_in_global_search" boolean) TO "service_role";
 
 
 
@@ -3977,6 +4751,12 @@ GRANT ALL ON FUNCTION "public"."delete_location_alias"("p_alias_id" "uuid") TO "
 GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."delete_tool"("p_tool_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."delete_tool_search_alias"("p_alias_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."delete_tool_search_alias"("p_alias_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_tool_search_alias"("p_alias_id" "uuid") TO "service_role";
 
 
 
@@ -4076,6 +4856,12 @@ GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."list_tool_search_aliases"("p_tool_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."list_tool_search_aliases"("p_tool_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."list_tool_search_aliases"("p_tool_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."log_group_activity"() TO "service_role";
@@ -4100,6 +4886,12 @@ GRANT ALL ON FUNCTION "public"."normalize_location"("p_company_id" "uuid", "p_in
 
 
 
+GRANT ALL ON FUNCTION "public"."normalize_search_text"("p_input" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."normalize_search_text"("p_input" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."normalize_search_text"("p_input" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO "service_role";
@@ -4109,6 +4901,18 @@ GRANT ALL ON FUNCTION "public"."reclaim_tracker_to_global"("p_serial" "text") TO
 GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "anon";
 GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recompute_company_active_on_delete"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recompute_group_members_global_search"("p_group_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."recompute_group_members_global_search"("p_group_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recompute_group_members_global_search"("p_group_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recompute_tool_include_in_global_search"("p_tool_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."recompute_tool_include_in_global_search"("p_tool_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recompute_tool_include_in_global_search"("p_tool_id" "uuid") TO "service_role";
 
 
 
@@ -4123,21 +4927,33 @@ GRANT ALL ON FUNCTION "public"."remove_user_from_company"("p_user_id" "uuid") TO
 
 
 
-GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "anon";
-GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."replace_tool_ai_aliases"("p_tool_id" "uuid", "p_aliases" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."replace_tool_ai_aliases"("p_tool_id" "uuid", "p_aliases" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."replace_tool_ai_aliases"("p_tool_id" "uuid", "p_aliases" "text"[]) TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) TO "anon";
-GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer, "p_scope" "text", "p_group_id" "uuid", "p_owner_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer, "p_scope" "text", "p_group_id" "uuid", "p_owner_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_tools"("p_company_id" "uuid", "p_term" "text", "p_limit" integer, "p_offset" integer, "p_scope" "text", "p_group_id" "uuid", "p_owner_id" "uuid") TO "service_role";
 
 
 
 GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_checklist_items"("items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."set_group_include_members_in_global_search"("p_group_id" "uuid", "p_include" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."set_group_include_members_in_global_search"("p_group_id" "uuid", "p_include" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_group_include_members_in_global_search"("p_group_id" "uuid", "p_include" boolean) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."set_tool_include_in_global_search"("p_tool_id" "uuid", "p_include" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."set_tool_include_in_global_search"("p_tool_id" "uuid", "p_include" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_tool_include_in_global_search"("p_tool_id" "uuid", "p_include" boolean) TO "service_role";
 
 
 
@@ -4165,9 +4981,9 @@ GRANT ALL ON FUNCTION "public"."superadmin_global_tracker_pool"() TO "service_ro
 
 
 
-GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) TO "anon";
-GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone) TO "service_role";
+GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone, "p_until" timestamp with time zone) TO "anon";
+GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone, "p_until" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tool_breadcrumb"("p_tool_id" "uuid", "p_since" timestamp with time zone, "p_until" timestamp with time zone) TO "service_role";
 
 
 
@@ -4180,6 +4996,12 @@ GRANT ALL ON FUNCTION "public"."tool_current_location"("p_tool_id" "uuid") TO "s
 GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."tool_tracker_history"("p_tool_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."tools_set_search_norm"() TO "anon";
+GRANT ALL ON FUNCTION "public"."tools_set_search_norm"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."tools_set_search_norm"() TO "service_role";
 
 
 
@@ -4198,6 +5020,18 @@ GRANT ALL ON FUNCTION "public"."tracker_latest_fix"("p_serial" "text") TO "servi
 GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "anon";
 GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."tracker_locations_sync_current"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."trg_tool_group_members_recompute_global_search"() TO "anon";
+GRANT ALL ON FUNCTION "public"."trg_tool_group_members_recompute_global_search"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."trg_tool_group_members_recompute_global_search"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."trg_tool_groups_recompute_global_search"() TO "anon";
+GRANT ALL ON FUNCTION "public"."trg_tool_groups_recompute_global_search"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."trg_tool_groups_recompute_global_search"() TO "service_role";
 
 
 
@@ -4246,6 +5080,12 @@ GRANT ALL ON FUNCTION "public"."upsert_company_tools_export_settings"("p_company
 GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."upsert_location_alias"("p_company_id" "uuid", "p_alias" "text", "p_normalized_location" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_tool_search_alias"("p_tool_id" "uuid", "p_alias" "text", "p_source" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_tool_search_alias"("p_tool_id" "uuid", "p_alias" "text", "p_source" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_tool_search_alias"("p_tool_id" "uuid", "p_alias" "text", "p_source" "text") TO "service_role";
 
 
 
@@ -4369,6 +5209,12 @@ GRANT ALL ON TABLE "public"."tool_groups" TO "service_role";
 GRANT ALL ON TABLE "public"."tool_images" TO "anon";
 GRANT ALL ON TABLE "public"."tool_images" TO "authenticated";
 GRANT ALL ON TABLE "public"."tool_images" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tool_search_aliases" TO "anon";
+GRANT ALL ON TABLE "public"."tool_search_aliases" TO "authenticated";
+GRANT ALL ON TABLE "public"."tool_search_aliases" TO "service_role";
 
 
 

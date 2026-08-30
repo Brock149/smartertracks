@@ -8,6 +8,84 @@ const corsHeaders = {
   'Content-Type': 'application/json',
 }
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: corsHeaders })
+}
+
+function stripBearer(raw: string): string {
+  return raw.replace(/^Bearer\s+/i, '').trim()
+}
+
+function describeToken(token: string | null): string {
+  if (!token) return 'missing'
+  if (token.startsWith('sb_publishable_')) return 'publishable-key'
+  if (token.startsWith('sb_secret_')) return 'secret-key'
+  if (!token.startsWith('eyJ')) return 'not-jwt'
+  const payload = jwtPayload(token)
+  if (!payload) return 'jwt-unreadable'
+  return typeof payload.role === 'string' ? `jwt-${payload.role}` : 'jwt'
+}
+
+function jwtPayload(token: string): { role?: string; sub?: string } | null {
+  try {
+    let part = token.split('.')[1]
+    if (!part) return null
+    part = part.replace(/-/g, '+').replace(/_/g, '/')
+    while (part.length % 4) part += '='
+    return JSON.parse(atob(part))
+  } catch (_e) {
+    return null
+  }
+}
+
+function userJwtFromRequest(req: Request): string | null {
+  const candidates: string[] = []
+  for (const [_name, value] of req.headers.entries()) {
+    if (!value) continue
+    const stripped = stripBearer(value)
+    if (stripped.startsWith('eyJ')) candidates.push(stripped)
+  }
+
+  const unique = [...new Set(candidates)]
+  const isUserToken = (t: string) => {
+    const payload = jwtPayload(t)
+    if (!payload?.sub || typeof payload.sub !== 'string') return false
+    // GoTrue puts postgres role in `role` (authenticated). Custom hooks
+    // sometimes overwrite that with the app role (admin / tech).
+    if (payload.role === 'service_role' || payload.role === 'anon') return false
+    return true
+  }
+  return unique.find(isUserToken) || unique.find((t) => t.startsWith('eyJ')) || null
+}
+
+async function userIdFromAuthApi(req: Request, token: string): Promise<{ id: string | null; detail: string }> {
+  const base = Deno.env.get('SUPABASE_URL')
+  if (!base) return { id: null, detail: 'no-url' }
+
+  const apiKeys = [
+    req.headers.get('apikey'),
+    Deno.env.get('SUPABASE_ANON_KEY'),
+    Deno.env.get('SUPABASE_PUBLISHABLE_KEY'),
+    Deno.env.get('SERVICE_KEY'),
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+  ].filter((k): k is string => !!k)
+
+  let lastStatus = 'no-key'
+  for (const apikey of apiKeys) {
+    const res = await fetch(`${base.replace(/\/$/, '')}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey,
+      },
+    })
+    lastStatus = String(res.status)
+    if (!res.ok) continue
+    const json = await res.json()
+    if (typeof json?.id === 'string' && json.id.length > 0) return { id: json.id, detail: 'ok' }
+  }
+  return { id: null, detail: `auth-${lastStatus}` }
+}
+
 // Lets an existing, signed-in account that is NOT currently in a company join one
 // using a company access code. This is the re-join path for a tech whose account
 // survived being removed from a previous company. Their personal tools come with
@@ -18,101 +96,92 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SERVICE_KEY')!
-    )
-
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header' }), { status: 401, headers: corsHeaders })
-    }
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers: corsHeaders })
+    const serviceKey = Deno.env.get('SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!serviceKey) {
+      return jsonResponse({ success: false, error: 'Server is missing SERVICE_KEY' })
     }
 
-    const { accessCode } = await req.json()
-    if (!accessCode) {
-      return new Response(JSON.stringify({ error: 'Access code is required' }), { status: 400, headers: corsHeaders })
+    // Pin Authorization to the service role. The edge runtime otherwise
+    // forwards the caller's JWT, and a logged-out-of-company user has no
+    // RLS policy that allows SET role = 'admin' on their own row.
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${serviceKey}` } },
+    })
+
+    const token = userJwtFromRequest(req)
+    if (!token) {
+      const raw = req.headers.get('Authorization') || req.headers.get('authorization')
+      return jsonResponse({
+        success: false,
+        error: `Invalid token (${describeToken(raw ? stripBearer(raw) : null)})`,
+      })
     }
-
-    // The account must not already belong to a company. Switching companies has
-    // to go through the admin (remove) so a tech can't silently leave.
-    const { data: me, error: meError } = await supabase
-      .from('users')
-      .select('company_id')
-      .eq('id', user.id)
-      .single()
-
-    if (meError || !me) {
-      return new Response(JSON.stringify({ error: 'Account not found' }), { status: 400, headers: corsHeaders })
+    const authed = await userIdFromAuthApi(req, token)
+    if (!authed.id) {
+      return jsonResponse({
+        success: false,
+        error: `Invalid token (${describeToken(token)}, ${authed.detail})`,
+      })
     }
-    if (me.company_id) {
-      return new Response(
-        JSON.stringify({ error: 'You are already part of a company. Ask that company\u2019s admin to remove you before joining a new one.' }),
-        { status: 400, headers: corsHeaders }
-      )
-    }
+    const userId = authed.id
 
-    // Validate the access code.
-    const { data: codeData, error: codeError } = await supabase
-      .from('company_access_codes')
-      .select('company_id, role')
-      .eq('code', accessCode)
-      .eq('is_active', true)
-      .single()
-
-    if (codeError || !codeData) {
-      return new Response(JSON.stringify({ error: 'Invalid access code' }), { status: 400, headers: corsHeaders })
-    }
-
-    // Attach the account to the new company with the code's role.
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ company_id: codeData.company_id, role: codeData.role })
-      .eq('id', user.id)
-
-    if (updateError) {
-      return new Response(JSON.stringify({ error: updateError.message }), { status: 400, headers: corsHeaders })
-    }
-
-    // Keep the auth metadata role in sync (mirrors handle_new_user behaviour).
+    let accessCode = ''
     try {
-      await supabase.auth.admin.updateUserById(user.id, { user_metadata: { role: codeData.role } })
+      const body = await req.json()
+      accessCode = typeof body?.accessCode === 'string' ? body.accessCode.trim().toUpperCase() : ''
+    } catch (_e) {
+      return jsonResponse({ success: false, error: 'Access code is required' })
+    }
+    if (!accessCode) {
+      return jsonResponse({ success: false, error: 'Access code is required' })
+    }
+
+    const { data: joined, error: joinError } = await supabase.rpc('join_company_with_code', {
+      p_user_id: userId,
+      p_code: accessCode,
+    })
+
+    if (joinError) {
+      return jsonResponse({ success: false, error: joinError.message })
+    }
+
+    const companyId = joined?.company_id
+    const joinedRole = joined?.role
+    if (!joined?.success || !companyId || !joinedRole) {
+      return jsonResponse({ success: false, error: joined?.error || 'Could not join' })
+    }
+
+    try {
+      await supabase.auth.admin.updateUserById(userId, { user_metadata: { role: joinedRole, app_role: joinedRole } })
     } catch (_e) {
       // Non-fatal: the users table is the source of truth for role.
     }
 
-    // Log a company activity event so the join shows in the Transactions feed.
     try {
-      const { data: joined } = await supabase
+      const { data: profile } = await supabase
         .from('users')
         .select('name, email')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single()
-      const name = joined?.name || user.email || 'A user'
-      const email = joined?.email || user.email || ''
+      const name = profile?.name || 'A user'
+      const email = profile?.email || ''
       await supabase.from('company_events').insert({
-        company_id: codeData.company_id,
+        company_id: companyId,
         event_type: 'user_joined',
-        actor_id: user.id,
+        actor_id: userId,
         actor_name: name,
         target_type: 'user',
-        target_id: user.id,
+        target_id: userId,
         target_label: email ? `${name} (${email})` : name,
-        details: `Joined the company as ${codeData.role}`,
+        details: `Joined the company as ${joinedRole}`,
       })
     } catch (_e) {
       // company_events table not present yet — ignore.
     }
 
-    return new Response(
-      JSON.stringify({ success: true, company_id: codeData.company_id, role: codeData.role }),
-      { status: 200, headers: corsHeaders }
-    )
+    return jsonResponse({ success: true, company_id: companyId, role: joinedRole })
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message || 'Unknown error' }), { status: 500, headers: corsHeaders })
+    return jsonResponse({ success: false, error: err.message || 'Unknown error' }, 500)
   }
 })

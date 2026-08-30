@@ -321,3 +321,12 @@ verify_jwt = false
 
 [functions."tracker-webhook"]
 verify_jwt = false
+
+# Gateway JWT checks can 401 user sessions that use the new publishable
+# keys / signing-key JWTs (kid). These functions validate the user JWT
+# themselves via auth.getUser / getClaims.
+[functions."join-company-with-code"]
+verify_jwt = false
+
+[functions."leave-company"]
+verify_jwt = false
