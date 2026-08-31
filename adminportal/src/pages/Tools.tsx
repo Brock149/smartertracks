@@ -8,6 +8,7 @@ import {
   uploadToolImageToStorage,
   insertToolImageRecord,
   removeStorageObject,
+  MAX_ORIGINAL_BYTES,
 } from '../lib/uploadImage'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 import { getMyCompanySettings } from '../lib/companySettingsApi'
@@ -98,7 +99,7 @@ export default function Tools() {
   const [newToolImagesAdded, setNewToolImagesAdded] = useState<Array<{ id: string; image_url: string }>>([])
   // Photos taken during creation, before the tool row exists. Stored in the
   // bucket and attached to the tool once it's created (or cleaned up on cancel).
-  const [pendingCreateImages, setPendingCreateImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
+  const [pendingCreateImages, setPendingCreateImages] = useState<Array<{ filePath: string; publicUrl: string; previewUrl: string }>>([])
   const [uploadingCreateImage, setUploadingCreateImage] = useState(false)
   const [createImageError, setCreateImageError] = useState<string | null>(null)
   const [editToolImages, setEditToolImages] = useState<Array<{ id: string; image_url: string }>>([])
@@ -299,8 +300,13 @@ export default function Tools() {
       const createdCompanyId = data.tool?.company_id
       if (createdToolId && createdCompanyId && pendingCreateImages.length > 0) {
         for (const img of pendingCreateImages) {
+          if (!img.publicUrl) continue
           await insertToolImageRecord(createdToolId, createdCompanyId, img.publicUrl, img.filePath)
         }
+      }
+
+      for (const img of pendingCreateImages) {
+        URL.revokeObjectURL(img.previewUrl)
       }
 
       setNewTool({
@@ -326,34 +332,54 @@ export default function Tools() {
   }
 
   const handleCreateImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files || [])
     // Reset the input so the same file can be re-picked later if needed.
     event.target.value = ''
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      setCreateImageError('Please choose an image file.')
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setCreateImageError('Image must be less than 5MB.')
-      return
-    }
+    if (files.length === 0) return
+
     setCreateImageError(null)
     setUploadingCreateImage(true)
     try {
-      const uploaded = await uploadToolImageToStorage(file)
-      if (!uploaded) {
-        setCreateImageError('Failed to upload image. Please try again.')
-        return
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          setCreateImageError('Please choose an image file.')
+          continue
+        }
+        if (file.size > MAX_ORIGINAL_BYTES) {
+          setCreateImageError('Image must be less than 25MB.')
+          continue
+        }
+
+        const previewUrl = URL.createObjectURL(file)
+        const localId = `local-${crypto.randomUUID()}`
+        setPendingCreateImages((prev) => [...prev, { filePath: localId, publicUrl: '', previewUrl }])
+
+        const uploaded = await uploadToolImageToStorage(file)
+        if (!uploaded) {
+          URL.revokeObjectURL(previewUrl)
+          setPendingCreateImages((prev) => prev.filter((img) => img.filePath !== localId))
+          setCreateImageError('Failed to upload image. Please try again.')
+          continue
+        }
+        setPendingCreateImages((prev) => {
+          if (!prev.some((img) => img.filePath === localId)) {
+            URL.revokeObjectURL(previewUrl)
+            void removeStorageObject(uploaded.filePath)
+            return prev
+          }
+          return prev.map((img) => (img.filePath === localId ? { ...uploaded, previewUrl } : img))
+        })
       }
-      setPendingCreateImages((prev) => [...prev, uploaded])
     } finally {
       setUploadingCreateImage(false)
     }
   }
 
-  const handleRemoveCreateImage = async (filePath: string) => {
-    await removeStorageObject(filePath)
+  const handleRemoveCreateImage = async (filePath: string, previewUrl?: string) => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    if (!filePath.startsWith('local-')) {
+      await removeStorageObject(filePath)
+    }
     setPendingCreateImages((prev) => prev.filter((img) => img.filePath !== filePath))
   }
 
@@ -508,7 +534,10 @@ export default function Tools() {
     }
     // Clean up any photos uploaded during this (cancelled) creation.
     for (const img of pendingCreateImages) {
-      await removeStorageObject(img.filePath);
+      URL.revokeObjectURL(img.previewUrl)
+      if (img.filePath && !img.filePath.startsWith('local-')) {
+        await removeStorageObject(img.filePath);
+      }
     }
     setNewTool({
       number: '',
@@ -1211,10 +1240,11 @@ export default function Tools() {
                       <label className={`inline-block cursor-pointer px-4 py-2 rounded-lg transition-colors text-white ${
                         uploadingCreateImage ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
                       }`}>
-                        {uploadingCreateImage ? 'Uploading...' : 'Upload Image'}
+                        {uploadingCreateImage ? 'Uploading...' : 'Upload Images'}
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
                           onChange={handleCreateImageUpload}
                           className="hidden"
                           disabled={uploadingCreateImage}
@@ -1222,6 +1252,7 @@ export default function Tools() {
                       </label>
                       <p className="text-xs text-gray-500 mt-1">
                         Add photos now — they'll be saved with the tool. If you cancel, they're discarded.
+                        You can select several at once; previews show immediately.
                       </p>
                     </div>
                     {createImageError && (
@@ -1231,11 +1262,16 @@ export default function Tools() {
                       <div className="flex flex-wrap gap-4">
                         {pendingCreateImages.map((img) => (
                           <div key={img.filePath} className="relative w-28 h-28 border rounded-lg overflow-hidden group">
-                            <img src={img.publicUrl} alt="Tool" className="w-full h-full object-cover" />
+                            <img src={img.previewUrl} alt="Tool" className="w-full h-full object-cover" />
+                            {!img.publicUrl && (
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <span className="text-white text-xs">Uploading…</span>
+                              </div>
+                            )}
                             <button
                               type="button"
                               className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-80 group-hover:opacity-100"
-                              onClick={() => handleRemoveCreateImage(img.filePath)}
+                              onClick={() => handleRemoveCreateImage(img.filePath, img.previewUrl)}
                               title="Remove image"
                             >
                               ×
@@ -1315,8 +1351,9 @@ export default function Tools() {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-base md:text-lg hover:bg-blue-700 transition-colors"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-base md:text-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                   onClick={handleCreateTool}
+                  disabled={uploadingCreateImage}
                 >
                   Create Tool
                 </button>

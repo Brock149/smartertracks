@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { uploadToolImageAndInsert, fetchToolImages, deleteToolImageRecord } from '../lib/uploadImage';
+import { uploadToolImageAndInsert, fetchToolImages, deleteToolImageRecord, previewTransformUrl, MAX_ORIGINAL_BYTES } from '../lib/uploadImage';
 
 interface ToolImageUploadProps {
   toolId: string;
@@ -25,32 +25,37 @@ export function ToolImageUpload({ toolId, images, setImages, disabled, onRemoveI
   }, [toolId]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (files.length === 0) return;
     if (!toolId) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file');
-      return;
-    }
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be less than 5MB');
-      return;
-    }
     setIsUploading(true);
     setError(null);
     setSuccess(null);
     try {
-      const result = await uploadToolImageAndInsert(file, toolId);
-      if (result) {
-        setImages([...images, result]);
-        if (onAddImage) onAddImage(result);
-        setSuccess('Image uploaded successfully!');
+      const added: Array<{ id: string; image_url: string }> = [];
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          setError('Please upload an image file');
+          continue;
+        }
+        if (file.size > MAX_ORIGINAL_BYTES) {
+          setError('Image must be less than 25MB');
+          continue;
+        }
+        const result = await uploadToolImageAndInsert(file, toolId);
+        if (result) {
+          added.push(result);
+          if (onAddImage) onAddImage(result);
+        } else {
+          setError('Failed to upload image');
+        }
+      }
+      if (added.length > 0) {
+        setImages([...images, ...added]);
+        setSuccess(added.length === 1 ? 'Image uploaded successfully!' : `${added.length} images uploaded successfully!`);
         setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setError('Failed to upload image');
       }
     } catch (err) {
       setError('Error uploading image');
@@ -81,10 +86,11 @@ export function ToolImageUpload({ toolId, images, setImages, disabled, onRemoveI
               ? 'bg-gray-400 cursor-not-allowed text-white'
               : 'bg-blue-500 hover:bg-blue-600 text-white'
           }`}>
-            {isUploading ? 'Uploading...' : 'Upload Image'}
+            {isUploading ? 'Uploading...' : 'Upload Images'}
             <input
               type="file"
               accept="image/*"
+              multiple
               onChange={handleFileChange}
               className="hidden"
               disabled={isUploadDisabled}
@@ -100,7 +106,7 @@ export function ToolImageUpload({ toolId, images, setImages, disabled, onRemoveI
             {images.map(img => (
               <div key={img.id} className="relative w-32 h-32 border rounded-lg overflow-hidden group">
                 <img
-                  src={img.image_url}
+                  src={previewTransformUrl(img.image_url, 256)}
                   alt="Tool"
                   className="w-full h-full object-cover cursor-pointer"
                   onClick={() => { setPreviewImage(img.image_url); setImgError(false); }}

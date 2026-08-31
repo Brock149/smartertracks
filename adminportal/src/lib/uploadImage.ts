@@ -1,18 +1,73 @@
 import { supabase } from './supabaseClient';
 
+const MAX_UPLOAD_EDGE = 1280;
+const JPEG_QUALITY = 0.75;
+export const MAX_ORIGINAL_BYTES = 25 * 1024 * 1024;
+
+/** Small transformed URL for list/gallery thumbs so the browser never fetches the full original. */
+export function previewTransformUrl(url: string, width = 256): string {
+  if (!url || url.startsWith('blob:') || url.startsWith('data:')) return url;
+  const joiner = url.includes('?') ? '&' : '?';
+  return `${url}${joiner}width=${width}&quality=50&format=webp`;
+}
+
+/**
+ * Resize/compress a photo in the browser before upload.
+ * Phone photos are often 4K / several MB; a 1280px JPEG is plenty for tool inventory
+ * and uploads in a second instead of tens of seconds.
+ */
+export async function compressImageForUpload(file: File): Promise<File> {
+  if (file.type === 'image/gif') return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const longest = Math.max(bitmap.width, bitmap.height);
+    const scale = longest > MAX_UPLOAD_EDGE ? MAX_UPLOAD_EDGE / longest : 1;
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    if (scale === 1 && file.size < 400_000 && (file.type === 'image/jpeg' || file.type === 'image/webp')) {
+      bitmap.close();
+      return file;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY);
+    });
+    if (!blob) return file;
+
+    const baseName = file.name.replace(/\.[^.]+$/, '') || 'image';
+    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+  } catch {
+    return file;
+  }
+}
+
 // Upload an image and insert a record into tool_images
 export async function uploadToolImageAndInsert(
   file: File,
   toolId: string
 ): Promise<{ image_url: string, id: string, thumb_url?: string | null } | null> {
   try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const toUpload = await compressImageForUpload(file);
+    const fileExt = toUpload.name.split('.').pop()?.toLowerCase() || 'jpg';
     const fileName = `${toolId}-${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
     // Upload the file to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('tool-images')
-      .upload(filePath, file);
+      .upload(filePath, toUpload);
     if (uploadError) {
       console.error('Error uploading image:', uploadError);
       return null;
@@ -54,24 +109,8 @@ export async function uploadToolImageAndInsert(
       return null;
     }
 
-    // Try to generate and persist a thumbnail via Edge Function (non-blocking on failure)
-    try {
-      const session = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-thumbnail`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session.data.session?.access_token ? { 'Authorization': `Bearer ${session.data.session.access_token}` } : {})
-        },
-        body: JSON.stringify({ image_id: insertData.id, file_path: filePath })
-      });
-      if (res.ok) {
-        const { thumb_url, thumb_small_url } = await res.json();
-        return { ...insertData, thumb_url, thumb_small_url };
-      }
-    } catch (e) {
-      console.warn('generate-thumbnail failed (continuing without thumb):', e);
-    }
+    // Thumbnail generation can take several seconds; don't block the UI on it.
+    void generateToolThumbnail(insertData.id, filePath);
 
     return insertData;
   } catch (error) {
@@ -88,12 +127,13 @@ export async function uploadToolImageToStorage(
   file: File
 ): Promise<{ filePath: string; publicUrl: string } | null> {
   try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const toUpload = await compressImageForUpload(file);
+    const fileExt = toUpload.name.split('.').pop()?.toLowerCase() || 'jpg';
     const fileName = `new-${crypto.randomUUID()}-${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
     const { error: uploadError } = await supabase.storage
       .from('tool-images')
-      .upload(filePath, file);
+      .upload(filePath, toUpload);
     if (uploadError) {
       console.error('Error uploading image to storage:', uploadError);
       return null;
@@ -130,6 +170,12 @@ export async function insertToolImageRecord(
     return null;
   }
 
+  void generateToolThumbnail(insertData.id, filePath);
+
+  return insertData;
+}
+
+async function generateToolThumbnail(imageId: string, filePath: string): Promise<void> {
   try {
     const session = await supabase.auth.getSession();
     await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-thumbnail`, {
@@ -138,13 +184,11 @@ export async function insertToolImageRecord(
         'Content-Type': 'application/json',
         ...(session.data.session?.access_token ? { 'Authorization': `Bearer ${session.data.session.access_token}` } : {})
       },
-      body: JSON.stringify({ image_id: insertData.id, file_path: filePath })
+      body: JSON.stringify({ image_id: imageId, file_path: filePath })
     });
   } catch (e) {
     console.warn('generate-thumbnail failed (continuing without thumb):', e);
   }
-
-  return insertData;
 }
 
 // Remove a raw storage object by its path (used to clean up photos uploaded

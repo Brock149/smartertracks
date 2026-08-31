@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { ToolImageGallery } from '../components/ToolImageGallery'
-import { uploadToolImageToStorage, insertToolImageRecord, removeStorageObject } from '../lib/uploadImage'
+import { uploadToolImageToStorage, insertToolImageRecord, removeStorageObject, MAX_ORIGINAL_BYTES } from '../lib/uploadImage'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 import { searchTools } from '../lib/toolSearch'
 
@@ -95,7 +95,7 @@ export default function ToolGroups() {
     checklist: [] as NewGroupToolChecklistItem[],
   })
   const [groupToolLocationIsDefault, setGroupToolLocationIsDefault] = useState(true)
-  const [pendingGroupToolImages, setPendingGroupToolImages] = useState<Array<{ filePath: string; publicUrl: string }>>([])
+  const [pendingGroupToolImages, setPendingGroupToolImages] = useState<Array<{ filePath: string; publicUrl: string; previewUrl: string }>>([])
   const [uploadingGroupToolImage, setUploadingGroupToolImage] = useState(false)
   const [groupToolImageError, setGroupToolImageError] = useState<string | null>(null)
   const [createToolLoading, setCreateToolLoading] = useState(false)
@@ -514,7 +514,10 @@ export default function ToolGroups() {
 
   async function resetNewGroupTool() {
     for (const img of pendingGroupToolImages) {
-      await removeStorageObject(img.filePath)
+      URL.revokeObjectURL(img.previewUrl)
+      if (img.filePath && !img.filePath.startsWith('local-')) {
+        await removeStorageObject(img.filePath)
+      }
     }
     setNewGroupTool({
       name: '',
@@ -529,33 +532,53 @@ export default function ToolGroups() {
   }
 
   async function handleCreateToolImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
+    const files = Array.from(event.target.files || [])
     event.target.value = ''
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      setGroupToolImageError('Please choose an image file.')
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setGroupToolImageError('Image must be less than 5MB.')
-      return
-    }
+    if (files.length === 0) return
+
     setGroupToolImageError(null)
     setUploadingGroupToolImage(true)
     try {
-      const uploaded = await uploadToolImageToStorage(file)
-      if (!uploaded) {
-        setGroupToolImageError('Failed to upload image. Please try again.')
-        return
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          setGroupToolImageError('Please choose an image file.')
+          continue
+        }
+        if (file.size > MAX_ORIGINAL_BYTES) {
+          setGroupToolImageError('Image must be less than 25MB.')
+          continue
+        }
+
+        const previewUrl = URL.createObjectURL(file)
+        const localId = `local-${crypto.randomUUID()}`
+        setPendingGroupToolImages((prev) => [...prev, { filePath: localId, publicUrl: '', previewUrl }])
+
+        const uploaded = await uploadToolImageToStorage(file)
+        if (!uploaded) {
+          URL.revokeObjectURL(previewUrl)
+          setPendingGroupToolImages((prev) => prev.filter((img) => img.filePath !== localId))
+          setGroupToolImageError('Failed to upload image. Please try again.')
+          continue
+        }
+        setPendingGroupToolImages((prev) => {
+          if (!prev.some((img) => img.filePath === localId)) {
+            URL.revokeObjectURL(previewUrl)
+            void removeStorageObject(uploaded.filePath)
+            return prev
+          }
+          return prev.map((img) => (img.filePath === localId ? { ...uploaded, previewUrl } : img))
+        })
       }
-      setPendingGroupToolImages((prev) => [...prev, uploaded])
     } finally {
       setUploadingGroupToolImage(false)
     }
   }
 
-  async function handleRemoveGroupToolImage(filePath: string) {
-    await removeStorageObject(filePath)
+  async function handleRemoveGroupToolImage(filePath: string, previewUrl?: string) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    if (!filePath.startsWith('local-')) {
+      await removeStorageObject(filePath)
+    }
     setPendingGroupToolImages((prev) => prev.filter((img) => img.filePath !== filePath))
   }
 
@@ -616,8 +639,13 @@ export default function ToolGroups() {
       const createdCompanyId = data.tool?.company_id
       if (createdToolId && createdCompanyId && pendingGroupToolImages.length > 0) {
         for (const img of pendingGroupToolImages) {
+          if (!img.publicUrl) continue
           await insertToolImageRecord(createdToolId, createdCompanyId, img.publicUrl, img.filePath)
         }
+      }
+
+      for (const img of pendingGroupToolImages) {
+        URL.revokeObjectURL(img.previewUrl)
       }
 
       setNewGroupTool({
@@ -1561,10 +1589,11 @@ export default function ToolGroups() {
                     <label className={`inline-block cursor-pointer px-4 py-2 rounded-lg transition-colors text-white text-sm ${
                       uploadingGroupToolImage ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
                     }`}>
-                      {uploadingGroupToolImage ? 'Uploading...' : 'Upload Image'}
+                      {uploadingGroupToolImage ? 'Uploading...' : 'Upload Images'}
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         onChange={handleCreateToolImageUpload}
                         className="hidden"
                         disabled={uploadingGroupToolImage}
@@ -1578,11 +1607,16 @@ export default function ToolGroups() {
                     <div className="flex flex-wrap gap-4">
                       {pendingGroupToolImages.map((img) => (
                         <div key={img.filePath} className="relative w-24 h-24 border rounded-lg overflow-hidden group">
-                          <img src={img.publicUrl} alt="Tool" className="w-full h-full object-cover" />
+                          <img src={img.previewUrl} alt="Tool" className="w-full h-full object-cover" />
+                          {!img.publicUrl && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <span className="text-white text-xs">Uploading…</span>
+                            </div>
+                          )}
                           <button
                             type="button"
                             className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-80 group-hover:opacity-100"
-                            onClick={() => handleRemoveGroupToolImage(img.filePath)}
+                            onClick={() => handleRemoveGroupToolImage(img.filePath, img.previewUrl)}
                             title="Remove image"
                           >
                             ×
@@ -1660,7 +1694,7 @@ export default function ToolGroups() {
               <button
                 onClick={handleCreateGroupTool}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                disabled={createToolLoading || !newGroupTool.name.trim()}
+                disabled={createToolLoading || uploadingGroupToolImage || !newGroupTool.name.trim()}
               >
                 {createToolLoading ? 'Creating...' : 'Create Tool'}
               </button>
