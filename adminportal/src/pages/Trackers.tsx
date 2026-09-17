@@ -752,7 +752,7 @@ export default function Trackers() {
         <div
           className={
             liveMapFull
-              ? 'fixed inset-0 z-[10000] bg-white flex flex-col'
+              ? 'fixed inset-0 z-[10000] bg-white flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]'
               : 'border border-gray-200 rounded-lg p-4 order-1 lg:order-2 lg:sticky lg:top-4'
           }
         >
@@ -812,7 +812,7 @@ export default function Trackers() {
         const a = assignments[editTool.id]
         return (
           <div
-            className="fixed inset-0 bg-black bg-opacity-40 z-[10000] flex items-center justify-center p-4"
+            className="admin-sheet-overlay !z-[10000]"
             onClick={() => setEditTool(null)}
           >
             <div
@@ -953,11 +953,11 @@ export default function Trackers() {
       {/* Map preview modal */}
       {mapTool && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-stretch sm:items-center justify-center sm:p-4"
+          className="admin-sheet-overlay !z-[10000]"
           onClick={() => setMapTool(null)}
         >
           <div
-            className="bg-white shadow-xl w-full max-w-6xl h-[100dvh] sm:h-[92vh] sm:max-h-[92vh] sm:rounded-lg flex flex-col overflow-hidden"
+            className="bg-white shadow-xl w-full max-w-6xl h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1.5rem)] sm:h-[min(92dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1.5rem))] sm:rounded-lg flex flex-col overflow-hidden admin-sheet-panel"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative z-20 flex items-center justify-between px-4 py-3 border-b bg-white shrink-0">

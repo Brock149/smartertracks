@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase/client';
 import { searchTools as searchToolsRemote } from '../services/toolSearch';
+import { isOpenChecklistReport } from '../services/checklistReports';
 import { useAuth } from '../context/AuthContext';
 
 interface Tool {
@@ -304,7 +305,7 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
 
       const transactionIds = transactions.map(t => t.id);
 
-      // Get all checklist reports for these transactions (all existing reports are unresolved)
+      // Open reports only — resolved history stays on file but does not warn.
       const { data: reportsData, error } = await supabase
         .from('checklist_reports')
         .select(`
@@ -320,7 +321,7 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
         return [];
       }
 
-      return reportsData || [];
+      return (reportsData || []).filter(isOpenChecklistReport);
     } catch (error) {
       console.error('Error checking for open issues:', error);
       return [];
@@ -960,6 +961,14 @@ export default function TransferToolsScreen({ route }: { route?: any }) {
                     {issue.comments && (
                       <Text style={styles.issueComments}>"{issue.comments}"</Text>
                     )}
+                    {issue.resolution_status === 'in_progress' && (
+                      <Text style={styles.issueInProgress}>
+                        In progress{issue.resolution_notes ? `: ${issue.resolution_notes}` : ''}
+                        {issue.resolution_updated_at
+                          ? ` (updated ${new Date(issue.resolution_updated_at).toLocaleDateString()})`
+                          : ''}
+                      </Text>
+                    )}
                     <Text style={styles.issueDate}>
                       Reported: {new Date(issue.created_at).toLocaleDateString()}
                     </Text>
@@ -1521,6 +1530,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  issueInProgress: {
+    fontSize: 14,
+    color: '#1d4ed8',
     marginBottom: 8,
   },
   issueDate: {

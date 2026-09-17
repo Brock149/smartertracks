@@ -966,8 +966,8 @@ export default function Transactions() {
 
       {/* Create Transaction Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <div className="p-4 md:p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"

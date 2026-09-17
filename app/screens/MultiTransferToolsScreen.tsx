@@ -17,6 +17,7 @@ import { supabase } from '../supabase/client';
 import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
 import { searchTools as searchToolsRemote } from '../services/toolSearch';
+import { isOpenChecklistReport } from '../services/checklistReports';
 
 interface Tool {
   id: string;
@@ -54,6 +55,9 @@ interface IssueItem {
   comments?: string | null;
   checklist_item_name?: string | null;
   created_at?: string | null;
+  resolution_status?: string | null;
+  resolution_notes?: string | null;
+  resolution_updated_at?: string | null;
 }
 
 export default function MultiTransferToolsScreen({ navigation, route }: { navigation: any; route?: any }) {
@@ -382,6 +386,9 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
         status,
         comments,
         created_at,
+        resolution_status,
+        resolution_notes,
+        resolution_updated_at,
         checklist_item:tool_checklists(item_name)
       `)
       .in('transaction_id', transactionIds)
@@ -394,6 +401,7 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
     const toolMap = new Map(selectedTools.map((tool) => [tool.id, tool]));
 
     reportsData.forEach((report: any) => {
+      if (!isOpenChecklistReport(report)) return;
       const toolId = transactionToolMap.get(report.transaction_id);
       const tool = toolId ? toolMap.get(toolId) : undefined;
       if (!tool) return;
@@ -403,6 +411,9 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
         comments: report.comments,
         created_at: report.created_at,
         checklist_item_name: report.checklist_item?.item_name ?? null,
+        resolution_status: report.resolution_status,
+        resolution_notes: report.resolution_notes,
+        resolution_updated_at: report.resolution_updated_at,
       });
     });
 
@@ -1041,6 +1052,14 @@ export default function MultiTransferToolsScreen({ navigation, route }: { naviga
                     {issue.comments && (
                       <Text style={styles.issueComments}>"{issue.comments}"</Text>
                     )}
+                    {issue.resolution_status === 'in_progress' && (
+                      <Text style={styles.issueInProgress}>
+                        In progress{issue.resolution_notes ? `: ${issue.resolution_notes}` : ''}
+                        {issue.resolution_updated_at
+                          ? ` (updated ${new Date(issue.resolution_updated_at).toLocaleDateString()})`
+                          : ''}
+                      </Text>
+                    )}
                   </View>
                 ))}
               </View>
@@ -1641,6 +1660,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     fontStyle: 'italic',
+    marginTop: 4,
+  },
+  issueInProgress: {
+    fontSize: 12,
+    color: '#1d4ed8',
     marginTop: 4,
   },
   warningActions: {

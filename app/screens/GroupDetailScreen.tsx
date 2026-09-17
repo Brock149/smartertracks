@@ -14,7 +14,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 import { resize } from '../utils';
-import { searchTools as searchToolsRemote } from '../services/toolSearch';
+import { searchTools as searchToolsRemote, sortByLocalSearchRelevance, sortByMatchRank } from '../services/toolSearch';
 
 interface ToolGroup {
   id: string;
@@ -189,7 +189,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
         });
         if (cancelled) return;
         setRemoteFilteredTools(
-          results.map((t) => ({
+          sortByMatchRank(results).map((t) => ({
             id: t.id,
             number: t.number,
             name: t.name,
@@ -206,12 +206,16 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
         if (cancelled) return;
         const lower = term.toLowerCase();
         setRemoteFilteredTools(
-          groupTools.filter(
-            (tool) =>
-              tool.name.toLowerCase().includes(lower) ||
-              tool.number.toLowerCase().includes(lower) ||
-              (tool.owner_name || '').toLowerCase().includes(lower) ||
-              (tool.location || '').toLowerCase().includes(lower)
+          sortByLocalSearchRelevance(
+            term,
+            groupTools.filter(
+              (tool) =>
+                tool.name.toLowerCase().includes(lower) ||
+                tool.number.toLowerCase().includes(lower) ||
+                (tool.owner_name || '').toLowerCase().includes(lower) ||
+                (tool.location || '').toLowerCase().includes(lower)
+            ),
+            (tool) => tool
           )
         );
       } finally {
@@ -227,7 +231,7 @@ export default function GroupDetailScreen({ navigation, route }: GroupDetailScre
 
   const filteredGroupTools = useMemo(() => {
     if (!toolSearch.trim()) return groupTools;
-    return remoteFilteredTools ?? groupTools;
+    return remoteFilteredTools ?? [];
   }, [groupTools, toolSearch, remoteFilteredTools]);
 
   const groupCountText = useMemo(() => {

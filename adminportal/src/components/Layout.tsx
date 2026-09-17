@@ -165,7 +165,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-dvh bg-gray-100">
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -176,7 +176,7 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-800 text-white flex flex-col py-6 px-4 transform transition-transform duration-300 ease-in-out
+        fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-800 text-white flex flex-col py-6 px-4 transform transition-transform duration-300 ease-in-out pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="mb-8 flex items-center gap-3 px-2">
@@ -224,9 +224,9 @@ export default function Layout() {
       </aside>
 
       {/* Main Area */}
-      <div className="flex-1 flex flex-col min-h-screen md:ml-0">
+      <div className="flex-1 flex flex-col min-h-dvh min-w-0 md:ml-0">
         {/* Header */}
-        <header className="bg-white shadow flex items-center px-4 md:px-8 h-16 justify-between">
+        <header className="bg-white shadow flex items-center px-4 md:px-8 min-h-16 justify-between pt-[env(safe-area-inset-top)] sticky top-0 z-30">
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -273,7 +273,7 @@ export default function Layout() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-8">
+        <main className="flex-1 p-4 md:p-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {companyStatus && !companyStatus.isActive && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
               <div className="font-semibold">Account suspended</div>

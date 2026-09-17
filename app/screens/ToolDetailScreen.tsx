@@ -28,6 +28,7 @@ import {
   type PoolTracker,
   type MountType,
 } from '../services/trackers';
+import { isOpenChecklistReport } from '../services/checklistReports';
 import TrackerMap from '../components/TrackerMap';
 import { Image as ExpoImage } from 'expo-image';
 import ImageViewing from 'react-native-image-viewing';
@@ -96,6 +97,26 @@ function relativeTime(d: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function formatPossessionDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function isNonPossessionTransaction(tx: {
+  from_user_id: string | null;
+  to_user_id: string | null;
+  attribution?: string | null;
+}): boolean {
+  const attr = (tx.attribution || '').trim().toLowerCase();
+  if (attr.startsWith('tracker attached') || attr.startsWith('tracker detached')) {
+    return true;
+  }
+  return tx.from_user_id === tx.to_user_id;
+}
+
 export default function ToolDetailScreen({ route, navigation }: ToolDetailScreenProps) {
   const { tool } = route.params;
   const { user, features } = useAuth();
@@ -120,6 +141,13 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   const [attemptedClaim, setAttemptedClaim] = useState(false);
   const [claimErrors, setClaimErrors] = useState<string[]>([]);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [currentOwnerId, setCurrentOwnerId] = useState<string | null>(tool.current_owner);
+  const [reportNotes, setReportNotes] = useState('');
+
+  // Location-update modal (owners only). Reuses location / storedAt / notes
+  // while the modal is open; claim flow resets those fields on open.
+  const [locationUpdateModalVisible, setLocationUpdateModalVisible] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
   
   // Derived state – are the required claim fields filled in?
   const isClaimFormValid = location.trim().length > 0 && storedAt.trim().length > 0 && acknowledged;
@@ -138,7 +166,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   const [claimTrackerSerial, setClaimTrackerSerial] = useState<string | null>(null);
   const [claimTrackerMount, setClaimTrackerMount] = useState<MountType>('temporary');
 
-  const isOwner = tool.current_owner === user?.id;
+  const isOwner = currentOwnerId === user?.id;
 
   const storedAtOptions = ['On Truck', 'On Job Site', 'N/A'];
 
@@ -218,6 +246,15 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
 
   const fetchToolDetails = async () => {
     try {
+      const { data: toolRow } = await supabase
+        .from('tools')
+        .select('current_owner')
+        .eq('id', tool.id)
+        .single();
+      if (toolRow) {
+        setCurrentOwnerId(toolRow.current_owner ?? null);
+      }
+
       // Fetch tool images
       const { data: imagesData, error: imagesError } = await supabase
         .from('tool_images')
@@ -316,7 +353,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
 
       const transactionIds = transactions.map(t => t.id);
 
-      // Get all checklist reports for these transactions (all existing reports are unresolved)
+      // Open reports only — resolved history stays on file but does not warn.
       const { data: reportsData, error } = await supabase
         .from('checklist_reports')
         .select(`
@@ -332,15 +369,115 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         return [];
       }
 
-      return reportsData || [];
+      return (reportsData || []).filter(isOpenChecklistReport);
     } catch (error) {
       console.error('Error checking for open issues:', error);
       return [];
     }
   };
 
+  const resolveActorLabel = async (): Promise<{ name: string; email: string; line: string }> => {
+    let name = (user?.user_metadata?.name as string | undefined)?.trim() || '';
+    if (!name && user?.id) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+      name = (profile?.name || '').trim();
+    }
+    const email = user?.email || 'no email';
+    return {
+      name,
+      email,
+      line: name ? `${name} (${email})` : email,
+    };
+  };
+
+  const fetchLiveOwner = async (): Promise<{ id: string | null; name: string | null }> => {
+    const { data: liveTool, error } = await supabase
+      .from('tools')
+      .select('current_owner')
+      .eq('id', tool.id)
+      .single();
+    if (error) {
+      throw error;
+    }
+    const id = liveTool?.current_owner ?? null;
+    setCurrentOwnerId(id);
+    if (!id) {
+      return { id: null, name: null };
+    }
+    if (id === tool.current_owner && tool.owner_name) {
+      return { id, name: tool.owner_name };
+    }
+    const { data: ownerRow } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', id)
+      .single();
+    return { id, name: (ownerRow?.name || '').trim() || null };
+  };
+
+  const fetchPossessionStart = async (
+    ownerId: string | null
+  ): Promise<{ timestamp: string; ownerName: string | null } | null> => {
+    if (!ownerId) return null;
+    const { data, error } = await supabase
+      .from('tool_transactions')
+      .select(`
+        timestamp,
+        from_user_id,
+        to_user_id,
+        attribution,
+        deleted_to_user_name,
+        to_user:users!tool_transactions_to_user_id_fkey(name)
+      `)
+      .eq('tool_id', tool.id)
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching possession history:', error);
+      return null;
+    }
+
+    const possession = (data || []).find((tx: any) => {
+      if (isNonPossessionTransaction(tx)) return false;
+      return tx.to_user_id === ownerId;
+    });
+
+    if (!possession) return null;
+
+    const ownerName = possession.deleted_to_user_name
+      ? `${possession.deleted_to_user_name} (removed)`
+      : (possession.to_user as any)?.name || null;
+
+    return { timestamp: possession.timestamp, ownerName };
+  };
+
+  const possessionLineFor = (
+    kind: 'owner-report' | 'damage-report' | 'location-update',
+    ownerName: string | null,
+    possession: { timestamp: string; ownerName: string | null } | null,
+    ownerId: string | null
+  ): string => {
+    if (!ownerId) return 'Tool currently unassigned';
+    const sinceName = ownerName || possession?.ownerName || 'current owner';
+    if (possession) {
+      const since = formatPossessionDate(possession.timestamp);
+      if (kind === 'damage-report') {
+        return `Held by ${sinceName} since ${since}`;
+      }
+      return `In possession since ${since}`;
+    }
+    if (kind === 'damage-report') {
+      return `Held by ${sinceName}`;
+    }
+    return '';
+  };
+
   const handleClaimOwnership = async () => {
-    if (!tool || tool.current_owner === user?.id) {
+    if (!tool || currentOwnerId === user?.id) {
       Alert.alert('Error', 'This tool is already assigned to you');
       return;
     }
@@ -369,6 +506,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     setClaimErrors([]);
     setClaimTrackerSerial(null);
     setClaimTrackerMount('temporary');
+    setStoredAtPickerVisible(false);
     
     // Reset checklist items to default 'ok' status
     setChecklistItems(prev => prev.map(item => ({
@@ -434,21 +572,8 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
       }
 
       // Build the forced, non-editable attribution line for this claim.
-      // The display name lives in the users table (auth metadata is often empty),
-      // so resolve it there and only append the email when we actually have a name.
-      let claimerName = (user?.user_metadata?.name as string | undefined)?.trim() || '';
-      if (!claimerName && user?.id) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', user.id)
-          .single();
-        claimerName = (profile?.name || '').trim();
-      }
-      const claimerEmail = user?.email || 'no email';
-      const baseAttribution = claimerName
-        ? `Tool claimed by ${claimerName} (${claimerEmail}) — responsibility acknowledged`
-        : `Tool claimed by ${claimerEmail} — responsibility acknowledged`;
+      const actor = await resolveActorLabel();
+      const baseAttribution = `Tool claimed by ${actor.line} — responsibility acknowledged`;
       // If the tech flagged any checklist items, summarize them on the
       // transaction so the damage shows up directly in the transaction log
       // (app + admin) under the acknowledgment line.
@@ -577,10 +702,27 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
   };
 
   const handleChecklistSubmit = async () => {
+    const flagged = checklistItems.filter(item => item.status !== 'ok');
+    if (flagged.length === 0) {
+      Alert.alert(
+        'No Issues Found',
+        'Check at least one item that needs repair or replacement before submitting a report.'
+      );
+      return;
+    }
+
     setClaiming(true);
 
     try {
-      // Normalize the location using our SQL function (only when company_id is available)
+      const actor = await resolveActorLabel();
+      const liveOwner = await fetchLiveOwner();
+      const isReportingOwnTool = liveOwner.id === user?.id;
+
+      // Possession stays with the current owner. Reporter→reporter only when
+      // the tool is unassigned (RLS requires to_user to be a real company user).
+      const fromUserId = liveOwner.id || user?.id || null;
+      const toUserId = liveOwner.id || user?.id || null;
+
       const originalLocation = latestTransaction?.location || 'Current Location';
       let finalLocation = originalLocation;
       if (tool.company_id) {
@@ -597,31 +739,27 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         }
       }
 
-      // Create a "self-transfer" to generate checklist report
-      let reporterName = (user?.user_metadata?.name as string | undefined)?.trim() || '';
-      if (!reporterName && user?.id) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', user.id)
-          .single();
-        reporterName = (profile?.name || '').trim();
-      }
-      const reporterEmail = user?.email || 'no email';
-      const baseReportAttribution = reporterName
-        ? `Checklist report submitted by ${reporterName} (${reporterEmail})`
-        : `Checklist report submitted by ${reporterEmail}`;
-      const reportAttribution = appendDamageSummary(baseReportAttribution);
+      const possession = await fetchPossessionStart(liveOwner.id);
+      const kind = isReportingOwnTool ? 'owner-report' : 'damage-report';
+      const baseLine = isReportingOwnTool
+        ? `Checklist report submitted by ${actor.line}`
+        : `Damage reported by ${actor.line} — possession unchanged`;
+      const heldLine = possessionLineFor(kind, liveOwner.name, possession, liveOwner.id);
+      const attribution = appendDamageSummary(
+        heldLine ? `${baseLine}\n${heldLine}` : baseLine
+      );
+      const overallNotes = reportNotes.trim();
+
       const { data: transactionData, error: transactionError } = await supabase
         .from('tool_transactions')
         .insert({
           tool_id: tool.id,
-          from_user_id: user?.id,
-          to_user_id: user?.id,
+          from_user_id: fromUserId,
+          to_user_id: toUserId,
           location: finalLocation,
           stored_at: latestTransaction?.stored_at || 'N/A',
-          notes: '',
-          attribution: reportAttribution,
+          notes: overallNotes,
+          attribution,
           company_id: tool.company_id,
         })
         .select()
@@ -631,52 +769,147 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         throw transactionError;
       }
 
-      // Create checklist reports for items that need attention
-      const reportsToInsert = checklistItems
-        .filter(item => item.status !== 'ok')
-        .map(item => ({
-          transaction_id: transactionData.id,
-          checklist_item_id: item.id,
-          status: item.status === 'damaged' ? 'Damaged/Needs Repair' : 'Needs Replacement/Resupply',
-          comments: item.comments?.trim() || '',
-          company_id: tool.company_id,
-        }));
+      const reportsToInsert = flagged.map(item => ({
+        transaction_id: transactionData.id,
+        checklist_item_id: item.id,
+        status: item.status === 'damaged' ? 'Damaged/Needs Repair' : 'Needs Replacement/Resupply',
+        comments: item.comments?.trim() || overallNotes || '',
+        company_id: tool.company_id,
+      }));
 
-      if (reportsToInsert.length > 0) {
-        const { error: reportError } = await supabase
-          .from('checklist_reports')
-          .insert(reportsToInsert);
+      const { error: reportError } = await supabase
+        .from('checklist_reports')
+        .insert(reportsToInsert);
 
-        if (reportError) {
-          throw reportError;
-        }
-
-        Alert.alert(
-          'Success', 
-          `Checklist report submitted successfully! ${reportsToInsert.length} issue(s) reported.`,
-          [{ text: 'OK', onPress: () => {
-            // Reset checklist items back to 'ok' status
-            setChecklistItems(prev => prev.map(item => ({
-              ...item,
-              status: 'ok',
-              comments: '',
-            })));
-            // Navigate back to My Tools screen
-            navigation.goBack();
-          }}]
-        );
-      } else {
-        Alert.alert(
-          'No Issues Found', 
-          'All checklist items are marked as OK. No report needed.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+      if (reportError) {
+        throw reportError;
       }
+
+      Alert.alert(
+        'Success',
+        `Report submitted successfully! ${reportsToInsert.length} issue(s) reported.`,
+        [{ text: 'OK', onPress: () => {
+          setChecklistItems(prev => prev.map(item => ({
+            ...item,
+            status: 'ok',
+            comments: '',
+          })));
+          setReportNotes('');
+          navigation.goBack();
+        }}]
+      );
     } catch (error) {
       console.error('Error submitting checklist report:', error);
-      Alert.alert('Error', 'Failed to submit checklist report. Please try again.');
+      Alert.alert('Error', 'Failed to submit report. Please try again.');
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const openLocationUpdate = () => {
+    setLocation(latestTransaction?.location || '');
+    setStoredAt(latestTransaction?.stored_at && latestTransaction.stored_at !== 'Unknown'
+      ? latestTransaction.stored_at
+      : '');
+    setNotes('');
+    setStoredAtPickerVisible(false);
+    setLocationUpdateModalVisible(true);
+  };
+
+  const handleLocationUpdateSubmit = async () => {
+    if (!isOwner) {
+      Alert.alert('Error', 'Only the current owner can update location.');
+      return;
+    }
+    const newLocation = location.trim();
+    const newStoredAt = storedAt.trim();
+    if (!newLocation || !newStoredAt) {
+      Alert.alert('Missing fields', 'Enter a location and select where the tool is stored.');
+      return;
+    }
+    const oldLocation = (latestTransaction?.location || '').trim();
+    const oldStoredAt = (latestTransaction?.stored_at || '').trim();
+    const locChanged = newLocation !== oldLocation;
+    const storedChanged = newStoredAt !== oldStoredAt;
+    if (!locChanged && !storedChanged) {
+      Alert.alert('No changes', 'Update the location or stored-at value before saving.');
+      return;
+    }
+
+    setUpdatingLocation(true);
+    try {
+      const actor = await resolveActorLabel();
+      const liveOwner = await fetchLiveOwner();
+      if (liveOwner.id !== user?.id) {
+        Alert.alert('Error', 'Only the current owner can update location.');
+        return;
+      }
+
+      let finalLocation = newLocation;
+      if (tool.company_id) {
+        const { data: normalizedLocationData, error: normalizeError } = await supabase
+          .rpc('normalize_location', {
+            p_company_id: tool.company_id,
+            p_input_location: newLocation
+          });
+        if (normalizeError) {
+          console.error('Error normalizing location:', normalizeError);
+        } else {
+          finalLocation = normalizedLocationData || newLocation;
+        }
+      }
+
+      const possession = await fetchPossessionStart(liveOwner.id);
+      const heldLine = possessionLineFor('location-update', liveOwner.name, possession, liveOwner.id);
+      const changeBits: string[] = [];
+      if (locChanged || finalLocation !== oldLocation) {
+        changeBits.push(`Location: ${oldLocation || '—'} → ${finalLocation}`);
+      }
+      if (storedChanged) {
+        changeBits.push(`Stored: ${oldStoredAt || '—'} → ${newStoredAt}`);
+      }
+      const attributionParts = [
+        `Location updated by ${actor.line} — possession unchanged`,
+      ];
+      if (heldLine) attributionParts.push(heldLine);
+      if (changeBits.length > 0) attributionParts.push(changeBits.join('; '));
+
+      const { error: transactionError } = await supabase
+        .from('tool_transactions')
+        .insert({
+          tool_id: tool.id,
+          from_user_id: user?.id,
+          to_user_id: user?.id,
+          location: finalLocation,
+          stored_at: newStoredAt,
+          notes: notes.trim(),
+          attribution: attributionParts.join('\n'),
+          company_id: tool.company_id,
+        });
+
+      if (transactionError) {
+        throw transactionError;
+      }
+
+      setLatestTransaction({
+        location: finalLocation,
+        stored_at: newStoredAt,
+        timestamp: new Date().toISOString(),
+        notes: notes.trim(),
+        attribution: attributionParts.join('\n'),
+        from_user_name: actor.name || undefined,
+        to_user_name: actor.name || undefined,
+      });
+      setLocationUpdateModalVisible(false);
+      setLocation('');
+      setStoredAt('');
+      setNotes('');
+      Alert.alert('Success', 'Location updated. You still have this tool.');
+    } catch (error) {
+      console.error('Error updating location:', error);
+      Alert.alert('Error', 'Failed to update location. Please try again.');
+    } finally {
+      setUpdatingLocation(false);
     }
   };
 
@@ -752,7 +985,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
     });
   }, [images]);
 
-  const renderReadOnlyChecklistSection = () => {
+  const renderChecklistSection = (showHeader = true) => {
     if (checklistItems.length === 0) {
       return (
         <View style={styles.noChecklistContainer}>
@@ -763,42 +996,14 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
 
     return (
       <View style={styles.checklistSection}>
-        <Text style={styles.checklistTitle}>Tool Inspection Checklist</Text>
-        <Text style={styles.checklistSubtitle}>
-          Items that will be checked during transfers and inspections
-        </Text>
-        
-        {checklistItems.map((item) => (
-          <View key={item.id} style={styles.readOnlyChecklistItem}>
-            <View style={styles.checklistItemInfo}>
-              <Text style={styles.checklistItemName}>{item.item_name}</Text>
-              {item.required && (
-                <View style={styles.requiredBadge}>
-                  <Text style={styles.requiredText}>Required</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderChecklistSection = () => {
-    if (checklistItems.length === 0) {
-      return (
-        <View style={styles.noChecklistContainer}>
-          <Text style={styles.noChecklistText}>No checklist items for this tool</Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.checklistSection}>
-        <Text style={styles.checklistTitle}>Tool Inspection Checklist</Text>
-        <Text style={styles.checklistSubtitle}>
-          Check any items that need attention
-        </Text>
+        {showHeader && (
+          <>
+            <Text style={styles.checklistTitle}>Tool Inspection Checklist</Text>
+            <Text style={styles.checklistSubtitle}>
+              Check any items that need attention
+            </Text>
+          </>
+        )}
         
         {checklistItems.map((item) => (
           <View key={item.id} style={styles.checklistItem}>
@@ -899,7 +1104,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         style={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: (isOwner ? 100 : 160) + insets.bottom }}
       >
         {/* Tool Images */}
         <View style={styles.section}>
@@ -913,7 +1118,7 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
               <Text style={styles.toolNumber}>#{tool.number}</Text>
               <Text style={styles.toolName}>{tool.name}</Text>
             </View>
-            {tool.current_owner === user?.id && (
+            {isOwner && (
               <View style={styles.ownedBadge}>
                 <Ionicons name="checkmark-circle" size={20} color="#059669" />
                 <Text style={styles.ownedText}>Owned</Text>
@@ -945,7 +1150,12 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
               </View>
             </View>
 
-            <View style={styles.statusRow}>
+            <TouchableOpacity
+              style={styles.statusRow}
+              onPress={isOwner ? openLocationUpdate : undefined}
+              activeOpacity={isOwner ? 0.7 : 1}
+              disabled={!isOwner}
+            >
               <View style={styles.statusIcon}>
                 <Ionicons name="location-outline" size={20} color="#6b7280" />
               </View>
@@ -955,9 +1165,20 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                   {latestTransaction?.location || 'Location not specified'}
                 </Text>
               </View>
-            </View>
+              {isOwner && (
+                <View style={styles.updateLocationHit}>
+                  <Ionicons name="pencil" size={16} color="#2563eb" />
+                  <Text style={styles.updateLocationText}>Update</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-            <View style={styles.statusRow}>
+            <TouchableOpacity
+              style={styles.statusRow}
+              onPress={isOwner ? openLocationUpdate : undefined}
+              activeOpacity={isOwner ? 0.7 : 1}
+              disabled={!isOwner}
+            >
               <View style={styles.statusIcon}>
                 <Ionicons name="car-outline" size={20} color="#6b7280" />
               </View>
@@ -967,7 +1188,13 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                   {latestTransaction?.stored_at || 'N/A'}
                 </Text>
               </View>
-            </View>
+              {isOwner && (
+                <View style={styles.updateLocationHit}>
+                  <Ionicons name="pencil" size={16} color="#2563eb" />
+                  <Text style={styles.updateLocationText}>Update</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             {latestTransaction?.timestamp && (
               <View style={styles.statusRow}>
@@ -1132,54 +1359,71 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
           </View>
         )}
 
-        {/* Tool Checklist */}
+        {/* Tool Checklist — interactive for everyone so a tech can report
+            damage without claiming the tool. */}
         <View style={styles.section}>
-          {tool.current_owner === user?.id ? (
-            // Interactive checklist for owners
-            <>
-              <Text style={styles.sectionTitle}>Tool Inspection Checklist</Text>
-              <Text style={styles.checklistSubtitle}>
-                Check any items that need attention and submit a report
-              </Text>
-              {renderChecklistSection()}
-            </>
-          ) : (
-            // Read-only checklist for non-owners
-            <>
-              <Text style={styles.sectionTitle}>Tool Inspection Checklist</Text>
-              <Text style={styles.checklistSubtitle}>
-                Items that will be checked during transfers and inspections
-              </Text>
-              {renderReadOnlyChecklistSection()}
-            </>
+          <Text style={styles.sectionTitle}>Tool Inspection Checklist</Text>
+          <Text style={styles.checklistSubtitle}>
+            {isOwner
+              ? 'Check any items that need attention and submit a report'
+              : 'Check any damaged items and submit a report without claiming this tool'}
+          </Text>
+          {renderChecklistSection(false)}
+          {checklistItems.length > 0 && (
+            <View style={styles.reportNotesWrap}>
+              <Text style={styles.inputLabel}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.textInput, styles.notesInput]}
+                placeholder="Add any notes about this report..."
+                value={reportNotes}
+                onChangeText={setReportNotes}
+                multiline
+                numberOfLines={3}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+              />
+            </View>
           )}
         </View>
       </ScrollView>
 
       {/* Action Buttons */}
       <View style={[styles.bottomSection, { paddingVertical: 8 }]}>
-        {tool.current_owner !== user?.id ? (
-          <TouchableOpacity
-            style={styles.claimButton}
-            onPress={handleClaimOwnership}
-          >
-            <Ionicons name="hand-left-outline" size={20} color="#ffffff" />
-            <Text style={styles.claimButtonText}>Start Tool Claim</Text>
-          </TouchableOpacity>
-        ) : (
+        {!isOwner ? (
           <>
+            {checklistItems.length > 0 && (
+              <TouchableOpacity
+                style={styles.submitReportButton}
+                onPress={handleChecklistSubmit}
+                disabled={claiming}
+              >
+                <Ionicons name="warning-outline" size={18} color="#d97706" />
+                <Text style={styles.submitReportButtonText}>
+                  {claiming ? 'Submitting...' : 'Submit Report'}
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={styles.submitChecklistButton}
-              onPress={handleChecklistSubmit}
+              style={styles.claimButton}
+              onPress={handleClaimOwnership}
               disabled={claiming}
             >
-              <Ionicons name="checkmark-circle-outline" size={20} color="#ffffff" />
-              <Text style={styles.submitChecklistButtonText}>
-                {claiming ? 'Submitting...' : 'Submit Checklist Report'}
-              </Text>
+              <Ionicons name="hand-left-outline" size={20} color="#ffffff" />
+              <Text style={styles.claimButtonText}>Start Tool Claim</Text>
             </TouchableOpacity>
-            {/* Transfer removed: owners can submit checklist, transfers are disabled */}
           </>
+        ) : (
+          <TouchableOpacity
+            style={styles.submitChecklistButton}
+            onPress={handleChecklistSubmit}
+            disabled={claiming}
+          >
+            <Ionicons name="checkmark-circle-outline" size={20} color="#ffffff" />
+            <Text style={styles.submitChecklistButtonText}>
+              {claiming ? 'Submitting...' : 'Submit Checklist Report'}
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -1428,6 +1672,128 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Owner-only location / stored-at update. Self-loop transaction so
+          possession does not change. */}
+      <Modal
+        visible={locationUpdateModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setLocationUpdateModalVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.modalContainer}>
+            <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+              <TouchableOpacity
+                onPress={() => setLocationUpdateModalVisible(false)}
+                style={styles.cancelButton}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Update Location</Text>
+              <View style={styles.placeholder} />
+            </View>
+
+            <ScrollView
+              style={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              <View style={styles.modalToolInfo}>
+                <Text style={styles.modalToolNumber}>#{tool.number}</Text>
+                <Text style={styles.modalToolName}>{tool.name}</Text>
+                <Text style={styles.modalTransferInfo}>
+                  You still own this tool. This only updates where it is.
+                </Text>
+              </View>
+
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Location *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Where is this tool now?"
+                  value={location}
+                  onChangeText={setLocation}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Stored At *</Text>
+                <TouchableOpacity
+                  style={styles.dropdownButton}
+                  onPress={() => setStoredAtPickerVisible(!storedAtPickerVisible)}
+                >
+                  <Text style={[styles.dropdownText, !storedAt && { color: '#9ca3af' }]}>
+                    {storedAt || 'Select storage location'}
+                  </Text>
+                  <Ionicons
+                    name={storedAtPickerVisible ? "chevron-up" : "chevron-down"}
+                    size={20}
+                    color="#6b7280"
+                  />
+                </TouchableOpacity>
+
+                {storedAtPickerVisible && (
+                  <View style={styles.dropdownOptions}>
+                    {storedAtOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={[
+                          styles.dropdownOption,
+                          storedAt === option && styles.dropdownOptionSelected
+                        ]}
+                        onPress={() => {
+                          setStoredAt(option);
+                          setStoredAtPickerVisible(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.dropdownOptionText,
+                          storedAt === option && styles.dropdownOptionTextSelected
+                        ]}>
+                          {option}
+                        </Text>
+                        {storedAt === option && (
+                          <Ionicons name="checkmark" size={16} color="#2563eb" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Notes (optional)</Text>
+                <TextInput
+                  style={[styles.textInput, styles.notesInput]}
+                  placeholder="Why did the location change?"
+                  value={notes}
+                  onChangeText={setNotes}
+                  multiline
+                  numberOfLines={3}
+                  returnKeyType="done"
+                  blurOnSubmit
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+              </View>
+
+              <View style={styles.bottomButtonSection}>
+                <TouchableOpacity
+                  onPress={handleLocationUpdateSubmit}
+                  disabled={updatingLocation}
+                  style={styles.submitChecklistButton}
+                >
+                  <Ionicons name="location-outline" size={20} color="#ffffff" />
+                  <Text style={styles.submitChecklistButtonText}>
+                    {updatingLocation ? 'Saving...' : 'Save Location'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Warning Modal for Open Issues */}
       <Modal
         visible={warningModalVisible}
@@ -1473,6 +1839,14 @@ export default function ToolDetailScreen({ route, navigation }: ToolDetailScreen
                     <Text style={styles.issueStatus}>{issue.status}</Text>
                     {issue.comments && (
                       <Text style={styles.issueComments}>"{issue.comments}"</Text>
+                    )}
+                    {issue.resolution_status === 'in_progress' && (
+                      <Text style={styles.issueInProgress}>
+                        In progress{issue.resolution_notes ? `: ${issue.resolution_notes}` : ''}
+                        {issue.resolution_updated_at
+                          ? ` (updated ${new Date(issue.resolution_updated_at).toLocaleDateString()})`
+                          : ''}
+                      </Text>
                     )}
                     <Text style={styles.issueDate}>
                       Reported: {new Date(issue.created_at).toLocaleDateString()}
@@ -1860,6 +2234,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
+    gap: 8,
   },
   bottomButtonSection: {
     padding: 16,
@@ -1916,6 +2291,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  submitReportButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#d97706',
+  },
+  submitReportButtonText: {
+    color: '#d97706',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  updateLocationHit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  updateLocationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  reportNotesWrap: {
+    marginTop: 8,
   },
   modalContainer: {
     flex: 1,
@@ -2178,6 +2584,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  issueInProgress: {
+    fontSize: 14,
+    color: '#1d4ed8',
     marginBottom: 8,
   },
   issueDate: {

@@ -26,6 +26,7 @@ import {
   PersonalTool,
 } from '../services/personalTools';
 import { searchTools as searchToolsRemote } from '../services/toolSearch';
+import { isOpenChecklistReport } from '../services/checklistReports';
 
 interface Tool {
   id: string;
@@ -55,6 +56,9 @@ interface ChecklistReport {
   comments?: string;
   created_at: string;
   item_name: string;
+  resolution_status?: string;
+  resolution_notes?: string;
+  resolution_updated_at?: string;
 }
 
 interface ToolNotification {
@@ -399,7 +403,8 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
           let issueCount = 0;
           let reports: ChecklistReport[] = [];
 
-          // Look for ALL checklist reports for this tool (all existing reports are unresolved)
+          // Look for open checklist reports for this tool (resolved reports stay in history)
+
           if (transfer.tool_id) {
             // First get all transactions for this tool
             const { data: toolTransactions } = await supabase
@@ -410,7 +415,6 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
             if (toolTransactions && toolTransactions.length > 0) {
               const transactionIds = toolTransactions.map(t => t.id);
               
-              // Get all checklist reports for these transactions
               const { data: reportsData, error: reportsError } = await supabase
                 .from('checklist_reports')
                 .select(`
@@ -418,25 +422,33 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
                   status, 
                   comments, 
                   created_at,
+                  resolution_status,
+                  resolution_notes,
+                  resolution_updated_at,
                   checklist_item:tool_checklists(item_name)
                 `)
                 .in('transaction_id', transactionIds)
                 .order('created_at', { ascending: false });
 
-                        // Debug logging
-              console.log(`Transfer ID: ${transfer.id} - Found ${reportsData?.length || 0} reports`);
+              const openReports = (reportsData || []).filter(isOpenChecklistReport)
 
-              if (reportsData && reportsData.length > 0) {
+                        // Debug logging
+              console.log(`Transfer ID: ${transfer.id} - Found ${openReports.length} reports`);
+
+              if (openReports.length > 0) {
                 hasIssues = true;
-                issueCount = reportsData.length;
-                reports = reportsData.map(report => {
+                issueCount = openReports.length;
+                reports = openReports.map(report => {
                   const checklistItem = Array.isArray(report.checklist_item) ? report.checklist_item[0] : report.checklist_item;
                   return {
                     id: report.id,
                     status: report.status,
                     comments: report.comments,
                     created_at: report.created_at,
-                    item_name: checklistItem?.item_name || 'Unknown Item'
+                    item_name: checklistItem?.item_name || 'Unknown Item',
+                    resolution_status: report.resolution_status,
+                    resolution_notes: report.resolution_notes,
+                    resolution_updated_at: report.resolution_updated_at,
                   };
                 });
               }
@@ -698,6 +710,14 @@ export default function MyToolsScreen({ navigation }: MyToolsScreenProps) {
                     </View>
                     {report.comments && (
                       <Text style={styles.reportDetails}>"{report.comments}"</Text>
+                    )}
+                    {report.resolution_status === 'in_progress' && (
+                      <Text style={styles.reportInProgress}>
+                        In progress{report.resolution_notes ? `: ${report.resolution_notes}` : ''}
+                        {report.resolution_updated_at
+                          ? ` (updated ${new Date(report.resolution_updated_at).toLocaleDateString()})`
+                          : ''}
+                      </Text>
                     )}
                   </View>
                 ))}
@@ -1305,6 +1325,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#374151',
     fontStyle: 'italic',
+  },
+  reportInProgress: {
+    fontSize: 12,
+    color: '#1d4ed8',
+    marginTop: 4,
   },
   notificationActions: {
     flexDirection: 'row',

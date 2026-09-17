@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../context/AuthContext';
+import { isOpenChecklistReport } from '../services/checklistReports';
 import NoCompanyBanner from '../components/NoCompanyBanner';
 
 interface HomeScreenProps {
@@ -111,11 +112,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
           const { data: reportsData } = await supabase
             .from('checklist_reports')
-            .select('transaction_id')
+            .select('transaction_id, resolution_status')
             .in('transaction_id', transactionIds);
 
           const toolIdsWithIssues = new Set<string>();
           (reportsData || []).forEach((report) => {
+            if (!isOpenChecklistReport(report)) return;
             const toolId = transactionIdToToolId.get(report.transaction_id);
             if (toolId) toolIdsWithIssues.add(toolId);
           });
@@ -184,10 +186,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
           const { data: reportsData } = await supabase
             .from('checklist_reports')
-            .select('transaction_id')
+            .select('transaction_id, resolution_status')
             .in('transaction_id', transactionIds);
 
           (reportsData || []).forEach((report) => {
+            if (!isOpenChecklistReport(report)) return;
             const toolId = transactionIdToToolId.get(report.transaction_id);
             if (toolId) toolIdsWithIssues.add(toolId);
           });

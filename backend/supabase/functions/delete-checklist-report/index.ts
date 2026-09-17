@@ -6,19 +6,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function isStaff(role: string | null | undefined) {
+  return role === 'admin' || role === 'superadmin'
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Use the service role key for privileged access
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SERVICE_KEY') ?? ''
     )
 
-    // Get the authorization header and verify the user
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
@@ -36,16 +38,15 @@ serve(async (req) => {
       )
     }
 
-    // Get the user's company_id and verify admin role
     const { data: userData, error: userError } = await supabaseClient
       .from('users')
-      .select('company_id, role')
+      .select('company_id, role, name')
       .eq('id', user.id)
       .single()
 
-    if (userError || !userData || userData.role !== 'admin') {
+    if (userError || !userData || !isStaff(userData.role)) {
       return new Response(
-        JSON.stringify({ error: 'Only admins can delete checklist reports' }),
+        JSON.stringify({ error: 'Only admins can resolve checklist reports' }),
         { status: 403, headers: corsHeaders }
       )
     }
@@ -59,10 +60,9 @@ serve(async (req) => {
       })
     }
 
-    // Verify the checklist report belongs to the same company
     const { data: reportData, error: reportError } = await supabaseClient
       .from('checklist_reports')
-      .select('company_id')
+      .select('id, company_id, resolution_status')
       .eq('id', id)
       .single()
 
@@ -73,13 +73,40 @@ serve(async (req) => {
       )
     }
 
-    // Delete the checklist report
-    const { error: deleteError } = await supabaseClient
-      .from('checklist_reports')
-      .delete()
-      .eq('id', id)
+    // Keep the report for history. Marking it resolved is what removes it
+    // from the open-issues warning on claim/transfer.
+    if (reportData.resolution_status !== 'resolved') {
+      const now = new Date().toISOString()
+      const actorName = userData.name || user.email || 'An admin'
 
-    if (deleteError) throw deleteError
+      const { error: updateError } = await supabaseClient
+        .from('checklist_reports')
+        .update({
+          resolution_status: 'resolved',
+          resolution_updated_at: now,
+          resolution_updated_by: user.id,
+          resolution_updated_by_name: actorName,
+          resolved_at: now,
+          resolved_by: user.id,
+          resolved_by_name: actorName,
+        })
+        .eq('id', id)
+
+      if (updateError) throw updateError
+
+      const { error: historyError } = await supabaseClient
+        .from('checklist_report_updates')
+        .insert({
+          report_id: id,
+          company_id: userData.company_id,
+          resolution_status: 'resolved',
+          notes: null,
+          actor_id: user.id,
+          actor_name: actorName,
+        })
+
+      if (historyError) throw historyError
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -91,4 +118,4 @@ serve(async (req) => {
       status: 400,
     })
   }
-}) 
+})

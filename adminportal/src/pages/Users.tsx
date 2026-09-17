@@ -911,8 +911,8 @@ export default function Users() {
 
       {/* Add User Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 w-full max-w-md relative">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 w-full max-w-md relative admin-sheet-panel overflow-y-auto">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={handleClose}
@@ -1023,8 +1023,8 @@ export default function Users() {
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative admin-sheet-panel overflow-y-auto">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={handleEditClose}
@@ -1103,8 +1103,8 @@ export default function Users() {
 
       {/* Remove From Company Modal */}
       {removeUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative admin-sheet-panel overflow-y-auto">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={handleRemoveClose}
@@ -1156,8 +1156,8 @@ export default function Users() {
 
       {/* Edit Access Code Modal */}
       {isEditAccessCodeModalOpen && editingAccessCode && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative admin-sheet-panel overflow-y-auto">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={() => {

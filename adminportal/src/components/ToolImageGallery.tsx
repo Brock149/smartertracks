@@ -55,7 +55,7 @@ export function ToolImageGallery({ toolId }: { toolId: string }) {
       </div>
 
       {selectedIdx !== null && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg p-4 max-w-2xl w-full relative flex items-center">
             {/* Close Button */}
             <button

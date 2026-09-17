@@ -68,11 +68,86 @@ interface CompanyToolRow {
 
 type CellValue = string | number
 
+// PostgREST/Supabase caps each request at max_rows (1000). A single
+// .select() of tool_transactions therefore only returns the 1000 newest
+// rows company-wide, so tools whose latest transfer is older show up as
+// "No Location" even though the admin portal (search RPC / DISTINCT ON)
+// still has a location. Page through every row so the export matches.
+const PAGE_SIZE = 1000
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => Promise<{ data: T[] | null; error: { message: string } | null }>
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const all: T[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) return { data: all, error }
+    const rows = data ?? []
+    all.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return { data: all, error: null }
+}
+
+type ToolLocation = { location: string; stored_at: string }
+
+async function latestLocByTool(
+  admin: ReturnType<typeof createClient>,
+  companyId: string,
+  toolIds: string[]
+): Promise<{ data: Map<string, ToolLocation>; error: { message: string } | null }> {
+  const locByTool = new Map<string, ToolLocation>()
+  if (toolIds.length === 0) return { data: locByTool, error: null }
+
+  const applyRows = (rows: { tool_id: string; location?: string; stored_at?: string }[]) => {
+    for (const tx of rows) {
+      if (tx.tool_id && !locByTool.has(tx.tool_id)) {
+        locByTool.set(tx.tool_id, { location: tx.location || '', stored_at: tx.stored_at || '' })
+      }
+    }
+  }
+
+  // Same one-row-per-tool lookup the admin search / mobile All Tools screens use.
+  const chunkSize = 200
+  let rpcOk = true
+  for (let i = 0; i < toolIds.length; i += chunkSize) {
+    const chunk = toolIds.slice(i, i + chunkSize)
+    const { data, error } = await admin.rpc('latest_transactions_for_tools', { p_tool_ids: chunk })
+    if (error) {
+      rpcOk = false
+      locByTool.clear()
+      break
+    }
+    applyRows((data || []) as { tool_id: string; location?: string; stored_at?: string }[])
+  }
+  if (rpcOk) return { data: locByTool, error: null }
+
+  const { data: txRows, error: txError } = await fetchAllRows<{
+    tool_id: string
+    location: string
+    stored_at: string
+  }>(async (from, to) => {
+    const result = await admin
+      .from('tool_transactions')
+      .select('tool_id, location, stored_at, timestamp')
+      .eq('company_id', companyId)
+      .order('timestamp', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to)
+    return { data: result.data, error: result.error }
+  })
+  if (txError) return { data: locByTool, error: txError }
+  applyRows(txRows as { tool_id: string; location: string; stored_at: string }[])
+  return { data: locByTool, error: null }
 }
 
 // All schedule math is done in the company's local zone (Eastern) rather than
@@ -404,32 +479,32 @@ async function exportCompanyTools(
     owners.set(u.id, { name: u.name || 'Unknown' })
   }
 
-  const { data: toolRows, error: toolsError } = await admin
-    .from('tools')
-    .select(
-      'id, number, number_numeric, name, description, current_owner, deleted_owner_name, estimated_cost, photo_url, created_at, images:tool_images(image_url, is_primary, uploaded_at)'
-    )
-    .eq('company_id', company.company_id)
-    .eq('is_deleted', false)
+  const { data: toolRows, error: toolsError } = await fetchAllRows<CompanyToolRow>(async (from, to) => {
+    const result = await admin
+      .from('tools')
+      .select(
+        'id, number, number_numeric, name, description, current_owner, deleted_owner_name, estimated_cost, photo_url, created_at, images:tool_images(image_url, is_primary, uploaded_at)'
+      )
+      .eq('company_id', company.company_id)
+      .eq('is_deleted', false)
+      .order('id', { ascending: true })
+      .range(from, to)
+    return { data: (result.data || null) as CompanyToolRow[] | null, error: result.error }
+  })
   if (toolsError) {
     return { company_id: company.company_id, type: 'company', status: 'error', detail: toolsError.message }
   }
-  const tools = (toolRows || []) as CompanyToolRow[]
+  const tools = toolRows
 
-  // Latest transaction per tool gives current location + stored_at.
-  const { data: txRows, error: txError } = await admin
-    .from('tool_transactions')
-    .select('tool_id, location, stored_at, timestamp')
-    .eq('company_id', company.company_id)
-    .order('timestamp', { ascending: false })
+  // Latest transaction per tool — same source as the admin Tools page
+  // (search RPC DISTINCT ON), not a truncated 1000-row dump of all txs.
+  const { data: locByTool, error: txError } = await latestLocByTool(
+    admin,
+    company.company_id,
+    tools.map((t) => t.id)
+  )
   if (txError) {
     return { company_id: company.company_id, type: 'company', status: 'error', detail: txError.message }
-  }
-  const locByTool = new Map<string, { location: string; stored_at: string }>()
-  for (const tx of (txRows || []) as { tool_id: string; location: string; stored_at: string }[]) {
-    if (tx.tool_id && !locByTool.has(tx.tool_id)) {
-      locByTool.set(tx.tool_id, { location: tx.location || '', stored_at: tx.stored_at || '' })
-    }
   }
 
   const sorted = [...tools].sort((a, b) => {

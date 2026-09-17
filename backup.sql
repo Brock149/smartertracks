@@ -1196,6 +1196,54 @@ $$;
 ALTER FUNCTION "public"."is_superadmin"("uid" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."join_company_with_code"("p_user_id" "uuid", "p_code" "text") RETURNS "json"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_company_id uuid;
+  v_role text;
+  v_current uuid;
+  v_code text;
+BEGIN
+  v_code := upper(trim(coalesce(p_code, '')));
+  IF v_code = '' THEN
+    RAISE EXCEPTION 'Access code is required';
+  END IF;
+
+  SELECT company_id INTO v_current FROM users WHERE id = p_user_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Account not found';
+  END IF;
+  IF v_current IS NOT NULL THEN
+    RAISE EXCEPTION 'You are already part of a company';
+  END IF;
+
+  SELECT company_id, role INTO v_company_id, v_role
+    FROM company_access_codes
+   WHERE code = v_code AND is_active IS TRUE;
+
+  IF v_company_id IS NULL OR v_role IS NULL THEN
+    RAISE EXCEPTION 'Invalid access code';
+  END IF;
+
+  UPDATE users
+     SET company_id = v_company_id,
+         role = v_role
+   WHERE id = p_user_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'company_id', v_company_id,
+    'role', v_role
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."join_company_with_code"("p_user_id" "uuid", "p_code" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."list_tool_search_aliases"("p_tool_id" "uuid") RETURNS TABLE("id" "uuid", "alias" "text", "source" "text", "created_at" timestamp with time zone)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -4853,6 +4901,13 @@ GRANT ALL ON FUNCTION "public"."is_company_active"("cid" "uuid") TO "service_rol
 GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_superadmin"("uid" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."join_company_with_code"("p_user_id" "uuid", "p_code" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."join_company_with_code"("p_user_id" "uuid", "p_code" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."join_company_with_code"("p_user_id" "uuid", "p_code" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."join_company_with_code"("p_user_id" "uuid", "p_code" "text") TO "service_role";
 
 
 

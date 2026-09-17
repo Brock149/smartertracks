@@ -28,6 +28,46 @@ export interface SearchToolsParams {
   ownerId?: string | null
 }
 
+/** Local ranking used when search-tools is unavailable. Mirrors search_tools scores. */
+export function localToolSearchScore(term: string, number?: string | null, name?: string | null): number {
+  const t = term.trim().toLowerCase()
+  if (!t) return 0
+  const num = (number || '').trim().toLowerCase()
+  const nm = (name || '').trim().toLowerCase()
+  if (num === t) return 1000
+  if (nm === t) return 980
+  if (nm.startsWith(t)) return 940
+  if (num.startsWith(t)) return 920
+  if (nm.includes(t)) return 880
+  if (num.includes(t)) return 400
+  return 1
+}
+
+export function sortByLocalSearchRelevance<T>(
+  term: string,
+  items: T[],
+  pick: (item: T) => { number?: string | null; name?: string | null }
+): T[] {
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      score: localToolSearchScore(term, pick(item).number, pick(item).name),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ item }) => item)
+}
+
+/** Keep server relevance order (match_rank, then original API order). */
+export function sortByMatchRank<T extends { match_rank?: number }>(items: T[]): T[] {
+  const hasRanks = items.some((t) => (t.match_rank ?? 0) > 0)
+  if (!hasRanks) return items
+  return items
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => (b.t.match_rank ?? 0) - (a.t.match_rank ?? 0) || a.i - b.i)
+    .map(({ t }) => t)
+}
+
 export async function searchTools(params: SearchToolsParams): Promise<ToolSearchResult[]> {
   const term = (params.q || '').trim()
   if (!term) return []

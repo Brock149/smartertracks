@@ -6,49 +6,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Content-Type': 'application/json',
-};
+}
+
+function json(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: corsHeaders })
+}
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { status: 200, headers: corsHeaders });
+    return new Response('ok', { status: 200, headers: corsHeaders })
   }
 
   try {
-    // Get the authorization header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: corsHeaders }
-      )
+      return json({ error: 'No authorization header' }, 401)
     }
 
-    // Extract the token
-    const token = authHeader.replace('Bearer ', '')
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
     if (!token) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid authorization header' }),
-        { status: 401, headers: corsHeaders }
-      )
+      return json({ error: 'Invalid authorization header' }, 401)
     }
 
-    // Create Supabase client with service role key
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SERVICE_KEY')!
-    )
+    const serviceKey = Deno.env.get('SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    if (!serviceKey || !supabaseUrl) {
+      return json({ error: 'Server is missing SERVICE_KEY' }, 500)
+    }
 
-    // Verify the token and get the user
+    // Pin Authorization to the service role. The edge runtime otherwise
+    // forwards the caller's JWT, so the profile insert runs as the admin
+    // instead of service_role and can persist the auth user without company_id.
+    const supabase = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${serviceKey}` } },
+    })
+
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: corsHeaders }
-      )
+      return json({ error: 'Invalid token' }, 401)
     }
 
-    // Check if the user is an admin and get their company_id
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('role, company_id, name')
@@ -56,48 +54,104 @@ serve(async (req) => {
       .single()
 
     if (userError || !userData || userData.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Only admins can create users' }),
-        { status: 403, headers: corsHeaders }
-      )
+      return json({ error: 'Only admins can create users' }, 403)
     }
 
-    // Get the admin's company_id to assign to the new user
     const adminCompanyId = userData.company_id
-
-    // Get the request body
-    const { name, email, password, role } = await req.json()
-
-    // 1. Create user in Supabase Auth
-    const { data: authData, error: createError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    })
-    if (createError || !authData?.user?.id) {
-      return new Response(
-        JSON.stringify({ error: createError?.message || 'Failed to create user in Auth' }),
-        { status: 400, headers: corsHeaders }
-      )
+    if (!adminCompanyId) {
+      return json({ error: 'Your account is not assigned to a company' }, 400)
     }
-    const userId = authData.user.id
 
-    // 2. Insert user info into users table with the admin's company_id
-    const { error: dbError } = await supabase.from('users').insert({
-      id: userId,
+    const body = await req.json()
+    const name = typeof body?.name === 'string' ? body.name.trim() : ''
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const password = typeof body?.password === 'string' ? body.password : ''
+    const role = body?.role === 'admin' || body?.role === 'tech' ? body.role : ''
+
+    if (!name || !email || !password || !role) {
+      return json({ error: 'Name, email, password, and role are required' }, 400)
+    }
+
+    const profile = {
       name,
       email,
       role,
       company_id: adminCompanyId,
-    })
-    if (dbError) {
-      return new Response(
-        JSON.stringify({ error: dbError.message }),
-        { status: 400, headers: corsHeaders }
-      )
     }
 
-    // Best-effort: record this as a company activity event.
+    const { data: authData, error: createError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name, role, company_id: adminCompanyId },
+    })
+
+    let userId = authData?.user?.id as string | undefined
+    let createdAuthUser = Boolean(userId)
+
+    if (createError || !userId) {
+      // A previous attempt often leaves Auth + a users row with a blank
+      // company_id. Completing that profile is the same as a successful create.
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id, company_id')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (!existing?.id || existing.company_id) {
+        return json({ error: createError?.message || 'Failed to create user in Auth' }, 400)
+      }
+
+      userId = existing.id
+      createdAuthUser = false
+
+      const { error: updateAuthError } = await supabase.auth.admin.updateUserById(userId, {
+        password,
+        email_confirm: true,
+        user_metadata: { name, role, company_id: adminCompanyId },
+      })
+      if (updateAuthError) {
+        return json({ error: updateAuthError.message || 'Failed to update existing user' }, 400)
+      }
+    }
+
+    const { data: existingProfile } = await supabase
+      .from('users')
+      .select('id, company_id')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (existingProfile?.company_id && existingProfile.company_id !== adminCompanyId) {
+      if (createdAuthUser) {
+        await supabase.auth.admin.deleteUser(userId)
+      }
+      return json({ error: 'Email is already in use' }, 400)
+    }
+
+    const { error: dbError } = existingProfile
+      ? await supabase.from('users').update(profile).eq('id', userId)
+      : await supabase.from('users').insert({ id: userId, ...profile })
+
+    if (dbError) {
+      if (createdAuthUser) {
+        await supabase.auth.admin.deleteUser(userId)
+      }
+      return json({ error: dbError.message }, 400)
+    }
+
+    const { data: written, error: verifyError } = await supabase
+      .from('users')
+      .select('company_id')
+      .eq('id', userId)
+      .single()
+
+    if (verifyError || written?.company_id !== adminCompanyId) {
+      if (createdAuthUser) {
+        await supabase.auth.admin.deleteUser(userId)
+      }
+      return json({ error: 'Failed to assign company to user' }, 500)
+    }
+
     try {
       await supabase.from('company_events').insert({
         company_id: adminCompanyId,
@@ -106,21 +160,15 @@ serve(async (req) => {
         actor_name: userData.name || user.email || 'An admin',
         target_type: 'user',
         target_id: userId,
-        target_label: email ? `${name} (${email})` : name,
+        target_label: `${name} (${email})`,
         details: `Added to company as ${role}`,
       })
     } catch (_e) {
       // company_events table not present yet — ignore.
     }
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: corsHeaders }
-    )
+    return json({ success: true, company_id: adminCompanyId })
   } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err.message || 'Unknown error' }),
-      { status: 500, headers: corsHeaders }
-    )
+    return json({ error: err.message || 'Unknown error' }, 500)
   }
 })

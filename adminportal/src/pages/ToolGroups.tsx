@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabaseClient'
 import { ToolImageGallery } from '../components/ToolImageGallery'
 import { uploadToolImageToStorage, insertToolImageRecord, removeStorageObject, MAX_ORIGINAL_BYTES } from '../lib/uploadImage'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
-import { searchTools } from '../lib/toolSearch'
+import { searchTools, sortByLocalSearchRelevance, sortByMatchRank } from '../lib/toolSearch'
+import ReportDamageModal from '../components/ReportDamageModal'
+import UpdateLocationModal from '../components/UpdateLocationModal'
 
 type OwnerMode = 'specific' | 'company_default' | 'unassigned'
 
@@ -122,7 +124,7 @@ export default function ToolGroups() {
   })
   const [editGroupOwnerMode, setEditGroupOwnerMode] = useState<OwnerMode>('company_default')
   const [editGroupOwnerId, setEditGroupOwnerId] = useState('')
-  const [remoteAddToolIds, setRemoteAddToolIds] = useState<string[] | null>(null)
+  const [remoteAddResults, setRemoteAddResults] = useState<ToolSummary[] | null>(null)
   const [remoteMemberIds, setRemoteMemberIds] = useState<string[] | null>(null)
   const [editingMemberTool, setEditingMemberTool] = useState<ToolSummary | null>(null)
   const [editToolForm, setEditToolForm] = useState({ name: '', description: '' })
@@ -135,6 +137,7 @@ export default function ToolGroups() {
   const [transferChecklistStatus, setTransferChecklistStatus] = useState<Record<string, Record<string, 'damaged' | 'replace' | null>>>({})
   const [transferChecklistComments, setTransferChecklistComments] = useState<Record<string, Record<string, string>>>({})
   const [transferChecklistsLoading, setTransferChecklistsLoading] = useState(false)
+  const [custodyTool, setCustodyTool] = useState<{ id: string; label: string; mode: 'report' | 'location' } | null>(null)
 
   useEffect(() => {
     fetchGroups()
@@ -231,13 +234,18 @@ export default function ToolGroups() {
   }
 
   const matchingToolsByGroup = useMemo(() => {
-    const term = groupSearch.trim().toLowerCase()
+    const term = groupSearch.trim()
+    const lower = term.toLowerCase()
     if (!term) return {} as Record<string, GroupToolInfo[]>
     const result: Record<string, GroupToolInfo[]> = {}
     groups.forEach((g) => {
-      const tools = allGroupToolsMap[g.id] || []
-      const matches = tools.filter(
-        (t) => t.number.toLowerCase().includes(term) || t.name.toLowerCase().includes(term)
+      const groupTools = allGroupToolsMap[g.id] || []
+      const matches = sortByLocalSearchRelevance(
+        term,
+        groupTools.filter(
+          (t) => t.number.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)
+        ),
+        (t) => t
       )
       if (matches.length > 0) result[g.id] = matches
     })
@@ -245,12 +253,21 @@ export default function ToolGroups() {
   }, [groupSearch, groups, allGroupToolsMap])
 
   const filteredGroups = useMemo(() => {
-    const term = groupSearch.trim().toLowerCase()
+    const term = groupSearch.trim()
     if (!term) return groups
-    return groups.filter(group =>
-      group.name.toLowerCase().includes(term) ||
-      (group.description || '').toLowerCase().includes(term) ||
-      !!matchingToolsByGroup[group.id]
+    const lower = term.toLowerCase()
+    return sortByLocalSearchRelevance(
+      term,
+      groups.filter(
+        (group) =>
+          group.name.toLowerCase().includes(lower) ||
+          (group.description || '').toLowerCase().includes(lower) ||
+          !!matchingToolsByGroup[group.id]
+      ),
+      (group) => {
+        const bestTool = matchingToolsByGroup[group.id]?.[0]
+        return { number: bestTool?.number, name: group.name }
+      }
     )
   }, [groups, groupSearch, matchingToolsByGroup])
 
@@ -904,23 +921,24 @@ export default function ToolGroups() {
     const term = toolSearch.trim()
     const base = tools.filter((tool) => !membersByToolId.has(tool.id))
     if (!term) return base
-    if (!remoteAddToolIds) return []
-    const idSet = new Set(remoteAddToolIds)
-    return base.filter((tool) => idSet.has(tool.id))
-  }, [tools, toolSearch, membersByToolId, remoteAddToolIds])
+    if (!remoteAddResults) return []
+    return remoteAddResults.filter((tool) => !membersByToolId.has(tool.id))
+  }, [tools, toolSearch, membersByToolId, remoteAddResults])
 
   const filteredMembers = useMemo(() => {
     const term = memberSearch.trim()
     if (!term) return groupMembers
     if (!remoteMemberIds) return []
-    const idSet = new Set(remoteMemberIds)
-    return groupMembers.filter((member) => idSet.has(member.tool_id))
+    const byId = new Map(groupMembers.map((member) => [member.tool_id, member]))
+    return remoteMemberIds
+      .map((id) => byId.get(id))
+      .filter((member): member is GroupMember => !!member)
   }, [groupMembers, memberSearch, remoteMemberIds])
 
   useEffect(() => {
     const term = toolSearch.trim()
     if (!term) {
-      setRemoteAddToolIds(null)
+      setRemoteAddResults(null)
       return
     }
     let cancelled = false
@@ -928,18 +946,26 @@ export default function ToolGroups() {
       try {
         const results = await searchTools({ q: term, limit: 100, scope: 'company' })
         if (cancelled) return
-        setRemoteAddToolIds(results.map((r) => r.id))
+        setRemoteAddResults(
+          sortByMatchRank(results).map((r) => ({
+            id: r.id,
+            number: r.number,
+            name: r.name,
+          }))
+        )
       } catch (err) {
         console.error('Add-tools search failed', err)
         if (!cancelled) {
           const lower = term.toLowerCase()
-          setRemoteAddToolIds(
-            tools
-              .filter(
+          setRemoteAddResults(
+            sortByLocalSearchRelevance(
+              term,
+              tools.filter(
                 (t) =>
                   t.number.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)
-              )
-              .map((t) => t.id)
+              ),
+              (t) => t
+            )
           )
         }
       }
@@ -966,14 +992,15 @@ export default function ToolGroups() {
           groupId: selectedGroup.id,
         })
         if (cancelled) return
-        setRemoteMemberIds(results.map((r) => r.id))
+        setRemoteMemberIds(sortByMatchRank(results).map((r) => r.id))
       } catch (err) {
         console.error('Member search failed', err)
         if (!cancelled) {
           const lower = term.toLowerCase()
           setRemoteMemberIds(
-            groupMembers
-              .filter((member) => {
+            sortByLocalSearchRelevance(
+              term,
+              groupMembers.filter((member) => {
                 const t = member.tools
                 if (!t) return false
                 return (
@@ -982,8 +1009,9 @@ export default function ToolGroups() {
                   (t.owner_name || '').toLowerCase().includes(lower) ||
                   (t.location || '').toLowerCase().includes(lower)
                 )
-              })
-              .map((m) => m.tool_id)
+              }),
+              (member) => ({ number: member.tools?.number, name: member.tools?.name })
+            ).map((m) => m.tool_id)
           )
         }
       }
@@ -1253,7 +1281,7 @@ export default function ToolGroups() {
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                             {member.tools && (
                               <button
                                 onClick={() => openEditMemberTool(member.tools!)}
@@ -1262,6 +1290,36 @@ export default function ToolGroups() {
                               >
                                 Edit
                               </button>
+                            )}
+                            {member.tools?.id && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    setCustodyTool({
+                                      id: member.tools!.id,
+                                      label: `#${member.tools!.number} ${member.tools!.name}`,
+                                      mode: 'report',
+                                    })
+                                  }
+                                  className="text-sm text-amber-700 hover:text-amber-900"
+                                  disabled={actionLoading}
+                                >
+                                  Report
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setCustodyTool({
+                                      id: member.tools!.id,
+                                      label: `#${member.tools!.number} ${member.tools!.name}`,
+                                      mode: 'location',
+                                    })
+                                  }
+                                  className="text-sm text-blue-600 hover:text-blue-800"
+                                  disabled={actionLoading}
+                                >
+                                  Location
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => openTransferTool(member)}
@@ -1294,7 +1352,7 @@ export default function ToolGroups() {
       )}
 
       {isCreateOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1418,8 +1476,8 @@ export default function ToolGroups() {
       )}
 
       {isAddToolsOpen && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
               onClick={() => setIsAddToolsOpen(false)}
@@ -1493,8 +1551,8 @@ export default function ToolGroups() {
       )}
 
       {isCreateToolOpen && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <div className="p-6 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1704,7 +1762,7 @@ export default function ToolGroups() {
       )}
 
       {deleteGroupId && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1741,8 +1799,8 @@ export default function ToolGroups() {
       )}
 
       {isTransferOpen && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl z-10"
               onClick={() => { setIsTransferOpen(false); resetTransferChecklists() }}
@@ -1899,7 +1957,7 @@ export default function ToolGroups() {
       )}
 
       {isEditGroupOpen && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -2022,7 +2080,7 @@ export default function ToolGroups() {
       )}
 
       {editingMemberTool && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -2078,8 +2136,8 @@ export default function ToolGroups() {
         const toolId = transferToolMember.tool_id
         const items = transferChecklistsByTool[toolId] || []
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative max-h-[90vh] flex flex-col">
+          <div className="admin-sheet-overlay">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-lg relative max-h-[90vh] admin-sheet-panel flex flex-col">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl z-10"
                 onClick={() => { setIsTransferToolOpen(false); setTransferToolMember(null); resetTransferChecklists() }}
@@ -2225,6 +2283,31 @@ export default function ToolGroups() {
           </div>
         )
       })()}
+
+      {custodyTool?.mode === 'report' && selectedGroup && (
+        <ReportDamageModal
+          toolId={custodyTool.id}
+          toolLabel={custodyTool.label}
+          onClose={() => setCustodyTool(null)}
+          onSubmitted={() => {
+            const groupId = selectedGroup.id
+            setCustodyTool(null)
+            fetchGroupMembers(groupId)
+          }}
+        />
+      )}
+      {custodyTool?.mode === 'location' && selectedGroup && (
+        <UpdateLocationModal
+          toolId={custodyTool.id}
+          toolLabel={custodyTool.label}
+          onClose={() => setCustodyTool(null)}
+          onSubmitted={() => {
+            const groupId = selectedGroup.id
+            setCustodyTool(null)
+            fetchGroupMembers(groupId)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -21,6 +21,8 @@ import {
   regenerateToolAliases,
   type ToolSearchAlias,
 } from '../lib/toolSearch'
+import ReportDamageModal from '../components/ReportDamageModal'
+import UpdateLocationModal from '../components/UpdateLocationModal'
 
 interface Tool {
   id: string
@@ -74,6 +76,7 @@ export default function Tools() {
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false)
   const [loadingChecklist, setLoadingChecklist] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [custodyTool, setCustodyTool] = useState<{ id: string; label: string; mode: 'report' | 'location' } | null>(null)
   const [sortMode, setSortMode] = useState<'number' | 'name' | 'created_at'>('number')
   const [newTool, setNewTool] = useState({
     number: '',
@@ -971,22 +974,36 @@ export default function Tools() {
                           </button>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => handleEditTool(tool)}
-                          className="text-blue-600 hover:text-blue-900 mr-4"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeleteTool(tool)
-                            setDeleteModalOpen(true)
-                          }}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
+                      <td className="px-6 py-4 text-sm font-medium">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          <button
+                            onClick={() => handleEditTool(tool)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setCustodyTool({ id: tool.id, label: `#${tool.number} ${tool.name}`, mode: 'report' })}
+                            className="text-amber-700 hover:text-amber-900"
+                          >
+                            Report
+                          </button>
+                          <button
+                            onClick={() => setCustodyTool({ id: tool.id, label: `#${tool.number} ${tool.name}`, mode: 'location' })}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Location
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeleteTool(tool)
+                              setDeleteModalOpen(true)
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1004,12 +1021,24 @@ export default function Tools() {
                     <h3 className="font-semibold text-lg text-gray-900">{tool.name}</h3>
                     <p className="text-sm text-gray-500">#{tool.number}</p>
                   </div>
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => handleEditTool(tool)}
                       className="text-blue-600 hover:text-blue-900 text-sm font-medium"
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={() => setCustodyTool({ id: tool.id, label: `#${tool.number} ${tool.name}`, mode: 'report' })}
+                      className="text-amber-700 hover:text-amber-900 text-sm font-medium"
+                    >
+                      Report
+                    </button>
+                    <button
+                      onClick={() => setCustodyTool({ id: tool.id, label: `#${tool.number} ${tool.name}`, mode: 'location' })}
+                      className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                    >
+                      Location
                     </button>
                     <button
                       onClick={() => {
@@ -1140,8 +1169,8 @@ export default function Tools() {
 
       {/* Add Tool Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <div className="p-4 md:p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1365,8 +1394,8 @@ export default function Tools() {
 
       {/* Edit Tool Modal */}
       {isEditModalOpen && editingTool && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <div className="p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1720,7 +1749,7 @@ export default function Tools() {
 
       {/* Delete Tool Modal */}
       {deleteModalOpen && deleteTool && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1764,8 +1793,8 @@ export default function Tools() {
 
       {/* Checklist Modal */}
       {isChecklistModalOpen && selectedTool && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] flex flex-col">
+        <div className="admin-sheet-overlay">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl relative max-h-[90vh] admin-sheet-panel flex flex-col">
             <div className="p-8 border-b">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1866,7 +1895,7 @@ export default function Tools() {
 
       {/* Add Checklist Item Modal */}
       {isAddingItem && selectedTool && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1919,7 +1948,7 @@ export default function Tools() {
 
       {/* Edit Checklist Item Modal */}
       {editingChecklistItemId && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+        <div className="admin-sheet-overlay">
           <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
             <button
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
@@ -1989,6 +2018,29 @@ export default function Tools() {
             </form>
           </div>
         </div>
+      )}
+
+      {custodyTool?.mode === 'report' && (
+        <ReportDamageModal
+          toolId={custodyTool.id}
+          toolLabel={custodyTool.label}
+          onClose={() => setCustodyTool(null)}
+          onSubmitted={() => {
+            setCustodyTool(null)
+            fetchTools()
+          }}
+        />
+      )}
+      {custodyTool?.mode === 'location' && (
+        <UpdateLocationModal
+          toolId={custodyTool.id}
+          toolLabel={custodyTool.label}
+          onClose={() => setCustodyTool(null)}
+          onSubmitted={() => {
+            setCustodyTool(null)
+            fetchTools()
+          }}
+        />
       )}
     </div>
   )

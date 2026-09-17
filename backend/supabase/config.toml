@@ -330,3 +330,6 @@ verify_jwt = false
 
 [functions."leave-company"]
 verify_jwt = false
+
+[functions."update-checklist-report"]
+verify_jwt = false
