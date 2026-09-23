@@ -1,14 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { fetchCompanyEvents } from '../lib/companyEvents'
-import type { CompanyEvent } from '../lib/companyEvents'
 import { useCompanyFeatures } from '../hooks/useCompanyFeatures'
 import { searchTools } from '../lib/toolSearch'
-
-// A unified feed row: either a tool transaction or a company activity event.
-type FeedItem =
-  | { kind: 'tx'; id: string; ts: string; tx: Transaction }
-  | { kind: 'event'; id: string; ts: string; ev: CompanyEvent }
+import { fetchActivityFeed, type ActivityFeedItem } from '../lib/activityFeed'
 
 function eventMeta(eventType: string): { title: string; badge: string } {
   switch (eventType) {
@@ -30,33 +24,6 @@ function eventMeta(eventType: string): { title: string; badge: string } {
       return { title: 'Tracker removed', badge: 'text-gray-700 bg-gray-100' }
     default:
       return { title: eventType, badge: 'text-gray-700 bg-gray-50' }
-  }
-}
-
-interface Transaction {
-  id: string
-  tool_id: string | null
-  from_user_id: string | null
-  to_user_id: string
-  location: string
-  stored_at: string
-  notes: string | null
-  attribution?: string | null
-  timestamp: string
-  created_at: string
-  deleted_from_user_name?: string
-  deleted_to_user_name?: string
-  deleted_tool_number?: string
-  deleted_tool_name?: string
-  tool?: {
-    number: string
-    name: string
-  }
-  from_user?: {
-    name: string
-  }
-  to_user?: {
-    name: string
   }
 }
 
@@ -96,8 +63,11 @@ interface ActiveTrackerAssignment {
 
 export default function Transactions() {
   const { features } = useCompanyFeatures()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [companyEvents, setCompanyEvents] = useState<CompanyEvent[]>([])
+  const [feed, setFeed] = useState<ActivityFeedItem[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   // Tracker state for the create-transaction modal.
   const [trackerPool, setTrackerPool] = useState<PoolTracker[]>([])
   const [activeTrackers, setActiveTrackers] = useState<Record<string, ActiveTrackerAssignment>>({})
@@ -113,7 +83,6 @@ export default function Transactions() {
   }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [tools, setTools] = useState<Tool[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -146,13 +115,54 @@ export default function Transactions() {
   const [showUserResults, setShowUserResults] = useState(false)
   const toolSearchRef = useRef<HTMLInputElement | null>(null)
 
-  // Fetch transactions
   useEffect(() => {
-    fetchTransactions()
     fetchTools()
     fetchUsers()
-    fetchCompanyEvents().then(setCompanyEvents)
   }, [])
+
+  // Search commits after a short pause and starts back at page 1.
+  // The first run is skipped so opening the page does not reset a page change.
+  const skipSearchReset = useRef(true)
+  useEffect(() => {
+    if (skipSearchReset.current) {
+      skipSearchReset.current = false
+      return
+    }
+    const handle = setTimeout(() => {
+      setAppliedSearch(searchTerm.trim())
+      setCurrentPage(1)
+    }, 250)
+    return () => clearTimeout(handle)
+  }, [searchTerm])
+
+  // Page on the server. The old screen downloaded only the newest 1000 rows
+  // (the API cap) and searched those in the browser, so older history such as
+  // an initial assignment never appeared.
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetchActivityFeed({
+      query: appliedSearch,
+      page: currentPage,
+      pageSize: itemsPerPage,
+    })
+      .then((result) => {
+        if (cancelled) return
+        setFeed(result.items)
+        setTotalCount(result.total)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Failed to load transactions')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [appliedSearch, currentPage, reloadKey])
 
   // Load the tracker pool + active tool assignments (only when the feature is on).
   useEffect(() => {
@@ -212,33 +222,6 @@ export default function Transactions() {
       } catch (e) {
         console.warn(`Tracker action failed for tool ${tool.id} (continuing):`, e)
       }
-    }
-  }
-
-  async function fetchTransactions() {
-    try {
-      setLoading(true)
-      setError(null)
-      const { data, error } = await supabase
-        .from('tool_transactions')
-        .select(`
-          *,
-          tool:tools(number, name),
-          from_user:users!from_user_id(name),
-          to_user:users!to_user_id(name),
-          deleted_from_user_name,
-          deleted_to_user_name,
-          deleted_tool_number,
-          deleted_tool_name
-        `)
-        .order('timestamp', { ascending: false })
-
-      if (error) throw error
-      setTransactions(data || [])
-    } catch (error: any) {
-      setError(error.message)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -451,8 +434,7 @@ export default function Transactions() {
       setAttachSerialByTool({})
       setDetachByTool({})
       setIsCreateModalOpen(false)
-      fetchTransactions() // Refresh the transactions list
-      fetchCompanyEvents().then(setCompanyEvents) // Pick up new tracker history items
+      setReloadKey((key) => key + 1)
       if (features.trackersEnabled) fetchTrackerData()
     } catch (error: any) {
       setError(error.message || 'An unexpected error occurred')
@@ -516,62 +498,13 @@ export default function Transactions() {
     }
   }
 
-  // Merge tool transactions + company activity events into one chronological feed.
-  const feed = useMemo<FeedItem[]>(() => {
-    const txItems: FeedItem[] = transactions.map((t) => ({
-      kind: 'tx',
-      id: `tx-${t.id}`,
-      ts: t.timestamp || t.created_at,
-      tx: t,
-    }))
-    const eventItems: FeedItem[] = companyEvents.map((e) => ({
-      kind: 'event',
-      id: `ev-${e.id}`,
-      ts: e.created_at,
-      ev: e,
-    }))
-    return [...txItems, ...eventItems].sort(
-      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()
-    )
-  }, [transactions, companyEvents])
-
-  // Filter the combined feed based on the search term.
-  const filteredFeed = useMemo(() => {
-    const term = searchTerm.toLowerCase()
-    if (!term) return feed
-    return feed.filter((item) => {
-      if (item.kind === 'tx') {
-        const t = item.tx
-        return (
-          t.tool?.name?.toLowerCase().includes(term) ||
-          t.tool?.number?.toLowerCase().includes(term) ||
-          t.from_user?.name?.toLowerCase().includes(term) ||
-          t.to_user?.name?.toLowerCase().includes(term) ||
-          t.location?.toLowerCase().includes(term) ||
-          t.stored_at?.toLowerCase().includes(term)
-        )
-      }
-      const e = item.ev
-      return (
-        (e.actor_name || '').toLowerCase().includes(term) ||
-        (e.target_label || '').toLowerCase().includes(term) ||
-        (e.details || '').toLowerCase().includes(term) ||
-        eventMeta(e.event_type).title.toLowerCase().includes(term)
-      )
-    })
-  }, [feed, searchTerm])
-
   const totalPages = useMemo(
-    () => Math.max(Math.ceil(filteredFeed.length / itemsPerPage), 1),
-    [filteredFeed.length]
+    () => Math.max(Math.ceil(totalCount / itemsPerPage), 1),
+    [totalCount]
   )
 
-  // Add pagination function
-  const getPaginatedFeed = () => {
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-    return filteredFeed.slice(startIndex, endIndex)
-  }
+  const rangeStart = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
+  const rangeEnd = Math.min(currentPage * itemsPerPage, totalCount)
 
   // Keep page in range when results change
   useEffect(() => {
@@ -640,7 +573,7 @@ export default function Transactions() {
       <div className="mb-6">
         <input
           type="text"
-          placeholder="Search transactions..."
+          placeholder="Search all transactions..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full max-w-md px-3 md:px-5 py-2 md:py-3 border rounded-lg text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -657,7 +590,7 @@ export default function Transactions() {
       <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-lg">Loading transactions...</div>
-        ) : getPaginatedFeed().length === 0 ? (
+        ) : feed.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-lg">No transactions found</div>
         ) : (
           <div className="overflow-x-auto">
@@ -688,7 +621,7 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {getPaginatedFeed().map((item) => {
+                {feed.map((item) => {
                   if (item.kind === 'event') {
                     const ev = item.ev
                     const meta = eventMeta(ev.event_type)
@@ -785,11 +718,11 @@ export default function Transactions() {
       <div className="md:hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500 text-base">Loading transactions...</div>
-        ) : getPaginatedFeed().length === 0 ? (
+        ) : feed.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-base">No transactions found</div>
         ) : (
           <div className="space-y-4">
-            {getPaginatedFeed().map((item) => {
+            {feed.map((item) => {
               if (item.kind === 'event') {
                 const ev = item.ev
                 const meta = eventMeta(ev.event_type)
@@ -911,11 +844,9 @@ export default function Transactions() {
         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-gray-700">
-              Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-              <span className="font-medium">
-                {Math.min(currentPage * itemsPerPage, filteredFeed.length)}
-              </span>{' '}
-              of <span className="font-medium">{filteredFeed.length}</span> entries
+              Showing <span className="font-medium">{rangeStart}</span> to{' '}
+              <span className="font-medium">{rangeEnd}</span> of{' '}
+              <span className="font-medium">{totalCount}</span> entries
             </p>
           </div>
           <div>

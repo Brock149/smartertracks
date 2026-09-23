@@ -1,9 +1,11 @@
 # Smarter Tracks — Search Standardization Spec (for Cursor)
 
-## Goal
-Search across the app is exact-match, and it's missing real tools because of typos and formatting inconsistency (e.g. a tech searching "rigid" instead of "RIDGID" gets zero results; "ProPress" vs "Pro Press" vs "Pro-Press" are treated as three unrelated strings). This likely touches multiple search boxes in the app — tool lookup, tool creation duplicate-check, job assignment, admin portal, etc.
+This is for our tool tracking app/website/saas you can see the whole @codebase as well as our db backup from 1 minute ago, make sure you have a good understanding of what this is before you begin to make changes, ask questions to fill context if needed
 
-**This should be additive, not a rework.** The goal is to build on top of what's already working, not restructure how search or the database currently function. If any part of this doesn't fit cleanly with how things are actually built, push back and say so — you can see the real code and schema, I can't. Where I've suggested a specific approach below, treat it as a starting idea, not a requirement — if there's a better or lower-risk way to get the same result, I'd rather hear that.
+## Goal
+Search across the app is exact-match, and it's missing real tools because of typos and formatting inconsistency (e.g. a tech searching "rigit" instead of "RIDGID" gets zero results; "ProPress" vs "Pro Press" vs "Pro-Press" are treated as three unrelated strings). This likely touches multiple search boxes in the app — tool lookup, tool creation duplicate-check, job assignment, admin portal, etc.(find all search boxes on app and on admin portal)
+
+**This should be additive, not a rework.** The goal is to build on top of what's already working, not restructure how search or the database currently function. If any part of this doesn't fit cleanly with how things are actually built, push back and say so — you can see the real code and schema, I can't(this is claude btw). Where I've suggested a specific approach below, treat it as a starting idea, not a requirement — if there's a better or lower-risk way to get the same result, I'd rather hear that.
 
 **On cost specifically:** give me your own honest estimate for the Haiku API piece below. Don't just confirm my $1-2 number — if it's going to be more, tell me why (catalog size, prompt size, retries, model choice, number of calls per tool, etc.).
 
@@ -11,13 +13,13 @@ Search across the app is exact-match, and it's missing real tools because of typ
 
 ## Idea 1 — Typo/format tolerance
 
-The general idea: make search tolerant of spacing/punctuation differences ("ProPress" vs "Pro Press" vs "Pro-Press") and small typos ("rigid" vs "RIDGID"), most likely using something like Postgres's trigram similarity matching (`pg_trgm`) since that's a natural fit for Supabase and doesn't require calling any external AI. This part shouldn't need ongoing cost or an API call — it's just a better matching approach layered onto existing search.
+The general idea: make search tolerant of spacing/punctuation differences ("ProPress" vs "Pro Press" vs "Pro-Press") and small typos ("rigit" vs "RIDGID"), most likely using something like Postgres's trigram similarity matching (`pg_trgm`) since that's a natural fit for Supabase and doesn't require calling any external AI. This part shouldn't need ongoing cost or an API call — it's just a better matching approach layered onto existing search.
 
-## Idea 2 — Hidden AI-generated keyword aliases (Claude Haiku API)
+## Idea 2 — Hidden AI-generated keyword aliases (Claude Haiku API) ( if you can think of other alternatives i want to hear it, this md doc was made by claude so i suspect they have to push their own product first)
 
 For things typo-tolerance alone won't catch — real slang/nicknames (e.g. "sawzall" for reciprocating saw), abbreviations, brand nicknames — the idea is to generate a set of alternate search terms per tool using Claude's API, store them alongside the tool, and let search match against those too.
 
-Rough shape of how this could work (adjust as needed to fit the real schema/flow):
+Rough shape of how this could work (adjust as needed to fit the real schema/flow):(leave account setup, payment, all of that stuff up to me, you are responsible for the code and writing the sql for me to copy and paste into the sql editor on supabase, dont start ripping commands without me reviewing, mainly to check if additive first and if there an error get an explanation why ebfore proceeding, were making changes to our live db with clients tools inside so we can break everything)
 1. Set up billing at console.anthropic.com — this is pay-as-you-go API billing, separate from any Claude.ai or Cursor subscription. Add a payment method, load prepaid credit (starts around $5), set a monthly spend cap so it can't run away unsupervised.
 2. Generate an API key there.
 3. Some backend process (Supabase Edge Function or similar) takes a tool's name/brand/model and calls Claude Haiku to generate a list of likely misspellings, nicknames, and alternate terms for it.
@@ -34,13 +36,15 @@ The general idea: wherever tools are searched, match against the tool name (with
 
 **Open questions, not decisions — Cursor's take welcome on any of these:**
 - Should the AI-generated keywords be visible/editable somewhere (e.g. on the tool edit screen), or fully hidden?
-- Should this only look at tool name, or also brand/category/model number?
+- Should this only look at tool name, or also brand/category/model number? ( we only store name and description however I think a lot of the description feild will have this info inside it)
 - What's the lowest-risk way to roll this out given how search is actually built today?
 
 ---
 
 ## PS — separate backlog item, not urgent
 
-Group-created tools (tools created inside a group — e.g. auto-numbered tools added to a van's inventory vs. a warehouse's inventory) probably shouldn't be searchable from the admin portal's all-tools screen or the regular all-tools screen, similar to how personal tools ("My Tools") are already excluded from that search. Reasoning: mixing a van's tools and the warehouse's tools into one generic "hammer drill" search result would undercut the point of having them as separate sections.
+Group-created tools (tools created inside a group — e.g. auto-numbered tools added to a van's inventory vs. a warehouse's inventory) probably shouldn't be searchable from the admin portal's all-tools screen or the regular all-tools screen, similar to how personal tools ("My Tools") are already excluded from that search. Reasoning: mixing a van's tools and the warehouse's tools into one generic "hammer drill" search result would undercut the point of having them as separate sections. I'm imagining maybe a setting for the group as a whole to say are the tools in this group searchable or maybe when we're creating the tool through that function or whatever it is that create tool and group we have a checkbox there that's like defaulted to know just to make it that way. It's like hey, you know we don't want my dad's company has 50 vans and it's going to be adding 50 vans worth of company tools in through this feature and then 50 vans worth of personal tools through our personal tools feature. So we don't want all you know that's going to be like probably 3000 tools or some craziness put into the system that we don't want to have to go through all of the search results of 50 hammer drills to get to the one big heavy duty one that's actually the warehouse tool that I was looking for.
 
 Not sure whether this is a small addition to whatever search-scope logic exists today or a bigger change to how group-created tools are tagged/stored — flag which one it actually is once you've looked.
+
+-fix "name" sizing on admin portal tools screen. 
