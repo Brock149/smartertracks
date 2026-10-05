@@ -217,6 +217,32 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Book a Demo — Calendly Embed */}
+      <section id="book-demo" className="py-12 sm:py-16 bg-gray-50 border-b border-gray-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+              See It In Action — Book a Free Demo
+            </h2>
+            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+              Pick a time that works for you. We'll walk through exactly how Smarter Tracks works
+              for your team — your tools, your crew, your workflow. 30 minutes, no pressure.
+            </p>
+          </div>
+          <div
+            className="calendly-inline-widget"
+            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1"
+            style={{ minWidth: '320px', height: '700px' }}
+          />
+          <p className="mt-4 text-center text-sm text-gray-400">
+            Prefer email?{' '}
+            <a href="mailto:brockcoburn@smartertracks.com" className="text-blue-600 hover:text-blue-700 font-medium">
+              brockcoburn@smartertracks.com
+            </a>
+          </p>
+        </div>
+      </section>
+
       {/* Benefits (outcomes, not features) */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -502,32 +528,6 @@ export default function Landing() {
               and we'll help you figure it out.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* Book a Demo — Calendly Embed */}
-      <section id="book-demo" className="py-20 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-              See It In Action — Book a Free Demo
-            </h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-              Pick a time that works for you. We'll walk through exactly how Smarter Tracks works
-              for your team — your tools, your crew, your workflow. 30 minutes, no pressure.
-            </p>
-          </div>
-          <div
-            className="calendly-inline-widget"
-            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1"
-            style={{ minWidth: '320px', height: '700px' }}
-          />
-          <p className="mt-4 text-center text-sm text-gray-400">
-            Prefer email?{' '}
-            <a href="mailto:brockcoburn@smartertracks.com" className="text-blue-600 hover:text-blue-700 font-medium">
-              brockcoburn@smartertracks.com
-            </a>
-          </p>
         </div>
       </section>
 
