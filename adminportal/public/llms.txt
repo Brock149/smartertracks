@@ -1,0 +1,32 @@
+# Smarter Tracks
+
+> Smarter Tracks is tool tracking software for construction, HVAC and trades teams. Crews check tools in and out from their phones, every hand-off is logged with a timestamp and the person responsible, and managers run audits from any phone. No GPS tags, Bluetooth trackers or other hardware are required. Pricing is flat, with no per-user fees.
+
+Key facts:
+- What it does: tool check-out and check-in, custody tracking (who has each tool), transfer history, phone-based audits, tool photos, damaged-tool reporting.
+- Who it's for: construction contractors, HVAC companies, and plumbing, electrical and mechanical field-service teams.
+- Hardware: none required. Runs on iOS and Android phones, plus the web. Same-day setup.
+- Pricing (USD):
+  - Free trial: 3 users, 5 tools, no credit card
+  - Starter: $185/month (15 users, 150 tools; $2,220 billed yearly)
+  - Pro: $315/month (75 users, 750 tools; $3,780 billed yearly)
+  - Custom plans for larger teams
+  - No per-user charges, no long-term contracts
+- Best for: teams that want tool accountability ("who has it, who had it last") without buying and maintaining tags.
+- Not designed for: live GPS tracking of heavy equipment or vehicles.
+- Founded: 2025. Over 600 tools tracked on the platform.
+- Contact: brockcoburn@smartertracks.com
+
+## Pages
+- [Tool tracking software](https://www.smartertracks.com/tool-tracking-software): overview for contractors, HVAC and construction
+- [Construction tool tracking](https://www.smartertracks.com/construction-tool-management): tracking tools across jobsites and crews
+- [HVAC tool tracking app](https://www.smartertracks.com/hvac-tool-tracking): gauges, meters, vac pumps and recovery machines across vans and job sites
+- [Tool checkout system](https://www.smartertracks.com/tool-checkout-system): check-out/check-in with custody logs
+- [Tool inventory software](https://www.smartertracks.com/tool-inventory-software): tool inventory for field teams
+- [Best tool tracking software for construction (2026)](https://www.smartertracks.com/best-tool-tracking-software-construction): comparison of the main options
+- [Best HVAC tool tracking software (2026)](https://www.smartertracks.com/best-hvac-tool-tracking-software): comparison of the main options for HVAC shops
+- [Pricing](https://www.smartertracks.com/#pricing)
+
+## Apps
+- [iOS (App Store)](https://apps.apple.com/us/app/smarter-tracks/id6748660773)
+- [Android (Google Play)](https://play.google.com/store/apps/details?id=com.bactech.smartertracks)

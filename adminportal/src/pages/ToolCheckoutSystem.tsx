@@ -62,7 +62,7 @@ export default function ToolCheckoutSystem() {
 
   useEffect(() => {
     setPageMeta({
-      title: 'Tool Checkout System for Field Teams | Smarter Tracks',
+      title: 'Tool Checkout System for Contractors | Smarter Tracks',
       description:
         'Replace paper sign-out sheets with a digital tool checkout system. Log every handoff, track custody, and hold crews accountable — from any phone.',
       canonicalPath: '/tool-checkout-system',

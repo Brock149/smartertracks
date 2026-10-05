@@ -32,20 +32,39 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Smarter Tracks",
-        "applicationCategory": "BusinessApplication",
-        "operatingSystem": "iOS, Android, Web",
-        "description": "Tool tracking software for HVAC, construction, and trades teams. Track tools, log every checkout, run audits from your phone.",
-        "url": "https://www.smartertracks.com/",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD",
-          "description": "Free trial available"
-        }
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.smartertracks.com/#org",
+            "name": "Smarter Tracks",
+            "url": "https://www.smartertracks.com/",
+            "foundingDate": "2025",
+            "founder": { "@type": "Person", "name": "Brock Coburn" },
+            "email": "brockcoburn@smartertracks.com",
+            "sameAs": [
+              "https://apps.apple.com/us/app/smarter-tracks/id6748660773",
+              "https://play.google.com/store/apps/details?id=com.bactech.smartertracks",
+              "https://www.g2.com/products/smarter-tracks/reviews"
+            ]
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Smarter Tracks",
+            "url": "https://www.smartertracks.com/",
+            "publisher": { "@id": "https://www.smartertracks.com/#org" },
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "iOS, Android, Web",
+            "description": "Tool tracking software for construction, HVAC and trades teams. Crews check tools in and out from their phones; every hand-off is logged with a timestamp and the person responsible. No GPS tags or hardware required. Flat pricing, no per-user fees.",
+            "offers": [
+              { "@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD", "description": "3 users, 5 tools, no credit card" },
+              { "@type": "Offer", "name": "Starter", "price": "185", "priceCurrency": "USD", "description": "15 users, 150 tools, per month" },
+              { "@type": "Offer", "name": "Pro", "price": "315", "priceCurrency": "USD", "description": "75 users, 750 tools, per month" }
+            ]
+          }
+        ]
       }
     </script>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
     <!-- Google Ads Global Site Tag -->

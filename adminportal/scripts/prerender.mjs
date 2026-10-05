@@ -29,27 +29,39 @@ const routesToRender = [
   },
   {
     url: '/hvac-tool-tracking',
-    title: 'HVAC Tool Tracking App | Smarter Tracks',
+    title: 'HVAC Tool Tracking Software & App | Smarter Tracks',
     description:
       'HVAC tool tracking app built for real shop and field workflows. Assign tools, track locations, run audits, and keep techs accountable.',
   },
   {
     url: '/construction-tool-management',
-    title: 'Construction Tool Tracking Software | Smarter Tracks',
+    title: 'Construction Tool Tracking Software & App for Contractors | Smarter Tracks',
     description:
       'Construction tool tracking software for contractors. Track tools across jobsites, assign custody, run audits, and reduce tool loss.',
   },
   {
     url: '/tool-inventory-software',
-    title: 'Tool Inventory Software for Field Teams | Smarter Tracks',
+    title: 'Tool Inventory Software for Contractors | Smarter Tracks',
     description:
       'Tool inventory software for HVAC, construction, and trades. Track tools, assign custody, run audits, and keep inventory accurate.',
   },
   {
     url: '/tool-checkout-system',
-    title: 'Tool Checkout System for Field Teams | Smarter Tracks',
+    title: 'Tool Checkout System for Contractors | Smarter Tracks',
     description:
       'Tool checkout system for contractors and field crews. Assign tools, scan checkouts, and track returns across jobsites.',
+  },
+  {
+    url: '/best-tool-tracking-software-construction',
+    title: 'Best Tool Tracking Software for Construction (2026)',
+    description:
+      'Compare the best construction tool tracking software and apps for 2026: Smarter Tracks, ShareMyToolbox, Hilti ON!Track, GoCodes, Tenna, Milwaukee ONE-KEY, Sortly and ToolWatch. Pricing, hardware and who each is best for.',
+  },
+  {
+    url: '/best-hvac-tool-tracking-software',
+    title: 'Best HVAC Tool Tracking Software & Apps (2026)',
+    description:
+      'Compare the best HVAC tool tracking software and apps for 2026: Smarter Tracks, ShareMyToolbox, Sortly, Milwaukee ONE-KEY, Hilti ON!Track and ToolWatch. Pricing, hardware and which fits a service shop.',
   },
   {
     url: '/privacy-policy',
@@ -97,9 +109,10 @@ for (const route of routesToRender) {
 
     const canonicalUrl = `https://www.smartertracks.com${route.url === '/' ? '' : route.url}`
 
-    const esc = (s) => s.replace(/"/g, '&quot;')
+    const esc = (s) =>
+      s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-    const pageHeadTags = `    <title>${route.title}</title>
+    const pageHeadTags = `    <title>${esc(route.title)}</title>
     <meta name="description" content="${esc(route.description)}" />
     <meta name="robots" content="index,follow" />
     <link rel="canonical" href="${canonicalUrl}" />

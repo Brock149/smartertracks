@@ -62,7 +62,7 @@ export default function ConstructionToolManagement() {
 
   useEffect(() => {
     setPageMeta({
-      title: 'Construction Tool Management Software | Smarter Tracks',
+      title: 'Construction Tool Tracking Software & App for Contractors | Smarter Tracks',
       description:
         'Construction tool management software that tracks every tool across job sites and crews. Assign custody, log checkouts, run audits, and stop losing tools. Book a free demo.',
       canonicalPath: '/construction-tool-management',
@@ -434,6 +434,13 @@ export default function ConstructionToolManagement() {
               fewer lost tools, less time wasted searching, and clear accountability from the shop to
               every active site.
             </p>
+            <p>
+              Comparing options for 2026? See our{' '}
+              <Link to="/best-tool-tracking-software-construction" className="text-blue-600 hover:text-blue-700 font-semibold">
+                best tool tracking software for construction
+              </Link>{' '}
+              guide, with pricing, hardware, and who each product fits.
+            </p>
           </div>
         </div>
       </section>
@@ -503,6 +510,12 @@ export default function ConstructionToolManagement() {
               Looking for a page tailored to your team or workflow? Start here.
             </p>
             <div className="mt-6 flex flex-wrap gap-4">
+              <Link
+                to="/best-tool-tracking-software-construction"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Best Tool Tracking Software for Construction
+              </Link>
               <Link
                 to="/tool-tracking-software"
                 className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"

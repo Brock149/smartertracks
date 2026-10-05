@@ -29,6 +29,9 @@ import ConstructionToolManagement from './pages/ConstructionToolManagement'
 import HvacToolTracking from './pages/HvacToolTracking'
 import ToolInventorySoftware from './pages/ToolInventorySoftware'
 import ToolCheckoutSystem from './pages/ToolCheckoutSystem'
+import BestToolTrackingSoftwareConstruction from './pages/BestToolTrackingSoftwareConstruction'
+import BestHvacToolTrackingSoftware from './pages/BestHvacToolTrackingSoftware'
+import NotFound from './pages/NotFound'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -139,6 +142,8 @@ export default function AppRoutes() {
       <Route path="/hvac-tool-tracking" element={<HvacToolTracking />} />
       <Route path="/tool-inventory-software" element={<ToolInventorySoftware />} />
       <Route path="/tool-checkout-system" element={<ToolCheckoutSystem />} />
+      <Route path="/best-tool-tracking-software-construction" element={<BestToolTrackingSoftwareConstruction />} />
+      <Route path="/best-hvac-tool-tracking-software" element={<BestHvacToolTrackingSoftware />} />
       <Route
         path="/admin"
         element={
@@ -159,6 +164,7 @@ export default function AppRoutes() {
         <Route path="billing" element={<AdminOnlyRoute><Billing /></AdminOnlyRoute>} />
         <Route path="settings" element={<AdminOnlyRoute><Settings /></AdminOnlyRoute>} />
       </Route>
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

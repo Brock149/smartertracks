@@ -62,7 +62,7 @@ export default function ToolInventorySoftware() {
 
   useEffect(() => {
     setPageMeta({
-      title: 'Tool Inventory Software for Field Teams | Smarter Tracks',
+      title: 'Tool Inventory Software for Contractors | Smarter Tracks',
       description:
         'Tool inventory software that stays accurate automatically. Track every tool, assign custody, run audits from your phone, and stop losing inventory to guesswork.',
       canonicalPath: '/tool-inventory-software',

@@ -56,6 +56,16 @@ export default function MarketingFooter() {
                   Tool Checkout System
                 </Link>
               </li>
+              <li>
+                <Link to="/best-tool-tracking-software-construction" className="text-gray-400 hover:text-white transition-colors">
+                  Best Construction Tool Tracking Software
+                </Link>
+              </li>
+              <li>
+                <Link to="/best-hvac-tool-tracking-software" className="text-gray-400 hover:text-white transition-colors">
+                  Best HVAC Tool Tracking Software
+                </Link>
+              </li>
             </ul>
           </div>
           <div>

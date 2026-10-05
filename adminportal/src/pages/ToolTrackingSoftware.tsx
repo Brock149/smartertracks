@@ -73,7 +73,7 @@ export default function ToolTrackingSoftware() {
 
   useEffect(() => {
     setPageMeta({
-      title: 'Tool Tracking Software for Trades Teams | Smarter Tracks',
+      title: 'Tool Tracking Software for HVAC & Contractors | Smarter Tracks',
       description:
         'Tool tracking software built for HVAC, construction, and field service teams. Know who has every tool, log every checkout, and run audits from your phone. Book a free demo with Smarter Tracks.',
       canonicalPath: '/tool-tracking-software',

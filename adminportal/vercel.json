@@ -1,12 +1,31 @@
 {
+  "headers": [
+    {
+      "source": "/llms.txt",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/b1c53c5cdc68846815998b184d138659.txt",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/superadminportal/:path*",
       "destination": "https://superadminportal-five.vercel.app/superadminportal/:path*"
     },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/signup", "destination": "/index.html" },
+    { "source": "/get-started", "destination": "/index.html" },
+    { "source": "/get-started/:path*", "destination": "/index.html" },
+    { "source": "/forgot-password", "destination": "/index.html" },
+    { "source": "/reset-password", "destination": "/index.html" },
+    { "source": "/account-deletion", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/:path*", "destination": "/index.html" }
   ]
-} 
+}

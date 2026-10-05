@@ -62,7 +62,7 @@ export default function HvacToolTracking() {
 
   useEffect(() => {
     setPageMeta({
-      title: 'HVAC Tool Tracking Software | Smarter Tracks',
+      title: 'HVAC Tool Tracking Software & App | Smarter Tracks',
       description:
         'HVAC tool tracking software built for real shop and field workflows. Assign tools to techs and trucks, track custody, run audits, and keep your HVAC crew accountable.',
       canonicalPath: '/hvac-tool-tracking',
@@ -437,6 +437,13 @@ export default function HvacToolTracking() {
               built specifically for trades teams — affordable, mobile-first, and operational the same
               day you sign up. If your techs can use a smartphone, they can use Smarter Tracks.
             </p>
+            <p>
+              Comparing options for 2026? See our{' '}
+              <Link to="/best-hvac-tool-tracking-software" className="text-blue-600 hover:text-blue-700 font-semibold">
+                best HVAC tool tracking software
+              </Link>{' '}
+              guide, with pricing, hardware, and which app fits a service shop.
+            </p>
           </div>
         </div>
       </section>
@@ -511,6 +518,12 @@ export default function HvacToolTracking() {
               See how Smarter Tracks helps teams across different trades and workflows.
             </p>
             <div className="mt-6 flex flex-wrap gap-4">
+              <Link
+                to="/best-hvac-tool-tracking-software"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
+              >
+                Best HVAC Tool Tracking Software
+              </Link>
               <Link
                 to="/tool-tracking-software"
                 className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"

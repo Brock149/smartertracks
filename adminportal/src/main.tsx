@@ -10,6 +10,8 @@ const PRERENDERED_ROUTES = new Set([
   '/construction-tool-management',
   '/tool-inventory-software',
   '/tool-checkout-system',
+  '/best-tool-tracking-software-construction',
+  '/best-hvac-tool-tracking-software',
   '/privacy-policy',
   '/terms-and-conditions',
 ])

@@ -572,9 +572,14 @@ export default function Landing() {
                 HVAC companies lose gauges, meters, vac pumps, and recovery machines constantly.
                 <strong> Track HVAC tools</strong> across service vans, warehouses, and job sites.
               </p>
-              <Link to="/hvac-tool-tracking" className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-semibold">
-                Learn about HVAC tool tracking &rarr;
-              </Link>
+              <div className="mt-4 space-y-2">
+                <Link to="/hvac-tool-tracking" className="block text-blue-600 hover:text-blue-700 font-semibold">
+                  Learn about HVAC tool tracking &rarr;
+                </Link>
+                <Link to="/best-hvac-tool-tracking-software" className="block text-blue-600 hover:text-blue-700 font-semibold">
+                  Compare the best HVAC tool tracking software &rarr;
+                </Link>
+              </div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-lg transition-shadow">
               <h3 className="text-xl font-semibold text-gray-900">Construction Tool Tracking</h3>
@@ -582,9 +587,14 @@ export default function Landing() {
                 Construction contractors manage tools across multiple jobsites and crews.
                 <strong> Track construction tools</strong> by location and assign custody to workers.
               </p>
-              <Link to="/construction-tool-management" className="mt-4 inline-block text-blue-600 hover:text-blue-700 font-semibold">
-                Learn about construction tool tracking &rarr;
-              </Link>
+              <div className="mt-4 space-y-2">
+                <Link to="/construction-tool-management" className="block text-blue-600 hover:text-blue-700 font-semibold">
+                  Learn about construction tool tracking &rarr;
+                </Link>
+                <Link to="/best-tool-tracking-software-construction" className="block text-blue-600 hover:text-blue-700 font-semibold">
+                  Compare the best construction tool tracking software &rarr;
+                </Link>
+              </div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-lg transition-shadow">
               <h3 className="text-xl font-semibold text-gray-900">Field Service Tool Tracking</h3>
