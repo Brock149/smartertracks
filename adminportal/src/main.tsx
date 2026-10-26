@@ -11,6 +11,7 @@ const PRERENDERED_ROUTES = new Set([
   '/tool-inventory-software',
   '/tool-checkout-system',
   '/best-tool-tracking-software-construction',
+  '/best-tool-checkout-system-contractors',
   '/best-hvac-tool-tracking-software',
   '/privacy-policy',
   '/terms-and-conditions',

@@ -30,6 +30,7 @@ import HvacToolTracking from './pages/HvacToolTracking'
 import ToolInventorySoftware from './pages/ToolInventorySoftware'
 import ToolCheckoutSystem from './pages/ToolCheckoutSystem'
 import BestToolTrackingSoftwareConstruction from './pages/BestToolTrackingSoftwareConstruction'
+import BestToolCheckoutSystemContractors from './pages/BestToolCheckoutSystemContractors'
 import BestHvacToolTrackingSoftware from './pages/BestHvacToolTrackingSoftware'
 import NotFound from './pages/NotFound'
 
@@ -143,6 +144,7 @@ export default function AppRoutes() {
       <Route path="/tool-inventory-software" element={<ToolInventorySoftware />} />
       <Route path="/tool-checkout-system" element={<ToolCheckoutSystem />} />
       <Route path="/best-tool-tracking-software-construction" element={<BestToolTrackingSoftwareConstruction />} />
+      <Route path="/best-tool-checkout-system-contractors" element={<BestToolCheckoutSystemContractors />} />
       <Route path="/best-hvac-tool-tracking-software" element={<BestHvacToolTrackingSoftware />} />
       <Route
         path="/admin"

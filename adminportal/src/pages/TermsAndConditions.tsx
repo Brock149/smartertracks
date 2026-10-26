@@ -221,15 +221,24 @@ export default function TermsAndConditions() {
         {/* ------------------------------------------------------------------ */}
         <h2 className="text-2xl font-semibold mt-8 mb-4">14. Payment &amp; Subscription Terms</h2>
         <p className="mb-4">
-          Certain features of the Platform may require a paid subscription. All fees are stated at the time
-          of purchase and are processed by our third-party payment provider, Stripe. By subscribing, you
-          authorize us to charge your payment method on a recurring basis until you cancel. You may cancel
-          your subscription at any time, but no refunds will be provided for partial billing periods unless
-          required by applicable law.
+          Paid plans are billed monthly or yearly, at the price shown when you subscribe. Payments are
+          processed by Stripe. By subscribing, you authorize us to charge your payment method on a
+          recurring basis until you cancel. There is no free plan.
         </p>
         <p className="mb-4">
-          We reserve the right to change pricing at any time. We will provide reasonable notice before any
-          price changes take effect for existing subscribers.
+          <strong>90-day money-back guarantee.</strong> If Smarter Tracks is not worth it for any reason,
+          email brockcoburn@smartertracks.com within 90 days of your first payment and we will refund
+          every dollar you paid for that subscription. No questions asked. This includes a yearly plan
+          paid up front.
+        </p>
+        <p className="mb-4">
+          You can cancel at any time. Canceling stops the next charge. There is no long-term contract.
+          After the 90-day guarantee, canceling does not refund the unused part of a period you already
+          paid for, unless the law requires a refund.
+        </p>
+        <p className="mb-4">
+          We may change prices. We will give existing subscribers reasonable notice before a new price
+          applies to them.
         </p>
 
         {/* ------------------------------------------------------------------ */}

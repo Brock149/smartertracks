@@ -55,7 +55,13 @@ const routesToRender = [
     url: '/best-tool-tracking-software-construction',
     title: 'Best Tool Tracking Software for Construction (2026)',
     description:
-      'Compare the best construction tool tracking software and apps for 2026: Smarter Tracks, ShareMyToolbox, Hilti ON!Track, GoCodes, Tenna, Milwaukee ONE-KEY, Sortly and ToolWatch. Pricing, hardware and who each is best for.',
+      'Compare construction tool tracking software and apps for 2026: Smarter Tracks, Hilti ON!Track, ShareMyToolbox, GoCodes, Tenna, Milwaukee ONE-KEY, Sortly and ToolWatch. RFID vs GPS vs QR vs no-tag check-out, pricing and who each is best for.',
+  },
+  {
+    url: '/best-tool-checkout-system-contractors',
+    title: 'Best Tool Checkout System for Contractors (2026)',
+    description:
+      'Compare tool checkout and tool inventory software for contractors in 2026: Smarter Tracks, ShareMyToolbox, GoCodes, Hilti ON!Track, Milwaukee ONE-KEY, Sortly, EZOfficeInventory, ToolWatch and Asset Panda. Pricing, hardware and who each fits.',
   },
   {
     url: '/best-hvac-tool-tracking-software',
@@ -121,7 +127,9 @@ for (const route of routesToRender) {
     <meta property="og:type" content="website" />
     <meta property="og:url" content="${canonicalUrl}" />
     <meta property="og:site_name" content="Smarter Tracks" />
+    <meta property="og:image" content="https://www.smartertracks.com/screenshots/smarter-tracks-tool-tracking-app.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.smartertracks.com/screenshots/smarter-tracks-tool-tracking-app.png" />
     <meta name="twitter:title" content="${esc(route.title)}" />
     <meta name="twitter:description" content="${esc(route.description)}" />`
 

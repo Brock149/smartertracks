@@ -4,11 +4,13 @@ import { setPageMeta } from '../lib/seo'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
 import ContactForm from '../components/ContactForm'
+import CtaPair from '../components/CtaPair'
+import { useCalendlyEmbed } from '../components/CalendlySection'
 
 const APP_SCREENSHOTS = [
-  { src: '/screenshots/alltools.png', alt: 'HVAC tool tracking showing all tools with photos and current owners' },
-  { src: '/screenshots/tooldescriptions.png', alt: 'HVAC tool details showing custody, location, and stored at information' },
-  { src: '/screenshots/homeinfo.png', alt: 'HVAC tool tracking dashboard showing tool counts and recent transfers' },
+  { src: '/screenshots/smarter-tracks-hvac-tool-tracking-app-tool-list.png', alt: 'Smarter Tracks HVAC tool tracking app: tool list showing who has each tool' },
+  { src: '/screenshots/smarter-tracks-tool-details-custody.png', alt: 'Smarter Tracks HVAC tool tracking app: tool details with custody and location' },
+  { src: '/screenshots/smarter-tracks-tool-checkout-app.png', alt: 'Smarter Tracks tool checkout app: recent checkouts and transfers' },
 ]
 
 const faqItems = [
@@ -28,9 +30,9 @@ const faqItems = [
       'Techs open the Smarter Tracks app on their phone, scan a barcode or QR code, and check tools in or out in seconds. No training required — most techs learn it on the first use.',
   },
   {
-    question: 'Does it work without GPS?',
+    question: 'Do I need GPS on every tool?',
     answer:
-      'Yes. Smarter Tracks uses assignment-based tracking rather than GPS hardware. Custody is recorded through the app when tools change hands, so you always know who has each tool without expensive tags or beacons.',
+      'Everyday tracking works in the app with no tags. Custody is recorded when tools change hands. Optional cellular GPS trackers are available for a few high-value items. They use cell service, like a phone, not Bluetooth, so they do not depend on other people\'s phones.',
   },
   {
     question: 'How fast can an HVAC team get set up?',
@@ -76,17 +78,7 @@ export default function HvacToolTracking() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://assets.calendly.com/assets/external/widget.js'
-    script.async = true
-    document.head.appendChild(script)
-    return () => {
-      try {
-        document.head.removeChild(script)
-      } catch { /* script already removed */ }
-    }
-  }, [])
+  useCalendlyEmbed()
 
   return (
     <div className="min-h-screen bg-white">
@@ -101,9 +93,9 @@ export default function HvacToolTracking() {
               <h1 className="text-5xl font-extrabold text-gray-900 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
                 HVAC Tool Tracking
               </h1>
-              <h1 className="text-5xl font-extrabold text-blue-600 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
+              <p className="text-5xl font-extrabold text-blue-600 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
                 That Keeps Your Vans and Crews Accountable.
-              </h1>
+              </p>
               <p className="mt-6 text-2xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
                 Your techs lose gauges, meters, vac pumps, and drill kits between trucks, shops, and
                 job sites every week. Smarter Tracks is HVAC tool tracking software that shows you
@@ -112,20 +104,12 @@ export default function HvacToolTracking() {
               <p className="mt-5 text-base font-bold text-gray-600 uppercase tracking-widest">
                 Built for HVAC, by Tradesmen
               </p>
-              <div className="mt-9 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <a
-                  href="#book-demo"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-5 rounded-lg text-xl font-semibold transition-colors shadow-lg text-center"
-                >
-                  Book a Free Demo
-                </a>
-                <a
-                  href="#benefits"
-                  className="text-gray-600 hover:text-gray-900 px-7 py-5 rounded-lg text-xl font-medium transition-colors text-center"
-                >
-                  Learn More &darr;
-                </a>
-              </div>
+              <CtaPair
+                section="hero"
+                align="start"
+                className="mt-9"
+                note="90-day money-back guarantee. No questions asked."
+              />
             </div>
 
             {/* App screenshots carousel */}
@@ -198,15 +182,11 @@ export default function HvacToolTracking() {
             </span>
             <span className="flex items-center gap-2">
               <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Same-day setup
-            </span>
-            <span className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
               iOS &amp; Android apps
             </span>
             <span className="flex items-center gap-2">
               <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Free trial available
+              90-day money-back guarantee
             </span>
           </div>
         </div>
@@ -268,38 +248,6 @@ export default function HvacToolTracking() {
         </div>
       </section>
 
-      {/* ROI stats */}
-      <section className="py-16 bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-              The ROI of HVAC Tool Tracking
-            </h2>
-            <p className="mt-4 max-w-3xl mx-auto text-lg text-gray-600">
-              HVAC teams using Smarter Tracks see measurable results within the first 90 days.
-            </p>
-          </div>
-          <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">75%+</div>
-              <p className="mt-2 text-gray-700 font-medium">Reduction in missing tools</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">$5K–$20K</div>
-              <p className="mt-2 text-gray-700 font-medium">Saved in the first year</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">Fewer</div>
-              <p className="mt-2 text-gray-700 font-medium">Emergency tool runs to the supply house</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">Same day</div>
-              <p className="mt-2 text-gray-700 font-medium">Setup time for most HVAC teams</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* How it works */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -308,7 +256,7 @@ export default function HvacToolTracking() {
               How It Works
             </h2>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
-              Get your HVAC team tracking tools in three steps. Most shops are fully operational the same day.
+              Add your tools, invite your crew, and start tracking the same day.
             </p>
           </div>
           <div className="mt-16 grid grid-cols-1 gap-10 md:grid-cols-3">
@@ -343,33 +291,25 @@ export default function HvacToolTracking() {
               </p>
             </div>
           </div>
-          <div className="mt-12 text-center">
-            <a
-              href="#book-demo"
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg"
-            >
-              Book a Free Demo
-            </a>
-          </div>
         </div>
       </section>
 
       {/* Calendly embed */}
       <section id="book-demo" className="py-20 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
               See HVAC Tool Tracking In Action
             </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
               Pick a time that works for you. We'll walk through exactly how Smarter Tracks handles
-              your tools, your techs, and your workflow. 30 minutes, no pressure.
+              your tools, your techs, and your workflow.
             </p>
           </div>
           <div
             className="calendly-inline-widget"
-            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1"
-            style={{ minWidth: '320px', height: '700px' }}
+            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1&hide_event_type_details=1"
+            style={{ minWidth: '320px', width: '100%', height: '750px' }}
           />
           <p className="mt-4 text-center text-sm text-gray-400">
             Prefer email?{' '}
@@ -385,8 +325,8 @@ export default function HvacToolTracking() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-center gap-x-12 gap-y-4 text-center">
             <div>
-              <div className="text-lg font-bold text-gray-900">Free trial included</div>
-              <p className="text-sm text-gray-500">No credit card required</p>
+              <div className="text-lg font-bold text-gray-900">90-day money-back guarantee</div>
+              <p className="text-sm text-gray-500">No questions asked</p>
             </div>
             <div>
               <div className="text-lg font-bold text-gray-900">Cancel anytime</div>
@@ -423,8 +363,8 @@ export default function HvacToolTracking() {
               each truck, what's sitting in the shop, and who had an item last. Audits that used to take
               hours with clipboards now take minutes from a phone. Damaged or worn-out tools get flagged
               during check-in so they can be repaired before the next crew grabs them. It's a simple
-              workflow that fits the way HVAC shops actually operate — no GPS hardware, no enterprise
-              training, no months-long rollout.
+              workflow that fits the way HVAC shops actually operate. Everyday tools need no tags.
+              Optional cellular GPS trackers are available for a few high-value items.
             </p>
             <p>
               What makes Smarter Tracks different from generic asset management platforms is focus.
@@ -576,18 +516,7 @@ export default function HvacToolTracking() {
           <h2 className="text-3xl font-extrabold text-white">
             Ready to Stop Losing HVAC Tools?
           </h2>
-          <p className="mt-4 text-xl text-blue-100">
-            Book a free 30-minute demo. We'll walk through how Smarter Tracks handles your tools,
-            your techs, and your workflow.
-          </p>
-          <div className="mt-8">
-            <a
-              href="#book-demo"
-              className="bg-white hover:bg-gray-100 text-blue-600 px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-block"
-            >
-              Book a Free Demo
-            </a>
-          </div>
+          <CtaPair section="final-cta" tone="dark" className="mt-8" note="90-day money-back guarantee. No questions asked." />
         </div>
       </section>
 

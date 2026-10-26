@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { trackEvent } from '../lib/analytics'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
-type PlanId = 'trial' | 'tier2' | 'tier3'
+type PlanId = 'tier2' | 'tier3'
 type BillingCycle = 'monthly' | 'annual'
 
 const PLAN_OPTIONS: Array<{
@@ -11,18 +12,17 @@ const PLAN_OPTIONS: Array<{
   annual: number
   users: number
   tools: number
-  requiresPayment: boolean
 }> = [
-  { id: 'trial', name: 'Free Trial', monthly: 0, annual: 0, users: 3, tools: 5, requiresPayment: false },
-  { id: 'tier2', name: 'Tier 2', monthly: 200, annual: 2220, users: 15, tools: 150, requiresPayment: true },
-  { id: 'tier3', name: 'Tier 3', monthly: 350, annual: 3780, users: 75, tools: 750, requiresPayment: true },
+  { id: 'tier2', name: 'Starter', monthly: 200, annual: 2220, users: 15, tools: 150 },
+  { id: 'tier3', name: 'Pro', monthly: 350, annual: 3780, users: 75, tools: 750 },
 ]
 
 export default function GetStarted() {
   const location = useLocation()
   const navigate = useNavigate()
   const params = new URLSearchParams(location.search)
-  const initialPlan = (params.get('plan') as PlanId | null) || 'trial'
+  const requestedPlan = params.get('plan')
+  const initialPlan: PlanId = requestedPlan === 'tier3' ? 'tier3' : 'tier2'
   const initialBilling = (params.get('billing') as BillingCycle | null) || 'monthly'
 
   const [companyName, setCompanyName] = useState('')
@@ -34,6 +34,14 @@ export default function GetStarted() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    trackEvent('signup_started', {
+      page: '/get-started',
+      section: 'signup',
+      plan: initialPlan,
+    })
+  }, [initialPlan])
 
   const selectedPlan = useMemo(
     () => PLAN_OPTIONS.find((plan) => plan.id === planId) ?? PLAN_OPTIONS[0],
@@ -141,7 +149,7 @@ export default function GetStarted() {
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    required={!selectedPlan.requiresPayment}
+                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 pr-10"
@@ -171,7 +179,7 @@ export default function GetStarted() {
 
             <div className="rounded-xl border border-gray-200 p-4">
               <div className="text-sm font-medium text-gray-700">Choose plan</div>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {PLAN_OPTIONS.map((plan) => (
                   <button
                     type="button"
@@ -191,21 +199,19 @@ export default function GetStarted() {
                 ))}
               </div>
 
-              {planId !== 'trial' && (
-                <div className="mt-4 flex gap-3">
-                  <select
-                    value={billingCycle}
-                    onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
-                    className="rounded-lg border border-gray-300 px-3 py-2"
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="annual">Annual</option>
-                  </select>
-                  <div className="text-lg font-semibold text-gray-900">
-                    ${price}/{billingCycle === 'annual' ? 'year' : 'month'}
-                  </div>
+              <div className="mt-4 flex gap-3">
+                <select
+                  value={billingCycle}
+                  onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
+                  className="rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                </select>
+                <div className="text-lg font-semibold text-gray-900">
+                  ${price}/{billingCycle === 'annual' ? 'year' : 'month'}
                 </div>
-              )}
+              </div>
             </div>
 
             {error && (
@@ -219,11 +225,7 @@ export default function GetStarted() {
               disabled={loading}
               className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading
-                ? 'Processing...'
-                : selectedPlan.requiresPayment
-                ? 'Continue to payment'
-                : 'Start free trial'}
+              {loading ? 'Processing...' : 'Continue to payment'}
             </button>
           </form>
         </div>

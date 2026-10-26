@@ -19,10 +19,11 @@ export default function MarketingHeader() {
   }
 
   return (
-    <header className="bg-white shadow-sm relative z-50">
+    <header className="sticky top-0 z-50 bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between py-4">
-          <Link to="/" className="text-2xl font-bold text-gray-900 hover:text-blue-700 transition-colors">
+          <Link to="/" className="flex items-center gap-2 text-2xl font-bold text-gray-900 hover:text-blue-700 transition-colors">
+            <img src="/smarter-tracks-logo.png" alt="Smarter Tracks logo" className="h-11 w-11 object-contain" />
             Smarter Tracks
           </Link>
 
@@ -71,7 +72,7 @@ export default function MarketingHeader() {
               onClick={(event) => handleAnchorClick(event, 'book-demo')}
               className="ml-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
             >
-              Book a Demo
+              Book a 15-Minute Chat
             </a>
           </nav>
 
@@ -129,7 +130,7 @@ export default function MarketingHeader() {
               onClick={(event) => handleAnchorClick(event, 'book-demo')}
               className="block mx-3 mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-center font-semibold transition-colors"
             >
-              Book a Demo
+              Book a 15-Minute Chat
             </a>
           </nav>
         )}

@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom'
 import { setPageMeta } from '../lib/seo'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
+import CtaPair from '../components/CtaPair'
+import BrandScreenshots from '../components/BrandScreenshots'
 
 const comparisonRows = [
   {
     name: 'Smarter Tracks',
     bestFor: 'HVAC shops tracking tools across techs, vans and the shop',
     hardware: 'None, just phones (iOS & Android)',
-    pricing: 'Free trial (3 users, 5 tools). Starter $185/mo (15 users, 150 tools). Pro $315/mo (75 users, 750 tools)',
+    pricing: 'Starter $185/mo (15 users, 150 tools). Pro $315/mo (75 users, 750 tools). 90-day money-back guarantee.',
     perUser: 'No',
     highlight: true,
   },
@@ -69,7 +71,7 @@ const faqItems = [
   {
     question: 'Do HVAC techs need GPS tags on their tools?',
     answer:
-      'Usually not. Gauges, meters and vac pumps are small and move constantly, and tags add cost and upkeep. Custody tracking (who has it, when it moved) answers the everyday questions without hardware.',
+      'Most gauges, meters and vac pumps are tracked in the app with no tags. Custody shows who has each tool. Optional cellular GPS trackers are available for a few high-value items. They use cell service, not Bluetooth.',
   },
   {
     question: 'How much does HVAC tool tracking software cost?',
@@ -114,7 +116,7 @@ const pageJsonLd = {
           name: 'Do HVAC techs need GPS tags on their tools?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Usually not. Gauges, meters and vac pumps are small and move constantly; custody tracking answers the everyday questions without hardware.',
+            text: 'Most gauges, meters and vac pumps are tracked in the app with no tags. Optional cellular GPS trackers are available for a few high-value items. They use cell service, not Bluetooth.',
           },
         },
         {
@@ -224,18 +226,19 @@ export default function BestHvacToolTrackingSoftware() {
             <p className="mt-3 text-gray-700">
               Every gauge, meter, vac pump and recovery machine is assigned to a tech, a service van or the shop. When a tool changes hands, the transfer is logged with a timestamp and the person responsible. Techs flag damaged tools at check-in, so broken ones get caught before the next call. Managers run audits from any phone and can see what's on each van before dispatch.
             </p>
+            <BrandScreenshots />
             <ul className="mt-4 list-disc space-y-2 pl-5 text-gray-700">
               <li><strong>Hardware:</strong> none. It runs on iOS and Android, and setup takes a day.</li>
               <li>
                 <strong>Pricing:</strong>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>free trial (3 users, 5 tools, no card)</li>
+                  <li>90-day money-back guarantee</li>
                   <li>Starter $185/mo (15 users, 150 tools)</li>
                   <li>Pro $315/mo (75 users, 750 tools)</li>
                   <li>no per-user charges, no long-term contract</li>
                 </ul>
               </li>
-              <li><strong>Less of a fit if:</strong> you need live GPS location, or you track thousands of consumable parts (it's built for tools, not parts stock). Plans cap tool counts.</li>
+              <li><strong>Less of a fit if:</strong> you track thousands of consumable parts (it's built for tools, not parts stock), or you want a tracker on every tool. Plans cap tool counts. Optional cellular GPS trackers are available for a few high-value items. They use cell service, not Bluetooth.</li>
             </ul>
             <p className="mt-4">
               <Link to="/hvac-tool-tracking" className="text-blue-600 hover:text-blue-700 font-semibold">
@@ -247,7 +250,7 @@ export default function BestHvacToolTrackingSoftware() {
           <section className="mt-10">
             <h3 className="text-2xl font-bold text-gray-900">2. ShareMyToolbox: best for barcode/QR with unlimited tools</h3>
             <p className="mt-3 text-gray-700">
-              It tracks unlimited tools with barcode/QR scanning, GPS captured on scans, kits and maintenance notes, and has an HVAC-specific setup. $100/month for the first admin plus $10 per additional user. 14-day free trial.
+              It tracks unlimited tools with barcode/QR scanning, GPS captured on scans, kits and maintenance notes, and has an HVAC-specific setup. $100/month for the first admin plus $10 per additional user. 14-day trial.
             </p>
           </section>
 
@@ -312,14 +315,13 @@ export default function BestHvacToolTrackingSoftware() {
           <p className="mt-4 text-lg text-blue-100">
             Phone-based check-out and check-in, flat pricing, and no tags to buy.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/#book-demo" className="bg-white hover:bg-gray-100 text-blue-600 px-8 py-3 rounded-lg font-semibold">
-              Book a free demo
-            </Link>
-            <Link to="/#pricing" className="border border-white text-white hover:bg-blue-700 px-8 py-3 rounded-lg font-semibold">
-              View pricing
-            </Link>
-          </div>
+          <CtaPair
+            section="final-cta"
+            tone="dark"
+            className="mt-8"
+            chatHref="/#book-demo"
+            note="90-day money-back guarantee. No questions asked."
+          />
         </div>
       </section>
 

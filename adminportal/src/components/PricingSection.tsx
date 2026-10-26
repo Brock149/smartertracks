@@ -1,156 +1,190 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { trackEvent } from '../lib/analytics'
+import {
+  MARKETING_PLANS,
+  monthlyPrice,
+  type BillingCycle,
+} from '../lib/marketingPlans'
 
 type PricingSectionProps = {
-  billingCycle: 'monthly' | 'annual'
-  onBillingCycleChange: (cycle: 'monthly' | 'annual') => void
+  billingCycle?: BillingCycle
+  onBillingCycleChange?: (cycle: BillingCycle) => void
 }
 
-export default function PricingSection({ billingCycle, onBillingCycleChange }: PricingSectionProps) {
-  const priceLabel = 'per month'
-  const starterAnnualMonthly = 185
-  const proAnnualMonthly = 315
-  const starterSavings = 'save 7.5%'
-  const proSavings = 'save 10%'
+export default function PricingSection({ billingCycle: billingCycleProp, onBillingCycleChange }: PricingSectionProps) {
+  const [internalCycle, setInternalCycle] = useState<BillingCycle>('annual')
+  const billingCycle = billingCycleProp ?? internalCycle
+
+  function setBillingCycle(cycle: BillingCycle) {
+    if (billingCycleProp === undefined) setInternalCycle(cycle)
+    onBillingCycleChange?.(cycle)
+  }
 
   return (
-    <section id="pricing" className="py-20 bg-white">
+    <section id="pricing" className="py-12 bg-gradient-to-br from-gray-50 to-blue-50 scroll-mt-4">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center">
-          <h3 className="text-4xl font-extrabold text-gray-900">Choose the plan that is right for you</h3>
-          <p className="mt-4 text-lg text-gray-600">Start free, then upgrade when your team grows.</p>
-          <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-gray-100 p-1">
+          <h2 className="text-4xl font-extrabold text-gray-900">Simple Pricing. Zero Risk.</h2>
+          <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">
+            Flat monthly price for your whole team. No per-user charges. Use it for 90 days. If it's not worth it, get every dollar back.
+          </p>
+          <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-2 rounded-full bg-white p-1 shadow-md">
             <button
               type="button"
-              onClick={() => onBillingCycleChange('monthly')}
+              onClick={() => setBillingCycle('monthly')}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                billingCycle === 'monthly' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                billingCycle === 'monthly' ? 'bg-blue-600 text-white shadow' : 'text-gray-500'
               }`}
             >
               Monthly
             </button>
             <button
               type="button"
-              onClick={() => onBillingCycleChange('annual')}
+              onClick={() => setBillingCycle('annual')}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                billingCycle === 'annual' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                billingCycle === 'annual' ? 'bg-blue-600 text-white shadow' : 'text-gray-500'
               }`}
             >
               Annual
             </button>
             <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-              Save with annual
+              Save up to 10%
             </span>
           </div>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-4">
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-            <h4 className="mt-2 text-2xl font-semibold text-gray-900">Free Trial</h4>
-            <p className="mt-2 text-gray-600">For teams who want to try it out</p>
-            <div className="mt-6 text-4xl font-extrabold text-gray-900">$0</div>
-            <p className="text-gray-500">Get started instantly</p>
-            <Link
-              to="/get-started?plan=trial"
-              className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
-            >
-              Get started
-            </Link>
-            <ul className="mt-6 space-y-2 text-sm text-gray-600">
-              <li>✓ 3 users</li>
-              <li>✓ 5 tools</li>
-              <li>✓ Full tool tracking</li>
-              <li>✓ Transfers & history</li>
-            </ul>
-          </div>
+        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <PlanCard
+            name="Starter"
+            description="For small teams getting organized"
+            price={monthlyPrice('starter', billingCycle)}
+            detail={
+              billingCycle === 'annual'
+                ? `$${MARKETING_PLANS.starter.annualTotal.toLocaleString('en-US')} billed yearly`
+                : `${MARKETING_PLANS.starter.users} users • ${MARKETING_PLANS.starter.tools} tools`
+            }
+            savings={billingCycle === 'annual' ? MARKETING_PLANS.starter.savings : undefined}
+            features={[
+              `${MARKETING_PLANS.starter.users} users`,
+              `${MARKETING_PLANS.starter.tools} tools`,
+              'Tool transfer history',
+              'Photos on tools',
+              'Damaged tool reporting',
+            ]}
+          />
+          <PlanCard
+            name="Pro"
+            description="For growing teams with more tools"
+            price={monthlyPrice('pro', billingCycle)}
+            detail={
+              billingCycle === 'annual'
+                ? `$${MARKETING_PLANS.pro.annualTotal.toLocaleString('en-US')} billed yearly`
+                : `${MARKETING_PLANS.pro.users} users • ${MARKETING_PLANS.pro.tools} tools`
+            }
+            savings={billingCycle === 'annual' ? MARKETING_PLANS.pro.savings : undefined}
+            popular
+            features={[
+              `${MARKETING_PLANS.pro.users} users`,
+              `${MARKETING_PLANS.pro.tools} tools`,
+              'Tool transfer history',
+              'Photos on tools',
+              'Damaged tool reporting',
+            ]}
+          />
+          <PlanCard
+            name="Custom"
+            description="For large teams and custom needs"
+            customLabel="Let's talk"
+            detail="Custom limits and billing"
+            features={[
+              'Custom limits and onboarding',
+              'Dedicated support',
+              'Custom integrations',
+              'Annual invoicing',
+            ]}
+          />
+        </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-            <h4 className="mt-2 text-2xl font-semibold text-gray-900">Starter</h4>
-            <p className="mt-2 text-gray-600">For small teams getting organized</p>
-            <div className="mt-6 text-4xl font-extrabold text-gray-900">
-              ${billingCycle === 'annual' ? starterAnnualMonthly : '200'}
-              <span className="text-base font-semibold text-gray-500">/{priceLabel}</span>
+        <div className="mt-10 rounded-2xl border border-blue-200 bg-white p-6 sm:p-8 shadow-sm">
+          <div className="flex items-start gap-4">
+            <svg className="h-10 w-10 shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">The 90-Day Money-Back Guarantee</h3>
+              <p className="mt-2 text-gray-700">
+                Use Smarter Tracks with your whole crew for 90 days. If it's not worth it for any reason, email{' '}
+                <a href="mailto:brockcoburn@smartertracks.com" className="text-blue-600 hover:text-blue-700 font-semibold">
+                  brockcoburn@smartertracks.com
+                </a>{' '}
+                and we'll refund every dollar. No questions asked.
+              </p>
             </div>
-            <p className="text-gray-500">
-              {billingCycle === 'annual'
-                ? '$2,220 billed yearly'
-                : '15 users • 150 tools'}
-            </p>
-            {billingCycle === 'annual' && (
-              <p className="text-sm text-green-700 font-semibold">{starterSavings}</p>
-            )}
-            <Link
-              to={`/get-started?plan=tier2&billing=${billingCycle}`}
-              className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
-            >
-              Buy now
-            </Link>
-            <ul className="mt-6 space-y-2 text-sm text-gray-600">
-              <li>✓ 15 users</li>
-              <li>✓ 150 tools</li>
-              <li>✓ Tool transfer history</li>
-              <li>✓ Photos on tools</li>
-              <li>✓ Damaged tool reporting</li>
-            </ul>
-          </div>
-
-          <div className="rounded-2xl border-2 border-blue-600 bg-white p-8 shadow-lg">
-            <div className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
-              <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">
-                Best value
-              </span>
-              <span className="rounded-full border border-blue-200 px-2 py-0.5 text-xs">
-                Most popular
-              </span>
-            </div>
-            <h4 className="mt-2 text-2xl font-semibold text-gray-900">Pro</h4>
-            <p className="mt-2 text-gray-600">For growing teams with more tools</p>
-            <div className="mt-6 text-4xl font-extrabold text-gray-900">
-              ${billingCycle === 'annual' ? proAnnualMonthly : '350'}
-              <span className="text-base font-semibold text-gray-500">/{priceLabel}</span>
-            </div>
-            <p className="text-gray-500">
-              {billingCycle === 'annual'
-                ? '$3,780 billed yearly'
-                : '75 users • 750 tools'}
-            </p>
-            {billingCycle === 'annual' && (
-              <p className="text-sm text-green-700 font-semibold">{proSavings}</p>
-            )}
-            <Link
-              to={`/get-started?plan=tier3&billing=${billingCycle}`}
-              className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700"
-            >
-              Buy now
-            </Link>
-            <ul className="mt-6 space-y-2 text-sm text-gray-600">
-              <li>✓ 75 users</li>
-              <li>✓ 750 tools</li>
-              <li>✓ Tool transfer history</li>
-              <li>✓ Photos on tools</li>
-              <li>✓ Damaged tool reporting</li>
-            </ul>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-            <h4 className="mt-2 text-2xl font-semibold text-gray-900">Custom</h4>
-            <p className="mt-2 text-gray-600">For large teams and custom needs</p>
-            <div className="mt-6 text-4xl font-extrabold text-gray-900">Let’s talk</div>
-            <p className="text-gray-500">Custom limits and billing</p>
-            <a
-              href="mailto:brockcoburn@smartertracks.com"
-              className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 font-semibold hover:bg-gray-50"
-            >
-              Schedule a demo
-            </a>
-            <ul className="mt-6 space-y-2 text-sm text-gray-600">
-              <li>✓ Custom limits & onboarding</li>
-              <li>✓ Dedicated support</li>
-              <li>✓ Custom integrations</li>
-              <li>✓ Annual invoicing</li>
-            </ul>
           </div>
         </div>
+
+        <p className="mt-8 text-center text-lg text-gray-600">
+          Not sure which plan fits?{' '}
+          <a
+            href="#book-demo"
+            className="text-blue-600 hover:text-blue-700 font-semibold"
+            onClick={() => trackEvent('cta_chat_click', { page: window.location.pathname, section: 'pricing' })}
+          >
+            Book a 15-minute chat
+          </a>{' '}
+          and we'll figure it out together.
+        </p>
+        <p className="mt-4 text-center text-sm font-medium text-gray-600">
+          90-day money-back guarantee · Cancel anytime · No long-term contracts
+        </p>
       </div>
     </section>
+  )
+}
+
+function PlanCard({
+  name,
+  description,
+  price,
+  customLabel,
+  detail,
+  savings,
+  popular,
+  features,
+}: {
+  name: string
+  description: string
+  price?: number
+  customLabel?: string
+  detail: string
+  savings?: string
+  popular?: boolean
+  features: string[]
+}) {
+  return (
+    <div className={`rounded-2xl bg-white p-8 shadow-sm ${popular ? 'border-4 border-blue-600 shadow-xl relative' : 'border border-gray-200'}`}>
+      {popular ? (
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold">
+          Most Popular
+        </div>
+      ) : null}
+      <h3 className="mt-2 text-2xl font-semibold text-gray-900">{name}</h3>
+      <p className="mt-2 text-gray-600">{description}</p>
+      <div className="mt-6 text-4xl font-extrabold text-gray-900">
+        {customLabel ?? (
+          <>
+            ${price}
+            <span className="text-base font-semibold text-gray-500">/month</span>
+          </>
+        )}
+      </div>
+      <p className="text-gray-500">{detail}</p>
+      {savings ? <p className="text-sm text-green-700 font-semibold">{savings}</p> : null}
+      <ul className="mt-6 space-y-2 text-sm text-gray-600">
+        {features.map((feature) => (
+          <li key={feature}>&#10003; {feature}</li>
+        ))}
+      </ul>
+    </div>
   )
 }

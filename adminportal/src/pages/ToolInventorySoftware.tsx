@@ -4,6 +4,8 @@ import { setPageMeta } from '../lib/seo'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
 import ContactForm from '../components/ContactForm'
+import CtaPair from '../components/CtaPair'
+import { useCalendlyEmbed } from '../components/CalendlySection'
 
 const APP_SCREENSHOTS = [
   { src: '/screenshots/alltools.png', alt: 'Tool inventory software showing complete tool list with photos and owners' },
@@ -35,12 +37,12 @@ const faqItems = [
   {
     question: 'How fast can we set up our tool inventory?',
     answer:
-      'Most teams add their tools, invite their crew, and start tracking the same day. No hardware, no lengthy onboarding — just add your tools and go.',
+      "Add your tools, invite your crew, and start tracking the same day. Book a 15-minute chat and we'll help you get started.",
   },
   {
-    question: 'Is there a free trial?',
+    question: "What if it isn't worth it?",
     answer:
-      'Yes. You can start with a free trial that includes full tool tracking, transfers, and history — no credit card required.',
+      "You have 90 days. Email us and we'll refund every dollar. No questions asked.",
   },
 ]
 
@@ -76,17 +78,7 @@ export default function ToolInventorySoftware() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://assets.calendly.com/assets/external/widget.js'
-    script.async = true
-    document.head.appendChild(script)
-    return () => {
-      try {
-        document.head.removeChild(script)
-      } catch { /* script already removed */ }
-    }
-  }, [])
+  useCalendlyEmbed()
 
   return (
     <div className="min-h-screen bg-white">
@@ -101,31 +93,28 @@ export default function ToolInventorySoftware() {
               <h1 className="text-5xl font-extrabold text-gray-900 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
                 Tool Inventory Software
               </h1>
-              <h1 className="text-5xl font-extrabold text-blue-600 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
+              <p className="text-5xl font-extrabold text-blue-600 sm:text-6xl lg:text-7xl tracking-tight leading-tight">
                 That Actually Stays Up to Date.
-              </h1>
+              </p>
               <p className="mt-6 text-2xl text-gray-600 max-w-2xl mx-auto lg:mx-0">
                 Spreadsheets go stale the moment someone checks out a tool. Smarter Tracks is tool
                 inventory software that updates automatically every time a tool changes hands — so
                 your inventory is always accurate.
               </p>
+              <p className="mt-4">
+                <Link to="/best-tool-checkout-system-contractors" className="text-blue-600 hover:text-blue-700 font-semibold">
+                  Compare the best tool checkout systems for contractors &rarr;
+                </Link>
+              </p>
               <p className="mt-5 text-base font-bold text-gray-600 uppercase tracking-widest">
                 Built for Trades, by Tradesmen
               </p>
-              <div className="mt-9 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <a
-                  href="#book-demo"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-5 rounded-lg text-xl font-semibold transition-colors shadow-lg text-center"
-                >
-                  Book a Free Demo
-                </a>
-                <a
-                  href="#benefits"
-                  className="text-gray-600 hover:text-gray-900 px-7 py-5 rounded-lg text-xl font-medium transition-colors text-center"
-                >
-                  Learn More &darr;
-                </a>
-              </div>
+              <CtaPair
+                section="hero"
+                align="start"
+                className="mt-9"
+                note="90-day money-back guarantee. No questions asked."
+              />
             </div>
 
             <div className="mt-10 lg:mt-0 relative">
@@ -197,15 +186,11 @@ export default function ToolInventorySoftware() {
             </span>
             <span className="flex items-center gap-2">
               <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Same-day setup
-            </span>
-            <span className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
               iOS &amp; Android apps
             </span>
             <span className="flex items-center gap-2">
               <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Free trial available
+              90-day money-back guarantee
             </span>
           </div>
         </div>
@@ -219,7 +204,7 @@ export default function ToolInventorySoftware() {
               What Tool Inventory Software Solves
             </h2>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
-              Most teams don't have an inventory problem — they have a visibility problem. Here's what changes when you fix it.
+              Missing tools are a visibility problem. Here's what changes when you fix it.
             </p>
           </div>
           <div className="mt-16 grid grid-cols-1 gap-12 md:grid-cols-3">
@@ -264,38 +249,6 @@ export default function ToolInventorySoftware() {
         </div>
       </section>
 
-      {/* ROI */}
-      <section className="py-16 bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-gray-900">
-              The ROI of Tool Inventory Software
-            </h2>
-            <p className="mt-4 max-w-3xl mx-auto text-lg text-gray-600">
-              Teams using Smarter Tracks see measurable results within the first 90 days.
-            </p>
-          </div>
-          <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">35%</div>
-              <p className="mt-2 text-gray-700 font-medium">Fewer lost tools in the first 90 days</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">$8,000+</div>
-              <p className="mt-2 text-gray-700 font-medium">Saved annually eliminating duplicate purchases</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">15 hrs</div>
-              <p className="mt-2 text-gray-700 font-medium">Reclaimed monthly from tool searches</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
-              <div className="text-4xl font-extrabold text-green-700">Same day</div>
-              <p className="mt-2 text-gray-700 font-medium">Setup time for most teams</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* How it works */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -304,7 +257,7 @@ export default function ToolInventorySoftware() {
               How It Works
             </h2>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
-              Get your team tracking tool inventory in three steps. Most teams are fully operational the same day.
+              Add your tools, invite your crew, and start tracking the same day.
             </p>
           </div>
           <div className="mt-16 grid grid-cols-1 gap-10 md:grid-cols-3">
@@ -339,33 +292,25 @@ export default function ToolInventorySoftware() {
               </p>
             </div>
           </div>
-          <div className="mt-12 text-center">
-            <a
-              href="#book-demo"
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg"
-            >
-              Book a Free Demo
-            </a>
-          </div>
         </div>
       </section>
 
       {/* Calendly */}
       <section id="book-demo" className="py-20 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
               See Tool Inventory Software In Action
             </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
               Pick a time that works for you. We'll walk through exactly how Smarter Tracks manages
-              your tool inventory — your tools, your crew, your workflow. 30 minutes, no pressure.
+              your tool inventory — your tools, your crew, your workflow.
             </p>
           </div>
           <div
             className="calendly-inline-widget"
-            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1"
-            style={{ minWidth: '320px', height: '700px' }}
+            data-url="https://calendly.com/brockcoburn-smartertracks/30min?hide_gdpr_banner=1&hide_event_type_details=1"
+            style={{ minWidth: '320px', width: '100%', height: '750px' }}
           />
           <p className="mt-4 text-center text-sm text-gray-400">
             Prefer email?{' '}
@@ -381,8 +326,8 @@ export default function ToolInventorySoftware() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-center gap-x-12 gap-y-4 text-center">
             <div>
-              <div className="text-lg font-bold text-gray-900">Free trial included</div>
-              <p className="text-sm text-gray-500">No credit card required</p>
+              <div className="text-lg font-bold text-gray-900">90-day money-back guarantee</div>
+              <p className="text-sm text-gray-500">No questions asked</p>
             </div>
             <div>
               <div className="text-lg font-bold text-gray-900">Cancel anytime</div>
@@ -566,18 +511,7 @@ export default function ToolInventorySoftware() {
           <h2 className="text-3xl font-extrabold text-white">
             Ready to Get Your Tool Inventory Under Control?
           </h2>
-          <p className="mt-4 text-xl text-blue-100">
-            Book a free 30-minute demo. We'll walk through how Smarter Tracks keeps your inventory
-            accurate, your tools accounted for, and your team productive.
-          </p>
-          <div className="mt-8">
-            <a
-              href="#book-demo"
-              className="bg-white hover:bg-gray-100 text-blue-600 px-10 py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg inline-block"
-            >
-              Book a Free Demo
-            </a>
-          </div>
+          <CtaPair section="final-cta" tone="dark" className="mt-8" note="90-day money-back guarantee. No questions asked." />
         </div>
       </section>
 

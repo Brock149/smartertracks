@@ -21,7 +21,7 @@ export default function MarketingFooter() {
                 <Link to="/#pricing" className="text-gray-400 hover:text-white transition-colors">Pricing</Link>
               </li>
               <li>
-                <Link to="/#book-demo" className="text-gray-400 hover:text-white transition-colors">Book a Demo</Link>
+                <Link to="/#book-demo" className="text-gray-400 hover:text-white transition-colors">Book a 15-Minute Chat</Link>
               </li>
               <li>
                 <Link to="/login" className="text-gray-400 hover:text-white transition-colors">Login</Link>
@@ -59,6 +59,11 @@ export default function MarketingFooter() {
               <li>
                 <Link to="/best-tool-tracking-software-construction" className="text-gray-400 hover:text-white transition-colors">
                   Best Construction Tool Tracking Software
+                </Link>
+              </li>
+              <li>
+                <Link to="/best-tool-checkout-system-contractors" className="text-gray-400 hover:text-white transition-colors">
+                  Best Tool Checkout System for Contractors
                 </Link>
               </li>
               <li>
