@@ -55,19 +55,19 @@ const routesToRender = [
     url: '/best-tool-tracking-software-construction',
     title: 'Best Tool Tracking Software for Construction (2026)',
     description:
-      'Compare construction tool tracking software and apps for 2026: Smarter Tracks, Hilti ON!Track, ShareMyToolbox, GoCodes, Tenna, Milwaukee ONE-KEY, Sortly and ToolWatch. RFID vs GPS vs QR vs no-tag check-out, pricing and who each is best for.',
+      'Compare the best construction tool tracking apps of 2026: RFID, GPS, QR and no-tag check-out, with pricing and who each one fits.',
   },
   {
     url: '/best-tool-checkout-system-contractors',
     title: 'Best Tool Checkout System for Contractors (2026)',
     description:
-      'Compare tool checkout and tool inventory software for contractors in 2026: Smarter Tracks, ShareMyToolbox, GoCodes, Hilti ON!Track, Milwaukee ONE-KEY, Sortly, EZOfficeInventory, ToolWatch and Asset Panda. Pricing, hardware and who each fits.',
+      'Compare the best tool checkout and inventory software for contractors in 2026, with pricing by crew size and what each option really costs.',
   },
   {
     url: '/best-hvac-tool-tracking-software',
     title: 'Best HVAC Tool Tracking Software & Apps (2026)',
     description:
-      'Compare the best HVAC tool tracking software and apps for 2026: Smarter Tracks, ShareMyToolbox, Sortly, Milwaukee ONE-KEY, Hilti ON!Track and ToolWatch. Pricing, hardware and which fits a service shop.',
+      'Compare the best HVAC tool tracking software and apps for 2026, with pricing and tag options, and see which one fits your crew.',
   },
   {
     url: '/privacy-policy',

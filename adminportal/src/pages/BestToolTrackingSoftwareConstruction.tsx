@@ -81,7 +81,7 @@ export default function BestToolTrackingSoftwareConstruction() {
     setPageMeta({
       title: 'Best Tool Tracking Software for Construction (2026)',
       description:
-        'Compare construction tool tracking software and apps for 2026: Smarter Tracks, Hilti ON!Track, ShareMyToolbox, GoCodes, Tenna, Milwaukee ONE-KEY, Sortly and ToolWatch. RFID vs GPS vs QR vs no-tag check-out, pricing and who each is best for.',
+        'Compare the best construction tool tracking apps of 2026: RFID, GPS, QR and no-tag check-out, with pricing and who each one fits.',
       canonicalPath: '/best-tool-tracking-software-construction',
     })
   }, [])

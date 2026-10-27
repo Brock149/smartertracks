@@ -149,7 +149,7 @@ export default function BestHvacToolTrackingSoftware() {
     setPageMeta({
       title: 'Best HVAC Tool Tracking Software & Apps (2026)',
       description:
-        'Compare the best HVAC tool tracking software and apps for 2026: Smarter Tracks, ShareMyToolbox, Sortly, Milwaukee ONE-KEY, Hilti ON!Track and ToolWatch. Pricing, hardware and which fits a service shop.',
+        'Compare the best HVAC tool tracking software and apps for 2026, with pricing and tag options, and see which one fits your crew.',
       canonicalPath: '/best-hvac-tool-tracking-software',
     })
   }, [])

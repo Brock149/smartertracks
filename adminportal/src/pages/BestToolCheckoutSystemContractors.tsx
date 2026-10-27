@@ -72,7 +72,7 @@ export default function BestToolCheckoutSystemContractors() {
     setPageMeta({
       title: 'Best Tool Checkout System for Contractors (2026)',
       description:
-        'Compare tool checkout and tool inventory software for contractors in 2026: Smarter Tracks, ShareMyToolbox, GoCodes, Hilti ON!Track, Milwaukee ONE-KEY, Sortly, EZOfficeInventory, ToolWatch and Asset Panda. Pricing, hardware and who each fits.',
+        'Compare the best tool checkout and inventory software for contractors in 2026, with pricing by crew size and what each option really costs.',
       canonicalPath: '/best-tool-checkout-system-contractors',
     })
   }, [])
