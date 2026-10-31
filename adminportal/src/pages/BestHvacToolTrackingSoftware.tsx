@@ -11,7 +11,7 @@ const comparisonRows = [
     name: 'Smarter Tracks',
     bestFor: 'HVAC shops tracking tools across techs, vans and the shop',
     hardware: 'None, just phones (iOS & Android)',
-    pricing: 'Starter $185/mo (15 users, 150 tools). Pro $315/mo (75 users, 750 tools). 90-day money-back guarantee.',
+    pricing: 'Starter $200/mo (15 users, 150 tools), Pro $350/mo (75 users, 750 tools); $185 / $315 per month billed annually. 90-day money-back guarantee',
     perUser: 'No',
     highlight: true,
   },
@@ -76,7 +76,7 @@ const faqItems = [
   {
     question: 'How much does HVAC tool tracking software cost?',
     answer:
-      'From free (Sortly\'s free plan, the ONE-KEY app) to quote-based enterprise systems. Smarter Tracks is $185/month for 15 users and 150 tools, with no per-user charges.',
+      'From free (Sortly\'s free plan, the ONE-KEY app) to quote-based enterprise systems. Smarter Tracks is $200/month for 15 users and 150 tools ($185/month billed annually), with no per-user charges.',
   },
 ]
 
@@ -84,8 +84,15 @@ const pageJsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
     {
+      '@type': 'Article',
+      headline: 'Best HVAC Tool Tracking Software & Apps (2026)',
+      dateModified: '2026-11-02',
+      author: { '@type': 'Person', name: 'Brock Coburn' },
+      publisher: { '@type': 'Organization', name: 'Smarter Tracks', url: 'https://www.smartertracks.com/' },
+    },
+    {
       '@type': 'FAQPage',
-      author: { '@type': 'Person', name: 'Brock Coburn', jobTitle: 'Founder, Smarter Tracks' },
+      author: { '@type': 'Person', name: 'Brock Coburn' },
       mainEntity: [
         {
           '@type': 'Question',
@@ -124,7 +131,7 @@ const pageJsonLd = {
           name: 'How much does HVAC tool tracking software cost?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'From free (Sortly\'s free plan, the ONE-KEY app) to quote-based enterprise systems. Smarter Tracks is $185/month for 15 users and 150 tools, with no per-user charges.',
+            text: 'From free (Sortly\'s free plan, the ONE-KEY app) to quote-based enterprise systems. Smarter Tracks is $200/month for 15 users and 150 tools ($185/month billed annually), with no per-user charges.',
           },
         },
       ],
@@ -165,11 +172,7 @@ export default function BestHvacToolTrackingSoftware() {
             Best HVAC Tool Tracking Software &amp; Apps (2026)
           </h1>
           <p className="mt-4 text-sm text-gray-500">
-            Last updated: October 2026 · Written by Brock Coburn, founder of Smarter Tracks
-          </p>
-          <p className="mt-3 text-sm text-gray-600">
-            <span className="font-semibold text-gray-800">About the author: </span>
-            Brock Coburn has worked across the HVAC trade, from hands-on pre-apprentice field work to office operations and sales. He built Smarter Tracks first for a mechanical contracting business, to fix its tool tracking.
+            Last updated: November 2026 · Written by Brock Coburn
           </p>
 
           <div className="mt-8 rounded-2xl border border-gray-200 bg-gray-50 p-6">
@@ -183,10 +186,6 @@ export default function BestHvacToolTrackingSoftware() {
               <li><strong>For techs standardised on Milwaukee tools:</strong> Milwaukee ONE-KEY.</li>
             </ul>
           </div>
-
-          <blockquote className="mt-8 border-l-4 border-blue-600 bg-blue-50 px-5 py-4 text-gray-700">
-            We make Smarter Tracks, so we're biased. Every price and hardware detail below comes from each vendor's own website (checked September 2026), and we say where each tool fits better than ours.
-          </blockquote>
 
           <h2 className="mt-12 text-3xl font-extrabold text-gray-900">Why HVAC tool tracking is different</h2>
           <p className="mt-4 text-gray-700">
@@ -229,15 +228,7 @@ export default function BestHvacToolTrackingSoftware() {
             <BrandScreenshots />
             <ul className="mt-4 list-disc space-y-2 pl-5 text-gray-700">
               <li><strong>Hardware:</strong> none. It runs on iOS and Android, and setup takes a day.</li>
-              <li>
-                <strong>Pricing:</strong>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>90-day money-back guarantee</li>
-                  <li>Starter $185/mo (15 users, 150 tools)</li>
-                  <li>Pro $315/mo (75 users, 750 tools)</li>
-                  <li>no per-user charges, no long-term contract</li>
-                </ul>
-              </li>
+              <li><strong>Pricing:</strong> Starter $200/mo (15 users, 150 tools). Pro $350/mo (75 users, 750 tools). $185 and $315 per month when billed annually. No per-user charges, no long-term contract, 90-day money-back guarantee.</li>
               <li><strong>Less of a fit if:</strong> you track thousands of consumable parts (it's built for tools, not parts stock), or you want a tracker on every tool. Plans cap tool counts. Optional cellular GPS trackers are available for a few high-value items. They use cell service, not Bluetooth.</li>
             </ul>
             <p className="mt-4">
@@ -306,6 +297,10 @@ export default function BestHvacToolTrackingSoftware() {
               </Link>
             </div>
           </div>
+
+          <p className="mt-8 text-sm italic text-gray-500">
+            About this page: written by Brock Coburn, who founded Smarter Tracks after years in the HVAC trade. Smarter Tracks makes one of the products listed; other vendors' prices are from their own websites, checked October 2026.
+          </p>
         </div>
       </article>
 
