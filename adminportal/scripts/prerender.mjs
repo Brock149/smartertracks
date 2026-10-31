@@ -55,7 +55,7 @@ const routesToRender = [
     url: '/best-tool-tracking-software-construction',
     title: 'Best Tool Tracking Software for Construction (2026)',
     description:
-      'Compare the best construction tool tracking software and apps for 2026: Smarter Tracks, Hilti ON!Track, ShareMyToolbox, Tenna, Milwaukee ONE-KEY, GoCodes, Sortly and ToolWatch. Pricing, hardware and who each fits.',
+      'Compare the best construction tool tracking software for 2026: Smarter Tracks, Hilti ON!Track, ShareMyToolbox, Tenna and Milwaukee ONE-KEY, with pricing.',
   },
   {
     url: '/best-tool-checkout-system-contractors',
