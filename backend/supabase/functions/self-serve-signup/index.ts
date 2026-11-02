@@ -41,8 +41,15 @@ serve(async (req) => {
       })
     }
 
+    if (planId === 'trial') {
+      return new Response(JSON.stringify({ error: 'The free plan is no longer available. Choose Starter or Pro.' }), {
+        status: 400,
+        headers: corsHeaders,
+      })
+    }
+
     const plan = getPlanById(planId)
-    if (!plan) {
+    if (!plan || plan.id === 'trial') {
       return new Response(JSON.stringify({ error: 'Invalid plan' }), {
         status: 400,
         headers: corsHeaders,
@@ -76,67 +83,6 @@ serve(async (req) => {
         status: 400,
         headers: corsHeaders,
       })
-    }
-
-    if (plan.id === 'trial') {
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .insert({
-          name: companyName,
-          is_active: true,
-          user_limit: plan.userLimit,
-          tool_limit: plan.toolLimit,
-          enforcement_mode: plan.enforcementMode,
-          tier_name: plan.name,
-          plan_id: plan.id,
-          billing_cycle: plan.billingCycle,
-          trial_expires_at: null,
-        })
-        .select('id')
-        .single()
-
-      if (companyError || !company?.id) {
-        throw companyError || new Error('Failed to create company')
-      }
-
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: adminEmail,
-        password,
-        email_confirm: true,
-      })
-
-      if (authError || !authData?.user?.id) {
-        throw authError || new Error('Failed to create admin user')
-      }
-
-      const userId = authData.user.id
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          name: adminName,
-          email: adminEmail,
-          role: 'admin',
-          company_id: company.id,
-        })
-
-      if (userError) {
-        await supabase.auth.admin.deleteUser(userId)
-        throw userError
-      }
-
-      await supabase
-        .from('companies')
-        .update({ created_by: userId })
-        .eq('id', company.id)
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mode: 'trial',
-        }),
-        { status: 200, headers: corsHeaders }
-      )
     }
 
     const { data: company, error: companyError } = await supabase

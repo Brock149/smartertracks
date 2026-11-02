@@ -21,15 +21,15 @@ export default function AddCompanyModal({ isOpen, onClose, onSuccess }: Props) {
     setLoading(true)
     setError('')
     try {
-      const trialPlan = getPlanById('trial')
-      const defaults = trialPlan
+      const starterPlan = getPlanById('tier2')
+      const defaults = starterPlan
         ? {
-            user_limit: trialPlan.userLimit,
-            tool_limit: trialPlan.toolLimit,
-            enforcement_mode: trialPlan.enforcementMode,
-            tier_name: trialPlan.name,
-            plan_id: trialPlan.id,
-            billing_cycle: trialPlan.billingCycle,
+            user_limit: starterPlan.userLimit,
+            tool_limit: starterPlan.toolLimit,
+            enforcement_mode: starterPlan.enforcementMode,
+            tier_name: starterPlan.name,
+            plan_id: starterPlan.id,
+            billing_cycle: 'monthly' as const,
             trial_expires_at: null,
           }
         : {}

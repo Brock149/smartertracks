@@ -612,14 +612,11 @@ declare
   tool_number text;
   tool_name text;
   v_company_id uuid;
-  v_owner_id uuid;
   v_actor_name text;
-  v_location text;
-  v_stored_at text;
   v_notes text;
 begin
-  select number, name, company_id, current_owner
-    into tool_number, tool_name, v_company_id, v_owner_id
+  select number, name, company_id
+    into tool_number, tool_name, v_company_id
     from public.tools
    where id = p_tool_id;
 
@@ -630,28 +627,12 @@ begin
   select coalesce(u.name, 'Someone') into v_actor_name
     from public.users u where u.id = auth.uid();
 
-  select tx.location, tx.stored_at into v_location, v_stored_at
-    from public.tool_transactions tx
-   where tx.tool_id = p_tool_id
-   order by tx.timestamp desc
-   limit 1;
-
+  -- One activity row is enough. A second tool_transactions row (System -> current
+  -- holder, attribution "Tool deleted") repeated the same deletion and looked
+  -- like a transfer. Creation still writes both an activity event and the real
+  -- initial assignment, because those are two different facts.
   v_notes := '#' || tool_number || ' - ' || tool_name
     || ' deleted by ' || coalesce(v_actor_name, 'Someone');
-
-  insert into public.tool_transactions (
-    tool_id, from_user_id, to_user_id, location, stored_at,
-    notes, company_id, attribution
-  ) values (
-    p_tool_id,
-    null,
-    v_owner_id,
-    coalesce(v_location, 'Not specified'),
-    coalesce(v_stored_at, 'N/A'),
-    v_notes,
-    v_company_id,
-    'Tool deleted'
-  );
 
   insert into public.company_events
     (company_id, event_type, actor_id, actor_name, target_type, target_id, target_label, details)

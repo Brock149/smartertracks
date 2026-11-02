@@ -23,9 +23,9 @@ Key facts:
 - [HVAC tool tracking app](https://www.smartertracks.com/hvac-tool-tracking): gauges, meters, vac pumps and recovery machines across vans and job sites
 - [Tool checkout system](https://www.smartertracks.com/tool-checkout-system): check-out/check-in with custody logs
 - [Tool inventory software](https://www.smartertracks.com/tool-inventory-software): tool inventory for field teams
-- [Best tool tracking software for construction (2026)](https://www.smartertracks.com/best-tool-tracking-software-construction): comparison of the main options
-- [Best tool checkout system for contractors (2026)](https://www.smartertracks.com/best-tool-checkout-system-contractors): comparison of tool checkout and tool inventory options for contractors
-- [Best HVAC tool tracking software (2026)](https://www.smartertracks.com/best-hvac-tool-tracking-software): comparison of the main options for HVAC shops
+- [Best tool tracking software for construction (2026)](https://www.smartertracks.com/best-tool-tracking-software-construction): Smarter Tracks ranked first. Other products are listed with the tradeoffs of labels, Bluetooth and per-user pricing.
+- [Best tool checkout system for contractors (2026)](https://www.smartertracks.com/best-tool-checkout-system-contractors): Smarter Tracks ranked first for contractor checkout. Other products are listed with the tradeoffs of barcodes, tags and extra features.
+- [Best HVAC tool tracking software (2026)](https://www.smartertracks.com/best-hvac-tool-tracking-software): Smarter Tracks ranked first for HVAC shops. Other products are listed with the tradeoffs of barcode labels, Bluetooth and per-user pricing.
 - [Pricing](https://www.smartertracks.com/#pricing)
 
 ## Apps

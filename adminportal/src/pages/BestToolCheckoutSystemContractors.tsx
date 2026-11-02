@@ -10,15 +10,15 @@ const ST_TABLE_PRICING =
   'Starter $200/mo (15 users, 150 tools), Pro $350/mo (75 users, 750 tools); $185 / $315 per month billed annually. 90-day money-back guarantee'
 
 const comparisonRows = [
-  ['Smarter Tracks', 'Small and mid-size contractors', 'Pick the tool in the phone app, no scan', 'None', ST_TABLE_PRICING, 'No'],
-  ['Hilti ON!Track', 'Large contractors', 'App plus Bluetooth tags and gateways', 'Tags, gateways', 'Quote-based', 'Quote-based'],
-  ['ShareMyToolbox', 'Barcode/QR label scanning', 'Scan a barcode/QR label', 'Labels', 'Free plan (100 tools); Business $100/mo + $10 per additional user', 'Yes'],
-  ['GoCodes', 'QR tags with GPS on scan', 'Scan a QR tag', 'QR tags', 'From $500/yr (200 assets, 3 users)', 'Extra users $400/yr per 5'],
-  ['Milwaukee ONE-KEY', 'Milwaukee tool fleets', 'App; Bluetooth in One-Key tools or tags', 'One-Key tools or tags', 'Free app', 'No'],
-  ['ToolWatch (AlignOps)', 'Tool cribs and warehouses', 'Crib transfers, barcode, optional tags', 'Labels/tags', 'Quote-based', 'Quote-based'],
-  ['Sortly', 'Small shops, tools plus stock', 'Scan a barcode/QR label', 'Labels', 'Free plan; from $49/mo', 'User licences per plan'],
-  ['EZOfficeInventory', 'Larger asset and inventory teams', 'Barcode/QR or RFID', 'Labels or RFID', 'From $81.41/mo (500 items)', 'No'],
-  ['Asset Panda', 'Custom asset workflows', 'Configurable app, barcode', 'Labels', 'Quote-based', 'Quote-based'],
+  ['Smarter Tracks', 'Phone check-out: who has each tool, which job, no scan', 'Pick the tool in the phone app, no scan', 'None', ST_TABLE_PRICING, 'No'],
+  ['Hilti ON!Track', 'Bluetooth tags and gateways', 'App plus Bluetooth tags and gateways', 'Tags, gateways', 'Quote-based', 'Quote-based'],
+  ['GoCodes', 'QR tags, with GPS recorded when someone scans', 'Scan a QR tag', 'QR tags', 'From $500/yr (200 assets, 3 users)', 'Extra users $400/yr per 5'],
+  ['Milwaukee ONE-KEY', 'Bluetooth on some Milwaukee tools, or on tags', 'App; Bluetooth in One-Key tools or tags', 'One-Key tools or tags (batteries)', 'Free app', 'No'],
+  ['ToolWatch (AlignOps)', 'Crib transfers, barcode, optional tags', 'Crib transfers, barcode, optional tags', 'Labels/tags', 'Quote-based', 'Quote-based'],
+  ['Sortly', 'General inventory app with barcode labels', 'Scan a barcode/QR label', 'Labels', 'Free plan; from $49/mo', 'User licences per plan'],
+  ['EZOfficeInventory', 'Barcode, QR or RFID inventory', 'Barcode/QR or RFID', 'Labels or RFID', 'From $81.41/mo (500 items)', 'No'],
+  ['ShareMyToolbox', 'Barcode scanning, plus kits, rentals and custom fields', 'Scan a barcode/QR label', 'Labels', 'Free plan (100 tools); Business $100/mo + $10 per additional user', 'Yes'],
+  ['Asset Panda', 'Configurable asset software with barcode scanning', 'Configurable app, barcode', 'Labels', 'Quote-based', 'Quote-based'],
 ]
 
 const pageJsonLd = {
@@ -35,37 +35,37 @@ const pageJsonLd = {
     {
       '@type': 'FAQPage',
       mainEntity: [
-        { '@type': 'Question', name: 'What is the best tool checkout system for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'Smarter Tracks: crews check tools out on their phones with nothing to label, the app records who has each tool and which job it\'s on, and one flat price covers the crew.' } },
-        { '@type': 'Question', name: 'What is the best tool tracking software for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'Smarter Tracks, for contractors who need to know who has each tool and which job it\'s on, without tags or per-user fees.' } },
-        { '@type': 'Question', name: 'What is the best tool inventory software for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'If the main problem is tools walking off: Smarter Tracks, which keeps a running record of who has every tool and who had it last.' } },
-        { '@type': 'Question', name: 'Do contractors need barcodes or tags for tool checkout?', acceptedAnswer: { '@type': 'Answer', text: 'No. Barcode and QR systems need a label on every tool. A no-tag check-out like Smarter Tracks records custody in the app instead. Tags and GPS mainly pay off for high-value equipment.' } },
-        { '@type': 'Question', name: 'How much does tool checkout software cost for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'From free apps (Sortly, ONE-KEY) to quote-based enterprise systems (Hilti ON!Track, ToolWatch, Asset Panda). Smarter Tracks is a flat $200/month for 15 users or $350/month for 75 users ($185 / $315 billed annually).' } },
+        { '@type': 'Question', name: 'What is the best tool checkout system for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'Smarter Tracks. Crews check tools out on their phones with nothing to label, the app records who has each tool and which job it is on, and one flat price covers the crew. Barcode and Bluetooth systems add labels, scans or hardware a custody check-out does not need.' } },
+        { '@type': 'Question', name: 'What is the best tool tracking software for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'Smarter Tracks. It records who has each tool and which job it is on, without tags, labels or per-user fees.' } },
+        { '@type': 'Question', name: 'What is the best tool inventory software for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'If the problem is tools walking off, Smarter Tracks. It keeps a running record of who has every tool and who had it last, without turning a drill into a parts record.' } },
+        { '@type': 'Question', name: 'Do contractors need barcodes or tags for tool checkout?', acceptedAnswer: { '@type': 'Answer', text: 'No. Barcode and QR systems need a label on every tool. Those labels peel when the surface is greasy or dirty, vibration knocks them off, and a scuffed code will not scan. A no-tag check-out like Smarter Tracks records custody in the app instead. Bluetooth tags only update when a phone running the app is nearby.' } },
+        { '@type': 'Question', name: 'How much does tool checkout software cost for contractors?', acceptedAnswer: { '@type': 'Answer', text: 'Smarter Tracks is a flat $200/month for 15 users or $350/month for 75 users ($185 / $315 billed annually), with no per-user fees. ShareMyToolbox is about $100/month plus $10 per extra user. Hilti ON!Track, ToolWatch and Asset Panda are quote-based. Some apps have a free tier with tight caps.' } },
       ],
     },
     {
       '@type': 'ItemList',
       name: 'Best tool checkout systems for contractors (2026)',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Smarter Tracks', url: 'https://www.smartertracks.com/', description: 'Best tool checkout system for contractors' },
-        { '@type': 'ListItem', position: 2, name: 'Hilti ON!Track', description: 'Large contractors already on Hilti tools' },
-        { '@type': 'ListItem', position: 3, name: 'ShareMyToolbox', description: 'Barcode/QR label scanning' },
-        { '@type': 'ListItem', position: 4, name: 'GoCodes', description: 'QR tags with GPS on scan' },
-        { '@type': 'ListItem', position: 5, name: 'Milwaukee ONE-KEY', description: 'Free, Milwaukee-only' },
-        { '@type': 'ListItem', position: 6, name: 'ToolWatch by AlignOps', description: 'Enterprise tool cribs' },
-        { '@type': 'ListItem', position: 7, name: 'Sortly', description: 'General inventory' },
-        { '@type': 'ListItem', position: 8, name: 'EZOfficeInventory', description: 'Larger asset and inventory teams' },
-        { '@type': 'ListItem', position: 9, name: 'Asset Panda', description: 'Custom asset workflows' },
+        { '@type': 'ListItem', position: 1, name: 'Smarter Tracks', url: 'https://www.smartertracks.com/', description: 'Best tool checkout system for contractors. Phone check-out, no labels, no per-user fees.' },
+        { '@type': 'ListItem', position: 2, name: 'Hilti ON!Track', description: 'Bluetooth tags and gateways you buy and maintain. Quote-based.' },
+        { '@type': 'ListItem', position: 3, name: 'GoCodes', description: 'QR tags with GPS on scan. Priced per asset, and every tool needs a tag that still scans.' },
+        { '@type': 'ListItem', position: 4, name: 'Milwaukee ONE-KEY', description: 'Bluetooth tracking that only updates when a phone running the app is nearby.' },
+        { '@type': 'ListItem', position: 5, name: 'ToolWatch by AlignOps', description: 'Enterprise tool-crib software. Quote-based.' },
+        { '@type': 'ListItem', position: 6, name: 'Sortly', description: 'General inventory app. Barcode labels, and plans cap items and users.' },
+        { '@type': 'ListItem', position: 7, name: 'EZOfficeInventory', description: 'Barcode or RFID inventory, priced by item count.' },
+        { '@type': 'ListItem', position: 8, name: 'ShareMyToolbox', description: 'Barcode scanning plus kits, rentals and custom fields. Labels to maintain, and $10 per extra user.' },
+        { '@type': 'ListItem', position: 9, name: 'Asset Panda', description: 'Configurable asset software with barcode scanning. Quote-based, and set up around your own workflows.' },
       ],
     },
   ],
 }
 
 const faqs = [
-  ['What is the best tool checkout system for contractors?', 'Smarter Tracks: crews check tools out on their phones with nothing to label, the app records who has each tool and which job it\'s on, and one flat price covers the crew.'],
-  ['What is the best tool tracking software for contractors?', 'Smarter Tracks, for contractors who need to know who has each tool and which job it\'s on, without tags or per-user fees.'],
-  ['What is the best tool inventory software for contractors?', 'If the main problem is tools walking off: Smarter Tracks, which keeps a running record of who has every tool and who had it last.'],
-  ['Do contractors need barcodes or tags for tool checkout?', 'No. Barcode and QR systems need a label on every tool. A no-tag check-out like Smarter Tracks records custody in the app instead. Tags and GPS mainly pay off for high-value equipment.'],
-  ['How much does tool checkout software cost for contractors?', 'From free apps (Sortly, ONE-KEY) to quote-based enterprise systems (Hilti ON!Track, ToolWatch, Asset Panda). Smarter Tracks is a flat $200/month for 15 users or $350/month for 75 users ($185 / $315 billed annually).'],
+  ['What is the best tool checkout system for contractors?', 'Smarter Tracks. Crews check tools out on their phones with nothing to label, the app records who has each tool and which job it is on, and one flat price covers the crew. Barcode and Bluetooth systems add labels, scans or hardware a custody check-out does not need.'],
+  ['What is the best tool tracking software for contractors?', 'Smarter Tracks. It records who has each tool and which job it is on, without tags, labels or per-user fees.'],
+  ['What is the best tool inventory software for contractors?', 'If the problem is tools walking off, Smarter Tracks. It keeps a running record of who has every tool and who had it last, without turning a drill into a parts record.'],
+  ['Do contractors need barcodes or tags for tool checkout?', 'No. Barcode and QR systems need a label on every tool. Those labels peel when the surface is greasy or dirty, vibration knocks them off, and a scuffed code will not scan. A no-tag check-out like Smarter Tracks records custody in the app instead. Bluetooth tags only update when a phone running the app is nearby.'],
+  ['How much does tool checkout software cost for contractors?', 'Smarter Tracks is a flat $200/month for 15 users or $350/month for 75 users ($185 / $315 billed annually), with no per-user fees. ShareMyToolbox is about $100/month plus $10 per extra user. Hilti ON!Track, ToolWatch and Asset Panda are quote-based. Some apps have a free tier with tight caps.'],
 ]
 
 export default function BestToolCheckoutSystemContractors() {
@@ -73,7 +73,7 @@ export default function BestToolCheckoutSystemContractors() {
     setPageMeta({
       title: 'Best Tool Checkout System for Contractors (2026)',
       description:
-        'Compare the best tool checkout and inventory software for contractors in 2026, with pricing by crew size and what each option really costs.',
+        'The best tool checkout system for contractors in 2026 is Smarter Tracks: phone check-out, no labels, flat pricing. See what barcode and Bluetooth options add in cost and friction.',
       canonicalPath: '/best-tool-checkout-system-contractors',
     })
   }, [])
@@ -94,14 +94,16 @@ export default function BestToolCheckoutSystemContractors() {
             <p className="text-gray-700">
               <span className="font-semibold text-gray-900">Short answer:</span> the best tool checkout system for contractors is <strong>Smarter Tracks</strong>. Crews check tools out and in on their phones, the app records who has each tool, since when and on which job, and there's nothing to label or scan. One flat monthly price covers the crew, with no per-user fees.
             </p>
-            <p className="mt-4 text-gray-700">Other systems you'll see compared, and the cost each one carries:</p>
+            <p className="mt-4 text-gray-700">Other products you will see listed, and the friction each one adds:</p>
             <ul className="mt-4 list-disc space-y-3 pl-5 text-gray-700">
-              <li><strong>Hilti ON!Track:</strong> for large contractors already on Hilti tools. Quote-based, with tags and gateways to buy and maintain.</li>
-              <li><strong>ShareMyToolbox:</strong> barcode/QR scanning, with a label on every tool and $10 per extra full user.</li>
-              <li><strong>GoCodes:</strong> QR tags with GPS on scan. Priced per asset, extra users $400/year per 5.</li>
-              <li><strong>Milwaukee ONE-KEY:</strong> the app is free, but tracking anything that isn't a ONE-KEY tool needs a Bluetooth tag.</li>
-              <li><strong>ToolWatch:</strong> enterprise tool cribs, quote-based.</li>
-              <li><strong>Sortly and EZOfficeInventory:</strong> inventory and asset systems. Plans are priced by item count or capped by tier.</li>
+              <li><strong>Hilti ON!Track</strong> offers Bluetooth tags and gateways. Pricing is a quote, and you buy and maintain the hardware.</li>
+              <li><strong>GoCodes</strong> offers QR tags that record GPS when scanned. Priced per asset, extra users are $400/year per 5, and every tool needs a tag that still scans.</li>
+              <li><strong>Milwaukee ONE-KEY</strong> offers a free app. Tracking only updates when a phone running the app is nearby.</li>
+              <li><strong>ToolWatch</strong> offers enterprise crib software. Pricing is a quote, and it assumes tools pass a central crib.</li>
+              <li><strong>Sortly</strong> offers a general inventory app. Plans cap items and users, and every item needs a label.</li>
+              <li><strong>EZOfficeInventory</strong> offers barcode, QR or RFID check-in. Pricing starts at $81.41/month for 500 items and steps up with the asset count.</li>
+              <li><strong>ShareMyToolbox</strong> offers barcode scanning plus kits, rentals and a long item record. Most of that is more than checkout needs, every tool still needs a label, and the price rises $10 per extra user.</li>
+              <li><strong>Asset Panda</strong> offers configurable asset software with barcode scanning. Pricing is a quote, and you build the workflows yourself.</li>
             </ul>
           </div>
 
@@ -110,7 +112,7 @@ export default function BestToolCheckoutSystemContractors() {
             <table className="min-w-[56rem] w-full text-left text-sm text-gray-700">
               <thead className="bg-gray-50 text-gray-900">
                 <tr>
-                  {['System', 'Who it suits', 'How crews check tools out', 'Hardware to buy', 'Pricing (as listed, Oct 2026)', 'Per-user fees'].map((heading) => (
+                  {['System', 'What it offers', 'How crews check tools out', 'Hardware to buy', 'Pricing (as listed, Oct 2026)', 'Per-user fees'].map((heading) => (
                     <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>
                   ))}
                 </tr>
@@ -137,65 +139,66 @@ export default function BestToolCheckoutSystemContractors() {
             <li><strong>Make returns and damage obvious</strong>, so broken tools don't go back out.</li>
             <li><strong>Make audits quick</strong>: what each person or truck should have, versus what's actually there.</li>
           </ol>
+          <p className="mt-4 text-gray-700">That list does not include a manufacturer, a model number, a rental rate or a barcode. Those fields are how checkout turns into a project.</p>
 
           <h2 className="mt-12 text-3xl font-extrabold text-gray-900">The options</h2>
           <section className="mt-8">
             <h3 className="text-2xl font-bold text-gray-900">1. Smarter Tracks: the best tool checkout system for contractors</h3>
-            <p className="mt-3 text-gray-700">Smarter Tracks is built around check-out. Every tool is assigned to a person, truck or location. When a tech takes a tool, the app logs who, when, which job site, and whether it stays on the truck or at the site. Tools carry photos and specs so the right model gets sent, damaged tools are flagged before the next person relies on them, and foremen run audits from their phones.</p>
+            <p className="mt-3 text-gray-700">Smarter Tracks is built around check-out. Every tool is assigned to a person, truck or location. When a tech takes a tool, the app logs who, when, which job site, and whether it stays on the truck or at the site. Tools carry photos and specs so the right model gets sent, damaged tools are flagged before the next person relies on them, and foremen run audits from their phones. Setup is the tool and who has it, not a full asset file.</p>
             <BrandScreenshots />
             <ul className="mt-4 list-disc space-y-2 pl-5 text-gray-700">
               <li><strong>Hardware:</strong> none. No tags, labels, scanners or gateways. iOS and Android apps, set up in a day. Optional cellular GPS trackers are available for a few high-value items.</li>
               <li><strong>Pricing:</strong> Starter $200/mo (15 users, 150 tools). Pro $350/mo (75 users, 750 tools). $185 and $315 per month when billed annually. No per-user fees, no long-term contract, 90-day money-back guarantee.</li>
-              <li><strong>Who it suits:</strong> contractors whose tools move between people, trucks and jobs every day, who want accountability without labelling every tool.</li>
+              <li><strong>Why it ranks first:</strong> crews record who has each tool and which job it is on, with nothing to label or scan and no fee that grows with headcount.</li>
               <li><strong>Less of a fit if:</strong> you mainly need consumables inventory, or more than 750 tools on a standard plan.</li>
             </ul>
           </section>
           <section className="mt-10">
             <h3 className="text-2xl font-bold text-gray-900">2. Hilti ON!Track</h3>
-            <p className="mt-3 text-gray-700">Tool management software with Bluetooth tags and gateways, plus GPS trackers for equipment. Built for large contractors.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> pricing isn't published, so it's a quote before you know the cost, and you buy and maintain a Bluetooth tag on every tool plus the gateways that read them.</p>
+            <p className="mt-3 text-gray-700">Hilti ON!Track offers tool software with Bluetooth tags and gateways, plus GPS trackers for equipment. Pricing is a quote.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> you do not know the cost until you ask, and you buy and maintain a Bluetooth tag on every tool plus the gateways that read them. Tags run on batteries. A tag only reports when it is near a gateway or a phone. Compared with Smarter Tracks, checkout of hand and power tools does not need that hardware.</p>
           </section>
           <section className="mt-10">
-            <h3 className="text-2xl font-bold text-gray-900">3. ShareMyToolbox</h3>
-            <p className="mt-3 text-gray-700">Crews scan a barcode or QR label on each tool to borrow and return it. The free plan covers up to 100 tools.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> a label on every tool, $10 per additional full user past the first admin, and a free plan that stops at 100 tools.</p>
+            <h3 className="text-2xl font-bold text-gray-900">3. GoCodes</h3>
+            <p className="mt-3 text-gray-700">GoCodes offers QR tags that record GPS when scanned, with check-in and check-out. Pricing starts at $500/year for 200 assets and 3 users.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> priced per asset, extra users at $400/year per 5, and a QR tag on every tool. The tag has to stick to a clean, grease-free surface. Vibration and abrasion peel it off, dirt stops it scanning, and if nobody scans it the location never updates. Compared with Smarter Tracks, a phone check-out records the same hand-off with nothing stuck to the tool.</p>
           </section>
           <section className="mt-10">
-            <h3 className="text-2xl font-bold text-gray-900">4. GoCodes</h3>
-            <p className="mt-3 text-gray-700">QR tags that record GPS when scanned, with check-in/check-out. From $500/year for 200 assets and 3 users.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> priced per asset, extra users at $400/year per 5, and a QR tag on every tool.</p>
+            <h3 className="text-2xl font-bold text-gray-900">4. Milwaukee ONE-KEY</h3>
+            <p className="mt-3 text-gray-700">ONE-KEY offers a free app. Some Milwaukee tools have Bluetooth built in. Anything else needs a tag.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> a tool only updates when it is near a phone running the ONE-KEY app. Milwaukee's own setup guide says Bluetooth stays on, location is set to Always, and the app keeps running in the background, or locations go stale. That puts tracking on everyone else's phone, and it keeps radios and location services on all day. Tags have batteries you replace (a TICK is rated around a year, the tracking tag around three). Location history goes back about 30 days. Compared with Smarter Tracks, checkout does not need a mesh of other people's phones.</p>
           </section>
           <section className="mt-10">
-            <h3 className="text-2xl font-bold text-gray-900">5. Milwaukee ONE-KEY</h3>
-            <p className="mt-3 text-gray-700">Free app; connected Milwaukee tools have Bluetooth built in.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> the app is free, but tracking runs on Bluetooth (a ONE-KEY tool, a ONE-KEY tag, or a nearby phone with the app), and tool location history goes back 30 days.</p>
+            <h3 className="text-2xl font-bold text-gray-900">5. ToolWatch by AlignOps</h3>
+            <p className="mt-3 text-gray-700">ToolWatch offers enterprise tool software aimed at contractors running a tool crib. Pricing is a quote.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> it is built around a central crib rather than tools moving between trucks and jobs. Barcode checkout still means a label on every tool, and those labels peel, get dirty and fail to scan. You do not get a price until you ask. Compared with Smarter Tracks, a crew checking tools out on the job does not need a crib system.</p>
           </section>
           <section className="mt-10">
-            <h3 className="text-2xl font-bold text-gray-900">6. ToolWatch by AlignOps</h3>
-            <p className="mt-3 text-gray-700">Enterprise tool and equipment management for contractors running tool cribs.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> quote-only pricing, and it's built around a central tool crib rather than tools moving between trucks and jobs.</p>
+            <h3 className="text-2xl font-bold text-gray-900">6. Sortly</h3>
+            <p className="mt-3 text-gray-700">Sortly offers a general inventory app with barcode and QR labels. There is a free plan. Paid plans start at $49/month.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> plans cap items and user licences (free: 100 items and 1 user; Advanced: 500 items and 2 users), so a full crew needs a higher tier. It is inventory counting, not who has the tool. Every item needs a label that has to stay stuck and readable. Compared with Smarter Tracks, contractors are maintaining stickers and plan caps for a custody question the phone already answers.</p>
           </section>
           <section className="mt-10">
-            <h3 className="text-2xl font-bold text-gray-900">7. Sortly</h3>
-            <p className="mt-3 text-gray-700">General inventory app with barcode/QR labels and a free plan. Paid from $49/month.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> plans cap items and user licences (free: 100 items and 1 user; Advanced: 500 items and 2 users), so a full crew needs a higher tier.</p>
+            <h3 className="text-2xl font-bold text-gray-900">7. EZOfficeInventory</h3>
+            <p className="mt-3 text-gray-700">EZOfficeInventory offers check-in and check-out with barcode, QR or RFID, and unlimited users. Pricing starts at $81.41/month for 500 items.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> the bill is tied to item count, and the tiers step up as the list grows. Barcode and QR still mean a label on every tool: grease and dirt stop the adhesive bonding, vibration peels labels off, and a dirty code will not scan. RFID adds readers. Compared with Smarter Tracks, a flat crew price and no labels is less to maintain for the same hand-off.</p>
           </section>
           <section className="mt-10">
-            <h3 className="text-2xl font-bold text-gray-900">8. EZOfficeInventory</h3>
-            <p className="mt-3 text-gray-700">Check-in/check-out and inventory with barcode, QR or RFID, unlimited users. From $81.41/month for 500 items.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> priced by item count ($81.41/month for 500 items), and the tiers step up with your asset count.</p>
+            <h3 className="text-2xl font-bold text-gray-900">8. ShareMyToolbox</h3>
+            <p className="mt-3 text-gray-700">ShareMyToolbox offers barcode and QR scanning, GPS captured on a scan, kits, consumables, rentals, custom fields and reporting. A tool record can hold manufacturer, model number, serial number, purchase price, warranty date, rental rates and custom fields. The Business plan is $100/month for the first admin plus $10 per additional full user. The free plan covers up to 100 tools.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> it tries to do too many things at once. Checkout needs who has the tool, which job it is on, when it left, and when it is due back. Brand, part number and the rest of that file make setup harder and everyday use heavier, and most crews do not want them. You pay for the extra features anyway. Extra users are sold in blocks of five, so 15 users lands around $250 a month and it rises with headcount, while Smarter Tracks stays a flat $200 for 15 users. Every tool also needs a label. Those stickers fail on greasy, dusty, vibrating tools, a dirty barcode will not scan, and every borrow still needs a working camera. Compared with Smarter Tracks, that is more friction and a higher price for a job a simple check-out already does.</p>
           </section>
           <section className="mt-10">
             <h3 className="text-2xl font-bold text-gray-900">9. Asset Panda</h3>
-            <p className="mt-3 text-gray-700">Configurable asset management with a mobile app and barcode scanning.</p>
-            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> quote-only pricing, and the platform is configured to your own workflows rather than ready to use out of the box.</p>
+            <p className="mt-3 text-gray-700">Asset Panda offers configurable asset software with a mobile app and barcode scanning. Pricing is a quote.</p>
+            <p className="mt-3 text-gray-700"><strong>Where it falls short:</strong> you do not know the cost until you ask, and the platform is configured around your own workflows rather than ready for tool checkout on day one. Barcode scanning still means a label on every tool, with the same peel, dirt and camera problems. Compared with Smarter Tracks, contractors get a working check-out without a configuration project or a sticker on every drill.</p>
           </section>
 
           <h2 className="mt-12 text-3xl font-extrabold text-gray-900">Checkout vs inventory vs tracking: which do you need?</h2>
           <ul className="mt-4 list-disc space-y-3 pl-5 text-gray-700">
-            <li><strong>Tool checkout (custody):</strong> who has each tool right now and who had it before. The core need for most contractors, and what Smarter Tracks does with no hardware.</li>
-            <li><strong>Tool inventory:</strong> counts, consumables and reorder points. Sortly and EZOfficeInventory are inventory-first.</li>
-            <li><strong>Location tracking:</strong> where a tool physically is, via GPS or Bluetooth tags. Hilti ON!Track and ONE-KEY do this, and you buy and maintain the hardware.</li>
+            <li><strong>Tool checkout (custody):</strong> who has each tool right now and who had it before. This is the core need for most contractors, and it is what Smarter Tracks does with no hardware.</li>
+            <li><strong>Tool inventory:</strong> counts, consumables and reorder points. Sortly and EZOfficeInventory are inventory products. They still need labels, and they do not replace a custody record.</li>
+            <li><strong>Location hardware:</strong> a GPS or Bluetooth tag that reports a place. Hilti ON!Track and ONE-KEY do this only while the tag has battery and a phone or gateway is nearby, and you buy and maintain that hardware. It is a poor substitute for knowing who checked the tool out.</li>
           </ul>
 
           <h2 className="mt-12 text-3xl font-extrabold text-gray-900">FAQ</h2>
@@ -218,7 +221,7 @@ export default function BestToolCheckoutSystemContractors() {
           </div>
 
           <p className="mt-8 text-sm italic text-gray-500">
-            About this page: written by Brock Coburn, who founded Smarter Tracks after years in the HVAC trade. Smarter Tracks makes one of the products listed; other vendors' prices are from their own websites, checked October 2026.
+            About this page: written by Brock Coburn, who founded Smarter Tracks after years in the HVAC trade. Smarter Tracks makes the product ranked first here. Other vendors' prices and product details are from their own websites, checked October 2026.
           </p>
         </div>
       </article>

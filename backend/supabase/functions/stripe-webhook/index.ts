@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
-import { getBillingCycleForPrice, getPlanById, getPlanByStripePriceId } from '../_shared/plans.ts'
+import { getBillingCycleForPrice, getPlanByStripePriceId } from '../_shared/plans.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,20 +82,6 @@ serve(async (req) => {
         tool_limit: plan.toolLimit,
         enforcement_mode: plan.enforcementMode,
         billing_cycle: billingCycle,
-        trial_expires_at: null,
-      }
-    }
-
-    const getTrialPlanUpdate = () => {
-      const plan = getPlanById('trial')
-      if (!plan) return {}
-      return {
-        plan_id: plan.id,
-        tier_name: plan.name,
-        user_limit: plan.userLimit,
-        tool_limit: plan.toolLimit,
-        enforcement_mode: plan.enforcementMode,
-        billing_cycle: plan.billingCycle,
         trial_expires_at: null,
       }
     }
@@ -336,8 +322,6 @@ serve(async (req) => {
         const subscription = event.data.object as Stripe.Subscription
         console.log('Subscription deleted:', subscription.id)
 
-        const trialPlanUpdate = getTrialPlanUpdate()
-        // Update company subscription status
         const { error } = await supabase
           .from('companies')
           .update({
@@ -347,7 +331,6 @@ serve(async (req) => {
               : null,
             is_active: false,
             suspended_at: new Date().toISOString(),
-            ...trialPlanUpdate,
           })
           .eq('stripe_subscription_id', subscription.id)
 
@@ -362,8 +345,6 @@ serve(async (req) => {
         const invoice = event.data.object as Stripe.Invoice
         console.log('Payment failed for invoice:', invoice.id)
 
-        const trialPlanUpdate = getTrialPlanUpdate()
-        // Update company subscription status
         if (invoice.subscription) {
           const { error } = await supabase
             .from('companies')
@@ -371,7 +352,6 @@ serve(async (req) => {
               stripe_status: 'past_due',
               is_active: false,
               suspended_at: new Date().toISOString(),
-              ...trialPlanUpdate,
             })
             .eq('stripe_subscription_id', invoice.subscription as string)
 
