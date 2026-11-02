@@ -7,14 +7,14 @@ Key facts:
 - Who it's for: construction contractors, HVAC companies, and plumbing, electrical and mechanical field-service teams.
 - Hardware: none required. Runs on iOS and Android phones, plus the web.
 - Pricing (USD):
-  - Starter: $185/month (15 users, 150 tools; $2,220 billed yearly)
-  - Pro: $315/month (75 users, 750 tools; $3,780 billed yearly)
+  - Starter: $200/month (15 users, 150 tools), or $185/month billed annually ($2,220/year)
+  - Pro: $350/month (75 users, 750 tools), or $315/month billed annually ($3,780/year)
   - Custom plans for larger teams
   - No per-user charges, no long-term contracts
   - 90-day money-back guarantee
 - Best for: teams that want tool accountability ("who has it, who had it last") without buying and maintaining tags.
 - Optional add-on: cellular GPS trackers for a few high-value tools. They use cell service, not Bluetooth, so they do not depend on nearby phones. Longer battery life and a tougher case for job sites. The core product still tracks the rest of the tools with no hardware.
-- Founded: 2025. Over 600 tools tracked on the platform.
+- Over 600 tools tracked on the platform.
 - Contact: brockcoburn@smartertracks.com
 
 ## Pages
